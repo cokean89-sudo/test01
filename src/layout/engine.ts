@@ -21,6 +21,8 @@ export function computeLayout(aspects: number[], area: Rect, opts: LayoutOptions
   const list = aspects.map(safeAspect);
   if (list.length === 0 || area.w <= 0 || area.h <= 0) return [];
   switch (opts.mode) {
+    case "report":
+      return layoutReport(list, area, opts.gap, opts.seed);
     case "grid":
       return layoutGrid(list.length, area, opts.columns, opts.gap);
     case "rows":
@@ -251,6 +253,24 @@ export function layoutMosaic(aspects: number[], area: Rect, gap: number, seed = 
     }
   }
   return best;
+}
+
+// ─── Report (케이스 스터디 템플릿) ──────────────────────────────
+
+/**
+ * 보고서형: 왼쪽 1/3 폭의 열에 앞쪽 항목(로고 패널 + 이미지)을 같은 높이로 쌓고,
+ * 나머지 2/3 영역은 모자이크로 채운다. 첨부 템플릿(케이스 스터디 페이지)의 구성.
+ */
+export function layoutReport(aspects: number[], area: Rect, gap: number, seed = 0): Rect[] {
+  const n = aspects.length;
+  if (n <= 2) return layoutRows(aspects, area, gap, 1);
+  const leftCount = n >= 7 ? 3 : n >= 4 ? 2 : 1;
+  const colW = (area.w - gap * 2) / 3;
+  const cellH = (area.h - gap * (leftCount - 1)) / leftCount;
+  const left: Rect[] = [];
+  for (let i = 0; i < leftCount; i++) left.push({ x: area.x, y: area.y + i * (cellH + gap), w: colW, h: cellH });
+  const right: Rect = { x: area.x + colW + gap, y: area.y, w: area.w - colW - gap, h: area.h };
+  return [...left, ...layoutMosaic(aspects.slice(leftCount), right, gap, seed)];
 }
 
 // ─── utils ──────────────────────────────────────────────────

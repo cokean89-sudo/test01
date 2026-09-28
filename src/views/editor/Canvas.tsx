@@ -279,6 +279,7 @@ export function Canvas() {
             index={pageIndex}
             total={doc.pages.length}
             mode="edit"
+            docTitle={doc.title}
             editingId={editingId}
             onTextCommit={(id, text) => {
               const ed = useEditor.getState();

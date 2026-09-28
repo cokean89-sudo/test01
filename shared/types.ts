@@ -19,6 +19,11 @@ export interface Reference {
   height?: number;
   source: RefSource;
   createdAt: number;
+  /** 기록: 누가 언제 추가/수정했는지 (웹 버전) */
+  createdBy?: string;
+  createdByName?: string;
+  updatedAt?: number;
+  updatedByName?: string;
 }
 
 /** 케이스 스터디(예: 경기장, 브랜드, 매장) — 여러 레퍼런스를 묶는 단위 */
@@ -30,6 +35,9 @@ export interface CaseStudy {
   description?: string;
   tags: string[];
   createdAt: number;
+  createdByName?: string;
+  updatedAt?: number;
+  updatedByName?: string;
 }
 
 // ─── Document ───────────────────────────────────────────────
@@ -142,9 +150,10 @@ export interface ShapeElement extends BaseElement {
 
 export type PageElement = TextElement | ImageElement | ShapeElement;
 
-export type LayoutMode = "grid" | "rows" | "columns" | "mosaic";
+export type LayoutMode = "report" | "grid" | "rows" | "columns" | "mosaic";
 
 export const LAYOUT_MODES: { key: LayoutMode; label: string; hint: string }[] = [
+  { key: "report", label: "보고서형", hint: "왼쪽 1/3 열에 로고·이미지를 쌓고 나머지는 모자이크 (케이스 스터디 템플릿)" },
   { key: "grid", label: "그리드 (N단)", hint: "지정한 열 수로 균등 분할" },
   { key: "rows", label: "자유 · 가로 정렬", hint: "이미지 비율 유지, 줄 단위 배치" },
   { key: "columns", label: "자유 · 세로 정렬", hint: "이미지 비율 유지, 열 단위(메이슨리) 배치" },
@@ -226,6 +235,11 @@ export interface DocumentData {
   updatedAt: number;
   settings: DocSettings;
   pages: Page[];
+  /** 서버 저장 버전 (동시 편집 병합 기준) */
+  version?: number;
+  teamId?: string;
+  createdByName?: string;
+  updatedByName?: string;
 }
 
 export interface DocumentSummary {
@@ -236,6 +250,8 @@ export interface DocumentSummary {
   updatedAt: number;
   createdAt: number;
   cover?: string;
+  createdByName?: string;
+  updatedByName?: string;
 }
 
 // ─── API payloads ───────────────────────────────────────────
@@ -309,4 +325,105 @@ export interface AppStatus {
   ai: boolean;
   model: string;
   aiReason?: string;
+}
+
+// ─── 계정 · 팀 (웹 버전) ─────────────────────────────────────
+
+export type Role = "owner" | "admin" | "editor" | "viewer";
+
+export const ROLE_LABEL: Record<Role, string> = {
+  owner: "소유자",
+  admin: "관리자",
+  editor: "편집자",
+  viewer: "보기 전용",
+};
+
+export const ROLE_RANK: Record<Role, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
+
+export interface UserInfo {
+  id: string;
+  email: string | null;
+  name: string;
+  emailVerified: boolean;
+  hasPassword: boolean;
+  providers: string[];
+}
+
+export interface TeamSummary {
+  id: string;
+  name: string;
+  role: Role;
+  personal: boolean;
+  memberCount: number;
+}
+
+export interface Member {
+  userId: string;
+  name: string;
+  email: string | null;
+  role: Role;
+  joinedAt: number;
+}
+
+export interface TeamDetail extends TeamSummary {
+  members: Member[];
+  defaults: DocSettings;
+  createdAt: number;
+}
+
+export interface InviteInfo {
+  id: string;
+  kind: "email" | "code";
+  email?: string;
+  code?: string;
+  role: Role;
+  createdByName?: string;
+  createdAt: number;
+  expiresAt: number;
+  maxUses: number;
+  uses: number;
+  status: "active" | "used" | "expired" | "revoked" | "locked";
+}
+
+export interface ActivityItem {
+  id: number;
+  userName: string;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  summary: string;
+  createdAt: number;
+}
+
+export interface DuplicateInfo {
+  imageUrl: string;
+  existing: Reference;
+}
+
+export interface SessionInfo {
+  user: UserInfo;
+  teams: TeamSummary[];
+}
+
+export interface AuthProviders {
+  email: boolean;
+  signup: boolean;
+  kakao: boolean;
+  naver: boolean;
+  mail: boolean;
+  signupDomains: string[];
+}
+
+export interface PresenceUser {
+  userId: string;
+  name: string;
+  pageId?: string;
+}
+
+export interface VersionInfo {
+  version: number;
+  title: string;
+  updatedByName: string;
+  updatedAt: number;
+  pageCount: number;
 }

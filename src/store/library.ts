@@ -1,15 +1,19 @@
 import { create } from "zustand";
-import type { AppStatus, CaseStudy, Reference } from "../../shared/types";
+import type { AppStatus, CaseStudy, DuplicateInfo, Reference } from "../../shared/types";
 import { api, type BulkOp, type CaseInput, type RefInput, type RefPatch } from "../api";
+import { useSession } from "./session";
 import { toast } from "./toast";
 
 interface LibraryState {
   refs: Reference[];
   cases: CaseStudy[];
   loaded: boolean;
+  /** 불러온 라이브러리의 팀 */
+  teamId: string;
   status: AppStatus | null;
   load: () => Promise<void>;
-  addRefs: (inputs: RefInput[]) => Promise<{ created: Reference[]; merged: Reference[] }>;
+  reset: () => void;
+  addRefs: (inputs: RefInput[]) => Promise<{ created: Reference[]; duplicates: DuplicateInfo[] }>;
   updateRef: (id: string, patch: RefPatch) => Promise<void>;
   bulk: (op: BulkOp) => Promise<void>;
   renameTag: (from: string, to: string) => Promise<void>;
@@ -23,17 +27,26 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   refs: [],
   cases: [],
   loaded: false,
+  teamId: "",
   status: null,
 
   async load() {
-    const [lib, status] = await Promise.all([api.library(), api.status().catch(() => null)]);
-    set({ refs: lib.references, cases: lib.cases, status, loaded: true });
+    const teamId = useSession.getState().teamId;
+    if (!teamId) return;
+    const [lib, status] = await Promise.all([api.library(), get().status ? Promise.resolve(get().status) : api.status().catch(() => null)]);
+    // 불러오는 사이 팀을 바꿨으면 버린다
+    if (useSession.getState().teamId !== teamId) return;
+    set({ refs: lib.references, cases: lib.cases, status, loaded: true, teamId });
+  },
+
+  reset() {
+    set({ refs: [], cases: [], loaded: false, teamId: "" });
   },
 
   async addRefs(inputs) {
     const result = await api.addRefs(inputs);
-    const mergedIds = new Map(result.merged.map((r) => [r.id, r]));
-    set({ refs: [...result.created, ...get().refs.map((r) => mergedIds.get(r.id) ?? r)] });
+    const updated = new Map(result.duplicates.map((d) => [d.existing.id, d.existing]));
+    set({ refs: [...result.created, ...get().refs.map((r) => updated.get(r.id) ?? r)] });
     return result;
   },
 

@@ -7,7 +7,7 @@ echo RefBoard 준비 중...
 
 where node >nul 2>nul
 if errorlevel 1 goto install_node
-node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=12)||(a===20&&b>=19)?0:1)"
+node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)"
 if errorlevel 1 goto old_node
 goto packages
 
@@ -21,7 +21,7 @@ pause
 exit /b 0
 
 :old_node
-echo Node.js 버전이 낮습니다. 22 이상이 필요합니다.
+echo Node.js 버전이 낮습니다. 22.13 이상이 필요합니다.
 :manual_node
 echo 열리는 페이지에서 Windows 설치 파일(LTS)을 받아 설치한 뒤, 이 파일을 다시 실행하세요.
 start "" "https://nodejs.org/ko/download"

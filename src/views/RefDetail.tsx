@@ -7,7 +7,7 @@ import { normalizeTags } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { toast } from "../store/toast";
 
-export function RefDetail({ ref_: ref, onClose }: { ref_: Reference; onClose: () => void }) {
+export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; onClose: () => void; readOnly?: boolean }) {
   const { refs, cases, updateRef, bulk } = useLibrary();
   const vocab = useMemo(() => tagVocabulary(refs), [refs]);
   const [title, setTitle] = useState(ref.title ?? "");
@@ -59,7 +59,6 @@ export function RefDetail({ ref_: ref, onClose }: { ref_: Reference; onClose: ()
               {ref.width}×{ref.height}
             </span>
           ) : null}
-          <span>{new Date(ref.createdAt).toLocaleDateString("ko-KR")}</span>
           {ref.sourceUrl && (
             <a href={ref.sourceUrl} target="_blank" rel="noreferrer" className="ellipsis">
               원본 페이지 ↗
@@ -69,6 +68,17 @@ export function RefDetail({ ref_: ref, onClose }: { ref_: Reference; onClose: ()
             이미지 ↗
           </a>
         </div>
+        <div className="attribution">
+          <span>
+            추가 <strong>{ref.createdByName ?? "—"}</strong> · {new Date(ref.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}
+          </span>
+          {ref.updatedAt && ref.updatedAt - ref.createdAt > 1000 && (
+            <span>
+              최근 수정 <strong>{ref.updatedByName ?? "—"}</strong> · {new Date(ref.updatedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}
+            </span>
+          )}
+        </div>
+        <fieldset className="plain-fieldset" disabled={readOnly}>
         <Field label="제목">
           <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title !== (ref.title ?? "") && updateRef(ref.id, { title })} />
         </Field>
@@ -109,7 +119,8 @@ export function RefDetail({ ref_: ref, onClose }: { ref_: Reference; onClose: ()
         <Field label="이미지 URL" hint="링크가 깨졌을 때 새 주소로 교체">
           <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} onBlur={() => imageUrl !== ref.imageUrl && imageUrl.trim() && updateRef(ref.id, { imageUrl: imageUrl.trim() })} />
         </Field>
-        <Button
+        </fieldset>
+        {!readOnly && <Button
           variant="danger"
           icon="trash"
           onClick={async () => {
@@ -119,7 +130,7 @@ export function RefDetail({ ref_: ref, onClose }: { ref_: Reference; onClose: ()
           }}
         >
           삭제
-        </Button>
+        </Button>}
       </div>
     </aside>
   );

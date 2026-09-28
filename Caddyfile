@@ -1,0 +1,14 @@
+# 도메인을 실제 주소로 바꾸세요. Caddy 가 HTTPS 인증서를 자동으로 발급·갱신합니다.
+refboard.example.com {
+	encode zstd gzip
+	# 요청 본문 상한 (문서 저장·가져오기 기준 여유 포함)
+	request_body {
+		max_size 12MB
+	}
+	reverse_proxy app:5178 {
+		# 실시간 동기화(SSE)가 버퍼링 없이 바로 전달되도록
+		flush_interval -1
+	}
+	# 헤더 보안 설정은 RefBoard 서버가 직접 붙인다 (CSP, HSTS 등)
+	header -Server
+}

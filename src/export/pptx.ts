@@ -3,7 +3,7 @@
 import PptxGenJS from "pptxgenjs";
 import type { DocSettings, DocumentData, ImageElement, Page } from "../../shared/types";
 import { proxied } from "../api";
-import { pageSize, resolveColor, resolveStyle } from "../components/PageView";
+import { fillTitle, pageSize, resolveColor, resolveStyle } from "../components/PageView";
 import { formatPageNumber } from "../lib/defaults";
 
 const inch = (pt: number) => pt / 72;
@@ -70,7 +70,7 @@ function renderBox(img: HTMLImageElement, el: ImageElement, boxW: number, boxH: 
   return canvas.toDataURL(opaque ? "image/jpeg" : "image/png", 0.9);
 }
 
-function addChrome(slide: PptxGenJS.Slide, page: Page, settings: DocSettings, index: number, total: number) {
+function addChrome(slide: PptxGenJS.Slide, page: Page, settings: DocSettings, index: number, total: number, title: string) {
   if (page.hideFooter) return;
   const { W, H } = pageSize(settings);
   const m = settings.margin;
@@ -84,12 +84,15 @@ function addChrome(slide: PptxGenJS.Slide, page: Page, settings: DocSettings, in
     margin: 0,
     valign: "top" as const,
   };
-  const up = (t: string) => (st.uppercase ? t.toUpperCase() : t);
+  const up = (t: string) => {
+    const s = fillTitle(t, title);
+    return st.uppercase ? s.toUpperCase() : s;
+  };
   const f = settings.footer;
   if (f.show) {
     const num = f.pageNumber ? formatPageNumber(f.pageNumberFormat, index + settings.pageNumberStart, total + settings.pageNumberStart - 1) : "";
     const text = (pos: "left" | "center" | "right", t: string) => up([t, f.pageNumber && f.pageNumberPos === pos ? num : ""].filter(Boolean).join("      "));
-    const y = inch(H - m.bottom * 0.62);
+    const y = inch(H - m.bottom + 2);
     const w = inch((W - m.left - m.right) / 3);
     const h = inch(st.fontSize * 1.6);
     slide.addText(text("left", f.left), { ...base, x: inch(m.left), y, w, h, align: "left" });
@@ -202,7 +205,7 @@ export async function exportPptx(doc: DocumentData): Promise<void> {
         }
       }
     }
-    addChrome(slide, page, settings, i, doc.pages.length);
+    addChrome(slide, page, settings, i, doc.pages.length, doc.title);
     if (page.notes) slide.addNotes(page.notes);
   }
   await pptx.writeFile({ fileName: `${doc.title || "document"}.pptx` });

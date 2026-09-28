@@ -1,0 +1,46 @@
+# 외부 공개용 구성: Caddy 가 HTTPS 인증서(Let's Encrypt)를 자동으로 받아 RefBoard 앞단에 선다.
+#   1) 도메인(예: refboard.example.com)의 DNS A 레코드를 이 서버 IP 로 지정
+#   2) .env 에 APP_URL=https://refboard.example.com, TRUST_PROXY=1 등 설정 (.env.example 참고)
+#   3) Caddyfile 의 도메인을 바꾼 뒤  docker compose up -d --build
+# RefBoard 컨테이너는 외부에 포트를 열지 않고 Caddy 를 통해서만 접속된다.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 5178
+      DATA_DIR: /data
+      # Caddy 한 단계 뒤에 있으므로 X-Forwarded-For 를 한 번만 신뢰
+      TRUST_PROXY: "1"
+    volumes:
+      - refboard-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "5178"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  refboard-data:
+  caddy-data:
+  caddy-config:

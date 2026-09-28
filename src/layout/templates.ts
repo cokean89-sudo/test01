@@ -45,10 +45,12 @@ export function headerColumns(settings: DocSettings, bodyHeight = 44): HeaderCol
       bottom: m.top + 50 + bodyHeight + 16,
     };
   }
+  // 첨부 템플릿 실측(A4 가로): 타이틀 20pt | 서브타이틀 x≈21% | 강조·설명 x≈40.7%, 이미지 영역 시작 97pt
+  const textX = m.left + inner * 0.403;
   return {
-    title: { x: m.left, y: m.top, w: inner * 0.19, h: 30 },
-    subtitle: { x: m.left + inner * 0.2, y: m.top + 2, w: inner * 0.18, h: 36 },
-    text: { x: m.left + inner * 0.395, y: m.top - 2, w: inner * 0.605, h: bodyHeight + 12 },
+    title: { x: m.left, y: m.top - 2, w: inner * 0.19, h: 30 },
+    subtitle: { x: m.left + inner * 0.2, y: m.top - 1, w: inner * 0.18, h: 36 },
+    text: { x: textX, y: m.top, w: W - m.right - textX, h: bodyHeight + 13 },
     bottom: m.top + 63,
   };
 }
@@ -151,12 +153,16 @@ export function createReferencePage(settings: DocSettings, input: ReferencePageI
   const { W } = pageDims(settings);
   const m = settings.margin;
   const cols = headerColumns(settings, 30);
+  // 템플릿 실측: "Reference" 라벨 99pt, 이미지 영역 121~541pt (하단 여백을 케이스 페이지보다 넉넉히)
+  const landscape = pageDims(settings).W > pageDims(settings).H;
   const labelY = cols.bottom + 2;
-  const areaY = labelY + 20;
+  const areaY = labelY + 22;
+  const areaBottom = contentBottom(settings) - (landscape ? 32 : 0);
   const elements: PageElement[] = [
     textEl("title", input.title || dummyText("title"), cols.title),
     textEl("subtitle", input.subtitle || dummyText("subtitle"), cols.subtitle),
-    textEl("body", input.description || dummyText("body"), { ...cols.text, y: cols.text.y + 2 }),
+    // 레퍼런스 페이지 설명은 한두 줄 요약이라 본문보다 크게 (템플릿 기준 9.5pt)
+    textEl("body", input.description || LOREM.body.split(". ")[0] + ".", { ...cols.text, y: cols.text.y - 1 }, { fontSize: 9.5, lineHeight: 1.45 }),
     textEl("section", input.sectionLabel ?? "Reference", { x: m.left, y: labelY, w: 240, h: 12 }),
     ...input.images.map((r) => imageFromRef(r, true)),
   ];
@@ -168,7 +174,7 @@ export function createReferencePage(settings: DocSettings, input: ReferencePageI
     kind: "reference",
     group: input.group ?? input.title,
     layout: { ...DEFAULT_LAYOUT, mode: "columns", columns: 0, ...input.layout },
-    area: { x: m.left, y: areaY, w: W - m.left - m.right, h: contentBottom(settings) - areaY },
+    area: { x: m.left, y: areaY, w: W - m.left - m.right, h: areaBottom - areaY },
     elements,
   };
   return relayoutPage(page);

@@ -29,7 +29,7 @@ export function buildHtml(input: DocumentData): string {
   const pages = doc.pages
     .map(
       (page, i) =>
-        `<section class="pg" id="p${i + 1}">${renderToStaticMarkup(createElement(PageView, { page, settings: doc.settings, index: i, total: doc.pages.length, mode: "view" }))}</section>`,
+        `<section class="pg" id="p${i + 1}">${renderToStaticMarkup(createElement(PageView, { page, settings: doc.settings, index: i, total: doc.pages.length, mode: "view", docTitle: doc.title }))}</section>`,
     )
     .join("\n");
   return `<!doctype html>

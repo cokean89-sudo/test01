@@ -13,6 +13,8 @@ export interface BuildOptions {
   matchMode: MatchMode;
   groupBy: GroupBy;
   layout: PageLayout;
+  /** true 면 템플릿 기본 배치 사용 (케이스: 보고서형, 레퍼런스: 세로 정렬) — layout 은 간격만 적용 */
+  layoutAuto?: boolean;
   maxPerPage: number;
   cover: boolean;
   sections: boolean;
@@ -217,7 +219,7 @@ export function buildDocument(
             description: ci === 0 ? c?.description : "",
             images: chunk,
             logos: ci === 0 ? group.logos : [],
-            layout: opts.layout,
+            layout: opts.layoutAuto ? { gap: opts.layout.gap } : opts.layout,
           }),
         );
       } else {
@@ -227,7 +229,7 @@ export function buildDocument(
             group: group.label,
             sectionLabel: "Reference" + suffix,
             images: chunk,
-            layout: opts.layout,
+            layout: opts.layoutAuto ? { gap: opts.layout.gap } : opts.layout,
           }),
         );
       }

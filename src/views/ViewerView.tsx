@@ -49,7 +49,7 @@ export function ViewerView({ id }: { id: string }) {
       <div className="viewer-pages">
         {doc.pages.map((p, i) => (
           <div key={p.id} className="viewer-page" id={"p" + (i + 1)} onDoubleClick={() => setPresent(i)}>
-            <PageView page={p} settings={doc.settings} index={i} total={doc.pages.length} />
+            <PageView page={p} settings={doc.settings} index={i} total={doc.pages.length} docTitle={doc.title} />
             <span className="viewer-num">{i + 1}</span>
           </div>
         ))}
@@ -105,7 +105,7 @@ export function Presenter({ doc, start, onExit }: { doc: DocumentData; start: nu
       }}
     >
       <div style={{ width }}>
-        <PageView page={page} settings={doc.settings} index={idx} total={n} />
+        <PageView page={page} settings={doc.settings} index={idx} total={n} docTitle={doc.title} />
       </div>
       <div className="presenter-hud" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => setIdx((i) => Math.max(0, i - 1))} aria-label="이전">

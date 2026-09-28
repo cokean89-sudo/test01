@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import type { TextElement } from "../../../shared/types";
-import { api } from "../../api";
+import type { PresenceUser, TextElement } from "../../../shared/types";
+import { api, teamApi, teamEvents } from "../../api";
 import { Spinner } from "../../components/ui";
-import { flushSave, useEditor } from "../../store/editor";
+import { navigate } from "../../lib/router";
+import { flushSave, pullRemote, useEditor } from "../../store/editor";
+import { useSession } from "../../store/session";
 import { toast } from "../../store/toast";
 import { PENDING_AI_KEY } from "../BuildDialog";
 import { isDummyText } from "../../lib/dummy";
 import { AI_FIELDS, analyzeRequestFor, applyAnalysis, contentImages, copySelection, deleteSelection, duplicateSelection, nudge, paste, reorder, type AiField } from "./actions";
 import { AiDialog } from "./AiDialog";
+import { HistoryDialog } from "./HistoryDialog";
 import { Canvas } from "./Canvas";
 import { ImagePicker } from "./ImagePicker";
 import { Inspector } from "./Inspector";
@@ -17,6 +20,7 @@ import { Toolbar } from "./Toolbar";
 export function EditorView({ id }: { id: string }) {
   const doc = useEditor((s) => s.doc);
   const modal = useEditor((s) => s.modal);
+  const readOnly = useEditor((s) => s.readOnly);
   const [error, setError] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
 
@@ -26,7 +30,10 @@ export function EditorView({ id }: { id: string }) {
       .document(id)
       .then((d) => {
         if (cancelled) return;
-        useEditor.getState().open(d);
+        // 다른 팀의 문서 링크로 들어왔으면 그 팀으로 전환
+        if (d.teamId && d.teamId !== useSession.getState().teamId) useSession.getState().switchTeam(d.teamId);
+        useEditor.getState().open(d, { readOnly: d.role === "viewer" });
+        if (d.role === "viewer") toast.info("보기 전용 권한입니다 — 편집할 수 없습니다");
         if (sessionStorage.getItem(PENDING_AI_KEY) === d.id) {
           sessionStorage.removeItem(PENDING_AI_KEY);
           setTimeout(() => void runAiAll(), 300);
@@ -42,6 +49,34 @@ export function EditorView({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // 실시간: 다른 팀원의 저장을 반영하고, 같은 문서를 보는 사람을 표시
+  const teamId = doc?.id === id ? doc.teamId : undefined;
+  useEffect(() => {
+    if (!teamId) return;
+    const es = teamEvents(teamId, id);
+    es.addEventListener("doc", (e) => {
+      const data = JSON.parse((e as MessageEvent).data) as { docId: string; version: number; byName?: string };
+      if (data.docId === id) void pullRemote(data.version, data.byName).catch(() => undefined);
+    });
+    es.addEventListener("presence", (e) => {
+      const data = JSON.parse((e as MessageEvent).data) as { docId: string; users: PresenceUser[] };
+      if (data.docId === id) useEditor.setState({ presence: data.users });
+    });
+    es.addEventListener("removed", () => {
+      toast.error("이 팀에 대한 접근 권한이 없어졌습니다");
+      navigate("docs");
+    });
+    return () => es.close();
+  }, [teamId, id]);
+
+  // 내가 보고 있는 페이지를 팀원에게 알림
+  const pageId = useEditor((s) => s.pageId);
+  useEffect(() => {
+    if (!teamId || !pageId) return;
+    const t = setTimeout(() => void teamApi.presence(teamId, id, pageId).catch(() => undefined), 400);
+    return () => clearTimeout(t);
+  }, [teamId, id, pageId]);
+
   const aiPage = useCallback(() => {
     const { pageId, setModal } = useEditor.getState();
     if (pageId) setModal({ type: "ai", pageIds: [pageId] });
@@ -50,7 +85,7 @@ export function EditorView({ id }: { id: string }) {
   /** 모든 페이지: 비어 있는 텍스트 칸과 캡션을 AI 로 채운다 (한 번의 실행 취소로 되돌릴 수 있음) */
   async function runAiAll() {
     const start = useEditor.getState().doc;
-    if (!start) return;
+    if (!start || useEditor.getState().readOnly) return;
     const targets = start.pages.filter((p) => (p.kind === "case" || p.kind === "reference") && contentImages(p).length > 0);
     if (!targets.length) {
       toast.info("분석할 이미지 페이지가 없습니다");
@@ -175,7 +210,7 @@ export function EditorView({ id }: { id: string }) {
   }
 
   return (
-    <div className="editor">
+    <div className={"editor" + (readOnly ? " readonly" : "")}>
       <Toolbar onAiPage={aiPage} onAiAll={runAiAll} aiBusy={aiBusy} />
       <div className="editor-body">
         <PageList />
@@ -184,6 +219,7 @@ export function EditorView({ id }: { id: string }) {
       </div>
       {modal?.type === "picker" && <ImagePicker mode={modal.mode} targetId={modal.targetId} />}
       {modal?.type === "ai" && <AiDialog pageId={modal.pageIds[0]} />}
+      {modal?.type === "history" && <HistoryDialog />}
     </div>
   );
 }

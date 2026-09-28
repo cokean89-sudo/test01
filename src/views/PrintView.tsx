@@ -69,7 +69,7 @@ export function PrintView({ id }: { id: string }) {
       </div>
       {doc.pages.map((p, i) => (
         <div key={p.id} className="print-page">
-          <PageView page={p} settings={doc.settings} index={i} total={doc.pages.length} mode="print" />
+          <PageView page={p} settings={doc.settings} index={i} total={doc.pages.length} mode="print" docTitle={doc.title} />
         </div>
       ))}
     </div>

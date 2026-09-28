@@ -2,6 +2,7 @@ import { useState, type ReactElement, type ReactNode } from "react";
 import {
   LAYOUT_MODES,
   PAGE_SIZES,
+  ROLE_RANK,
   TEXT_ROLES,
   type CaptionPos,
   type DocSettings,
@@ -18,7 +19,10 @@ import { SmartImage } from "../../components/SmartImage";
 import { Button, ColorInput, Field, NumberInput, Segmented, Select, Toggle } from "../../components/ui";
 import { FOOTER_PRESETS, REPORT_TYPOGRAPHY, TYPOGRAPHY_PRESETS } from "../../lib/defaults";
 import { useCurrentPage, useEditor } from "../../store/editor";
+import { teamApi } from "../../api";
 import { useLibrary } from "../../store/library";
+import { useCurrentTeam } from "../../store/session";
+import { toast } from "../../store/toast";
 import {
   align,
   changePageSize,
@@ -416,6 +420,7 @@ function LayoutGlyph({ mode }: { mode: string }) {
     rows: [r(1, 1, 9, 5, 1), r(11, 1, 10, 5, 2), r(1, 7, 5, 5, 3), r(7, 7, 8, 5, 4), r(16, 7, 5, 5, 5)],
     columns: [r(1, 1, 6, 4, 1), r(1, 6, 6, 6, 2), r(8, 1, 6, 7, 3), r(8, 9, 6, 3, 4), r(15, 1, 6, 11, 5)],
     mosaic: [r(1, 1, 10, 7, 1), r(1, 9, 10, 3, 2), r(12, 1, 9, 4, 3), r(12, 6, 4, 6, 4), r(17, 6, 4, 6, 5)],
+    report: [r(1, 1, 6, 3.3, 1), r(1, 5, 6, 3, 2), r(1, 9, 6, 3, 3), r(8, 1, 8, 6, 4), r(17, 1, 4, 11, 5), r(8, 8, 8, 4, 6)],
   };
   return (
     <svg width="44" height="26" viewBox="0 0 22 13" fill="currentColor">
@@ -443,8 +448,42 @@ const NUMBER_FORMATS = [
 function DocPanel() {
   const [s, set] = useSettings();
   const f = s.footer;
+  const team = useCurrentTeam();
+  const isAdmin = !!team && ROLE_RANK[team.role] >= ROLE_RANK.admin;
   return (
     <>
+      <Section title="팀 기본 양식">
+        <p className="muted small">새 문서는 &lsquo;{team?.name}&rsquo; 팀의 기본 양식(부서명·하단 태그라인·타이포)으로 시작합니다.</p>
+        <div className="row wrap">
+          <Button
+            size="sm"
+            onClick={async () => {
+              if (!team) return;
+              const d = await teamApi.detail(team.id);
+              set((x) => Object.assign(x, structuredClone(d.defaults)));
+              toast.success("팀 기본 양식을 이 문서에 적용했습니다 (Ctrl+Z 로 되돌리기)");
+            }}
+          >
+            팀 기본 양식 적용
+          </Button>
+          {isAdmin && (
+            <Button
+              size="sm"
+              onClick={async () => {
+                if (!team || !confirm(`이 문서의 양식을 '${team.name}' 팀의 기본값으로 저장할까요? 이후 새로 만드는 문서에 적용됩니다.`)) return;
+                try {
+                  await teamApi.saveDefaults(team.id, s);
+                  toast.success("팀 기본 양식으로 저장했습니다");
+                } catch (err) {
+                  toast.error((err as Error).message);
+                }
+              }}
+            >
+              이 양식을 팀 기본값으로
+            </Button>
+          )}
+        </div>
+      </Section>
       <Section title="페이지">
         <Field label="크기">
           <Select value={s.pageSize} onChange={(v) => changePageSize(v)} options={Object.entries(PAGE_SIZES).map(([k, v]) => ({ value: k as PageSizeKey, label: `${v.label} (${v.w}×${v.h}pt)` }))} />
@@ -492,7 +531,7 @@ function DocPanel() {
             <Field label="가운데">
               <input value={f.center} onChange={(e) => set((x) => void (x.footer.center = e.target.value), "f:center")} />
             </Field>
-            <Field label="오른쪽">
+            <Field label="오른쪽" hint="{title} = 문서 제목">
               <input value={f.right} onChange={(e) => set((x) => void (x.footer.right = e.target.value), "f:right")} />
             </Field>
             <Toggle checked={f.pageNumber} onChange={(v) => set((x) => void (x.footer.pageNumber = v))} label="페이지 번호" />

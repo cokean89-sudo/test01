@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LAYOUT_MODES, PAGE_SIZES, type PageSizeKey } from "../../shared/types";
 import { api } from "../api";
 import { PageView } from "../components/PageView";
 import { SmartImage } from "../components/SmartImage";
 import { Button, Field, Modal, NumberInput, Segmented, Select, Toggle } from "../components/ui";
 import { buildDocument, buildGroups, type BuildOptions, type GroupBy } from "../layout/autobuild";
-import { DEFAULT_LAYOUT, defaultSettings, FOOTER_PRESETS, TYPOGRAPHY_PRESETS } from "../lib/defaults";
+import { DEFAULT_LAYOUT, defaultSettings, FOOTER_PRESETS, REPORT_TYPOGRAPHY, TYPOGRAPHY_PRESETS } from "../lib/defaults";
+import { useTeamDefaults } from "../store/teamDefaults";
 import { navigate } from "../lib/router";
 import { useLibrary } from "../store/library";
 import { toast } from "../store/toast";
@@ -23,6 +24,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
     matchMode: preset?.matchMode ?? "or",
     groupBy: preset?.groupBy ?? (cases.length ? "case" : "tag"),
     layout: { ...DEFAULT_LAYOUT, ...preset?.layout },
+    layoutAuto: preset?.layoutAuto ?? !preset?.layout,
     maxPerPage: preset?.maxPerPage ?? 9,
     cover: preset?.cover ?? true,
     sections: preset?.sections ?? false,
@@ -30,8 +32,10 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
     refIds: preset?.refIds,
   });
   const [pageSize, setPageSize] = useState<PageSizeKey>("a4-landscape");
-  const [footerKey, setFooterKey] = useState(FOOTER_PRESETS[0].key);
-  const [typoKey, setTypoKey] = useState(TYPOGRAPHY_PRESETS[0].key);
+  // 기본값은 팀 문서 기본 설정 (부서명·양식·타이포)
+  const teamDefaults = useTeamDefaults();
+  const [footerKey, setFooterKey] = useState("team");
+  const [typoKey, setTypoKey] = useState("team");
   const [overrides, setOverrides] = useState<Record<string, { label?: string; excluded?: boolean }>>({});
   const [runAi, setRunAi] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -46,14 +50,19 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
     });
 
   const settings = useMemo(() => {
-    const s = defaultSettings();
+    const s = structuredClone(teamDefaults ?? defaultSettings());
     s.pageSize = pageSize;
-    s.footer = { ...FOOTER_PRESETS.find((f) => f.key === footerKey)!.footer };
-    if (footerKey === "report") s.footer.right = opts.title.toUpperCase().slice(0, 40) || "UNTITLED";
-    const typo = TYPOGRAPHY_PRESETS.find((t) => t.key === typoKey)!;
-    for (const [role, style] of Object.entries(typo.apply)) Object.assign(s.typography[role as keyof typeof s.typography], style);
+    if (footerKey !== "team") s.footer = { ...FOOTER_PRESETS.find((f) => f.key === footerKey)!.footer, left: s.footer.left || "" };
+    if (typoKey !== "team") {
+      const typo = TYPOGRAPHY_PRESETS.find((t) => t.key === typoKey)!;
+      s.typography = structuredClone(REPORT_TYPOGRAPHY);
+      for (const [role, style] of Object.entries(typo.apply)) Object.assign(s.typography[role as keyof typeof s.typography], style);
+    }
     return s;
-  }, [pageSize, footerKey, typoKey, opts.title]);
+  }, [teamDefaults, pageSize, footerKey, typoKey]);
+  useEffect(() => {
+    if (teamDefaults) setPageSize(teamDefaults.pageSize);
+  }, [teamDefaults]);
 
   const rawGroups = useMemo(() => buildGroups(refs, cases, opts), [refs, cases, opts]);
   const groups = useMemo(
@@ -66,7 +75,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
   async function create() {
     setCreating(true);
     try {
-      const doc = await api.createDocument(preview);
+      const doc = await api.createDocument({ title: preview.title, query: preview.query, settings: preview.settings, pages: preview.pages });
       if (runAi) sessionStorage.setItem(PENDING_AI_KEY, doc.id);
       close();
       navigate("edit/" + doc.id);
@@ -137,10 +146,25 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
             />
           </Field>
           <Field label="이미지 배치">
-            <Select value={opts.layout.mode} onChange={(mode) => set("layout", { ...opts.layout, mode })} options={LAYOUT_MODES.map((m) => ({ value: m.key, label: m.label }))} />
+            <Select<string>
+              value={opts.layoutAuto ? "auto" : opts.layout.mode}
+              onChange={(mode) =>
+                mode === "auto"
+                  ? setOpts((o) => ({ ...o, layoutAuto: true }))
+                  : setOpts((o) => ({ ...o, layoutAuto: false, layout: { ...o.layout, mode: mode as typeof o.layout.mode } }))
+              }
+              options={[
+                { value: "auto", label: "템플릿 기본 (케이스: 보고서형 · 레퍼런스: 세로 정렬)" },
+                ...LAYOUT_MODES.map((m) => ({ value: m.key, label: m.label })),
+              ]}
+            />
           </Field>
           <div className="grid-2">
-            {opts.layout.mode === "grid" || opts.layout.mode === "columns" ? (
+            {opts.layoutAuto ? (
+              <Field label="배열 변형">
+                <NumberInput value={opts.layout.seed} min={0} onChange={(seed) => set("layout", { ...opts.layout, seed })} />
+              </Field>
+            ) : opts.layout.mode === "grid" || opts.layout.mode === "columns" ? (
               <Field label={opts.layout.mode === "grid" ? "열(단) 수" : "열 수 (0=자동)"}>
                 <NumberInput value={opts.layout.columns} min={0} max={8} onChange={(columns) => set("layout", { ...opts.layout, columns })} />
               </Field>
@@ -171,10 +195,10 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
             <Select value={pageSize} onChange={setPageSize} options={Object.entries(PAGE_SIZES).map(([k, v]) => ({ value: k as PageSizeKey, label: v.label }))} />
           </Field>
           <Field label="문서 양식 (하단 태그라인)">
-            <Select value={footerKey} onChange={setFooterKey} options={FOOTER_PRESETS.map((f) => ({ value: f.key, label: f.label }))} />
+            <Select value={footerKey} onChange={setFooterKey} options={[{ value: "team", label: `팀 기본 설정${teamDefaults?.footer.left ? ` (${teamDefaults.footer.left})` : ""}` }, ...FOOTER_PRESETS.map((f) => ({ value: f.key, label: f.label }))]} />
           </Field>
           <Field label="타이포 프리셋">
-            <Select value={typoKey} onChange={setTypoKey} options={TYPOGRAPHY_PRESETS.map((t) => ({ value: t.key, label: t.label }))} />
+            <Select value={typoKey} onChange={setTypoKey} options={[{ value: "team", label: "팀 기본 설정" }, ...TYPOGRAPHY_PRESETS.map((t) => ({ value: t.key, label: t.label }))]} />
           </Field>
           <Toggle checked={opts.cover} onChange={(v) => set("cover", v)} label="표지 페이지" />
           <Toggle checked={opts.sections} onChange={(v) => set("sections", v)} label="그룹마다 간지(섹션) 페이지" />
@@ -221,7 +245,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
           <div className="page-preview-grid">
             {preview.pages.slice(0, 24).map((p, i) => (
               <div key={p.id} className="page-preview">
-                <PageView page={p} settings={settings} index={i} total={preview.pages.length} mode="thumb" />
+                <PageView page={p} settings={settings} index={i} total={preview.pages.length} mode="thumb" docTitle={opts.title} />
                 <span>{i + 1}</span>
               </div>
             ))}

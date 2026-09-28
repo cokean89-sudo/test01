@@ -1,9 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
+import { ROLE_LABEL, ROLE_RANK } from "../shared/types";
 import { Icon } from "./components/icons";
-import { Button, Toasts } from "./components/ui";
+import { Button, Menu, MenuItem, Spinner, Toasts } from "./components/ui";
 import { navigate, useRoute } from "./lib/router";
 import { useLibrary } from "./store/library";
+import { connectTeamEvents, useCurrentTeam, useSession } from "./store/session";
+import { toast } from "./store/toast";
 import { useUI } from "./store/ui";
+import { AccountView, ForgotView, InviteView, LoginView, ResetView, SignupView, VerifyView } from "./views/auth/AuthViews";
 import { BuildDialog } from "./views/BuildDialog";
 import { CasesView } from "./views/CasesView";
 import { CollectDialog } from "./views/CollectDialog";
@@ -11,19 +15,77 @@ import { DocsView } from "./views/DocsView";
 import { EditorView } from "./views/editor/EditorView";
 import { LibraryView } from "./views/LibraryView";
 import { PrintView } from "./views/PrintView";
+import { TeamView } from "./views/team/TeamView";
 import { ViewerView } from "./views/ViewerView";
+
+const PUBLIC = new Set(["login", "signup", "forgot", "verify", "reset", "invite"]);
 
 export function App() {
   const route = useRoute();
-  const load = useLibrary((s) => s.load);
+  const status = useSession((s) => s.status);
+  const teamId = useSession((s) => s.teamId);
+  const init = useSession((s) => s.init);
   const collect = useUI((s) => s.collect);
   const build = useUI((s) => s.build);
+  const [section = "library", id] = route;
 
   useEffect(() => {
-    load().catch((err) => console.error(err));
-  }, [load]);
+    init().catch((err) => toast.error("서버에 연결할 수 없습니다: " + (err as Error).message));
+  }, [init]);
 
-  const [section = "library", id] = route;
+  // 팀이 바뀌면 라이브러리를 새로 불러오고, 팀 실시간 이벤트를 구독한다
+  useEffect(() => {
+    if (status !== "ready" || !teamId) return;
+    const lib = useLibrary.getState();
+    lib.reset();
+    lib.load().catch((err) => console.error(err));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const reloadLibrary = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => useLibrary.getState().load().catch(() => undefined), 300);
+    };
+    const s = useSession.getState();
+    return connectTeamEvents(teamId, {
+      library: reloadLibrary,
+      team: () => {
+        s.bump("team");
+        void s.refreshTeams();
+      },
+      docs: () => s.bump("docs"),
+      doc: () => s.bump("docs"),
+      removed: () => {
+        toast.error("이 팀에서 내보내졌거나 팀이 삭제되었습니다");
+        void s.refreshTeams().then(() => navigate("library"));
+      },
+    });
+  }, [status, teamId]);
+
+  if (status === "loading") {
+    return (
+      <div className="center-msg">
+        <Spinner size={22} />
+      </div>
+    );
+  }
+
+  // 로그인 전: 공개 화면만
+  if (status === "anonymous") {
+    if (section === "signup") return <Shell><SignupView /></Shell>;
+    if (section === "forgot") return <Shell><ForgotView /></Shell>;
+    if (section === "verify" && id) return <Shell><VerifyView token={id} /></Shell>;
+    if (section === "reset" && id) return <Shell><ResetView token={id} /></Shell>;
+    if (section === "invite" && id) return <Shell><InviteView token={id} /></Shell>;
+    if (!PUBLIC.has(section) && location.hash.length > 2) sessionStorage.setItem("rb.after", location.hash);
+    return <Shell><LoginView /></Shell>;
+  }
+
+  if (section === "verify" && id) return <Shell><VerifyView token={id} /></Shell>;
+  if (section === "reset" && id) return <Shell><ResetView token={id} /></Shell>;
+  if (section === "invite" && id) return <Shell><InviteView token={id} /></Shell>;
+  if (section === "login" || section === "signup") {
+    navigate("library");
+    return null;
+  }
 
   // 뷰어·인쇄는 앱 크롬 없이 단독 화면
   if (section === "view" && id) return <ViewerView id={id} />;
@@ -39,6 +101,10 @@ export function App() {
           <CasesView />
         ) : section === "docs" ? (
           <DocsView />
+        ) : section === "team" ? (
+          <TeamView />
+        ) : section === "account" ? (
+          <AccountView />
         ) : (
           <LibraryView />
         )}
@@ -50,14 +116,27 @@ export function App() {
   );
 }
 
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <>
+      {children}
+      <Toasts />
+    </>
+  );
+}
+
 function TopBar({ section }: { section: string }) {
   const status = useLibrary((s) => s.status);
   const refCount = useLibrary((s) => s.refs.length);
+  const { user, teams, switchTeam, logout } = useSession();
+  const team = useCurrentTeam();
   const { openCollect, openBuild } = useUI();
+  const canEdit = !!team && ROLE_RANK[team.role] >= ROLE_RANK.editor;
   const tabs = [
     { key: "library", label: "레퍼런스", icon: "grid" as const, count: refCount },
     { key: "cases", label: "케이스", icon: "folder" as const },
     { key: "docs", label: "문서", icon: "file" as const },
+    { key: "team", label: "팀", icon: "layers" as const },
   ];
   const active = section === "edit" ? "docs" : section;
   return (
@@ -66,6 +145,38 @@ function TopBar({ section }: { section: string }) {
         <span className="brand-mark" />
         RefBoard
       </a>
+      <Menu
+        trigger={(open) => (
+          <button className="team-switch" onClick={open} title="팀 전환">
+            <span className="team-dot">{team?.name.slice(0, 1)}</span>
+            <span className="team-name ellipsis">{team?.name ?? "팀 없음"}</span>
+            <Icon name="down" size={13} />
+          </button>
+        )}
+      >
+        {(close) => (
+          <>
+            {teams.map((t) => (
+              <MenuItem
+                key={t.id}
+                icon={t.id === team?.id ? "check" : undefined}
+                hint={`${ROLE_LABEL[t.role]} · ${t.memberCount}명`}
+                onClick={() => {
+                  close();
+                  switchTeam(t.id);
+                  if (section === "edit") navigate("docs");
+                }}
+              >
+                {t.name}
+              </MenuItem>
+            ))}
+            <div className="menu-sep" />
+            <MenuItem icon="settings" onClick={() => (close(), navigate("team"))}>
+              팀 관리 · 초대
+            </MenuItem>
+          </>
+        )}
+      </Menu>
       <nav className="tabs">
         {tabs.map((t) => (
           <button key={t.key} className={"tab" + (active === t.key ? " on" : "")} onClick={() => navigate(t.key)}>
@@ -80,12 +191,39 @@ function TopBar({ section }: { section: string }) {
           <Icon name="sparkle" size={14} />
           {status?.ai ? "AI 연결됨" : "AI 미설정"}
         </span>
-        <Button icon="sparkle" onClick={() => openBuild()}>
-          키워드로 문서 만들기
-        </Button>
-        <Button icon="plus" variant="primary" onClick={() => openCollect()}>
-          레퍼런스 추가
-        </Button>
+        {canEdit && (
+          <>
+            <Button icon="sparkle" onClick={() => openBuild()}>
+              키워드로 문서 만들기
+            </Button>
+            <Button icon="plus" variant="primary" onClick={() => openCollect()}>
+              레퍼런스 추가
+            </Button>
+          </>
+        )}
+        <Menu
+          align="right"
+          trigger={(open) => (
+            <button className="avatar" onClick={open} title={user?.email ?? user?.name}>
+              {user?.name.slice(0, 1)}
+            </button>
+          )}
+        >
+          {(close) => (
+            <>
+              <div className="menu-head">
+                <strong>{user?.name}</strong>
+                <span className="muted small">{user?.email ?? "소셜 로그인"}</span>
+              </div>
+              <MenuItem icon="settings" onClick={() => (close(), navigate("account"))}>
+                내 계정
+              </MenuItem>
+              <MenuItem icon="x" onClick={() => (close(), void logout())}>
+                로그아웃
+              </MenuItem>
+            </>
+          )}
+        </Menu>
       </div>
     </header>
   );

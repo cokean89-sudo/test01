@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Reference } from "../../shared/types";
+import { ROLE_RANK, type Reference } from "../../shared/types";
 import { api } from "../api";
 import { Icon } from "../components/icons";
 import { SmartImage } from "../components/SmartImage";
@@ -7,6 +7,7 @@ import { Button, Empty, Menu, MenuItem, Modal, Segmented, Select, TagInput } fro
 import { groupHits } from "../layout/autobuild";
 import { norm, parseQuery, searchRefs, tagCounts, type MatchMode, type SortKey } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
+import { useCurrentTeam } from "../store/session";
 import { toast } from "../store/toast";
 import { useUI } from "../store/ui";
 import { extractUrls } from "./CollectDialog";
@@ -22,7 +23,10 @@ const SORTS: { value: SortKey; label: string }[] = [
 
 export function LibraryView() {
   const { refs, cases, loaded, bulk, renameTag, loadSample, updateRef } = useLibrary();
-  const { openCollect, openBuild } = useUI();
+  const { openCollect, openBuild, focusRef, setFocusRef } = useUI();
+  const team = useCurrentTeam();
+  const canEdit = !!team && ROLE_RANK[team.role] >= ROLE_RANK.editor;
+  const isAdmin = !!team && ROLE_RANK[team.role] >= ROLE_RANK.admin;
   const [query, setQuery] = useState(() => sessionStorage.getItem("rb.query") ?? "");
   const [mode, setMode] = useState<MatchMode>("or");
   const [sort, setSort] = useState<SortKey>("relevance");
@@ -79,6 +83,14 @@ export function LibraryView() {
   const selIds = [...selected];
   const openRef = refs.find((r) => r.id === openId) ?? null;
 
+  // 중복 알림에서 '편집'을 누르면 해당 레퍼런스 상세를 연다
+  useEffect(() => {
+    if (focusRef && refs.some((r) => r.id === focusRef)) {
+      setOpenId(focusRef);
+      setFocusRef(null);
+    }
+  }, [focusRef, refs, setFocusRef]);
+
   const card = (ref: Reference) => (
     <RefCard
       key={ref.id}
@@ -107,7 +119,7 @@ export function LibraryView() {
                   <Icon name="tag" size={13} /> {tag}
                 </button>
                 <span className="count">{count}</span>
-                <Menu
+                {canEdit && <Menu
                   align="right"
                   trigger={(open) => (
                     <button className="icon-mini" onClick={open} aria-label="태그 메뉴">
@@ -137,7 +149,7 @@ export function LibraryView() {
                       </MenuItem>
                     </>
                   )}
-                </Menu>
+                </Menu>}
               </li>
             ))}
           </ul>
@@ -157,9 +169,9 @@ export function LibraryView() {
             </ul>
           </section>
         )}
-        <section className="sidebar-foot">
-          <a className="link-btn" href="/api/backup">
-            <Icon name="download" size={13} /> 백업 내려받기
+        {isAdmin && <section className="sidebar-foot">
+          <a className="link-btn" href={api.backupUrl()}>
+            <Icon name="download" size={13} /> 팀 백업 내려받기
           </a>
           <label className="link-btn">
             <Icon name="upload" size={13} /> 백업 가져오기
@@ -172,7 +184,7 @@ export function LibraryView() {
                 if (!file) return;
                 try {
                   const data = JSON.parse(await file.text());
-                  const r = await api.importBackup(data, "merge");
+                  const r = await api.importBackup(data);
                   await useLibrary.getState().load();
                   toast.success(`가져오기 완료 — 레퍼런스 ${r.references} · 케이스 ${r.cases} · 문서 ${r.documents}`);
                 } catch (err) {
@@ -182,7 +194,7 @@ export function LibraryView() {
               }}
             />
           </label>
-        </section>
+        </section>}
       </aside>
 
       <section className="library-main">
@@ -222,7 +234,7 @@ export function LibraryView() {
           </Button>
         </div>
 
-        {selected.size > 0 && (
+        {selected.size > 0 && canEdit && (
           <div className="bulk-bar">
             <strong>{selected.size}개 선택</strong>
             <Button size="sm" icon="tag" onClick={() => setBulkTag("add")}>
@@ -284,7 +296,7 @@ export function LibraryView() {
           {loaded && refs.length === 0 ? (
             <Empty title="레퍼런스 라이브러리가 비어 있습니다">
               <p>핀터레스트 핀·보드, 웹페이지, 이미지 링크를 붙여넣어 키워드와 함께 저장하세요.</p>
-              <div className="row">
+              {canEdit && <div className="row">
                 <Button variant="primary" icon="plus" onClick={() => openCollect()}>
                   레퍼런스 추가
                 </Button>
@@ -296,7 +308,7 @@ export function LibraryView() {
                 >
                   샘플 데이터로 체험하기
                 </Button>
-              </div>
+              </div>}
             </Empty>
           ) : hits.length === 0 ? (
             <Empty title="검색 결과가 없습니다">
@@ -329,7 +341,7 @@ export function LibraryView() {
         </div>
       </section>
 
-      {openRef && <RefDetail ref_={openRef} onClose={() => setOpenId(null)} />}
+      {openRef && <RefDetail ref_={openRef} readOnly={!canEdit} onClose={() => setOpenId(null)} />}
 
       {bulkTag && (
         <BulkTagDialog

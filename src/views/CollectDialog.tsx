@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { RefSource, ScrapeResult } from "../../shared/types";
+import type { DuplicateInfo, Reference, RefSource, ScrapeResult } from "../../shared/types";
 import { api, type RefInput } from "../api";
 import { SmartImage } from "../components/SmartImage";
 import { Button, Field, Modal, Segmented, Spinner, TagInput, Toggle } from "../components/ui";
@@ -17,6 +17,8 @@ interface Candidate {
   width?: number;
   height?: number;
   source: RefSource;
+  /** 팀 라이브러리에 이미 있는 같은 이미지 */
+  duplicate?: Reference;
 }
 
 interface SourceBlock {
@@ -61,6 +63,8 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
   const [note, setNote] = useState("");
   const [aiTag, setAiTag] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ created: number; duplicates: DuplicateInfo[] } | null>(null);
+  const setFocusRef = useUI((s) => s.setFocusRef);
 
   useEffect(() => {
     if (initialUrls) void fetchAll(initialUrls);
@@ -90,6 +94,16 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
             height: it.height,
             source: SOURCE_OF[result.kind],
           }));
+          // 팀 라이브러리에 이미 있는 이미지인지 확인 (누가 언제 추가했는지)
+          const dups = await api.checkDuplicates(items.map((i) => i.imageUrl)).catch(() => [] as DuplicateInfo[]);
+          const dupMap = new Map(dups.map((d) => [d.imageUrl, d.existing]));
+          for (const it of items) {
+            const d = dupMap.get(it.imageUrl);
+            if (d) {
+              it.duplicate = d;
+              it.checked = false;
+            }
+          }
           setBlocks((prev) => prev.map((b) => (b.url === url ? { ...b, status: "done", result, items } : b)));
         } catch (err) {
           setBlocks((prev) => prev.map((b) => (b.url === url ? { ...b, status: "error", error: (err as Error).message } : b)));
@@ -130,10 +144,11 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
         height: c.height,
         source: c.source,
       }));
-      const { created, merged } = await addRefs(inputs);
-      toast.success(`${created.length}개 저장${merged.length ? ` · ${merged.length}개는 기존 항목에 태그 병합` : ""}`);
-      close();
+      const { created, duplicates } = await addRefs(inputs);
+      toast.success(`${created.length}개 저장${duplicates.length ? ` · 중복 ${duplicates.length}개는 기존 항목에 태그만 추가` : ""}`);
       if (aiTag && created.length) void autoTag(created.map((r) => r.id));
+      if (duplicates.length) setResult({ created: created.length, duplicates });
+      else close();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -164,6 +179,45 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
       }
     }
     if (done) toast.success(`AI 태깅 완료 (${done}개)`);
+  }
+
+  if (result) {
+    return (
+      <Modal title="저장 결과" onClose={close} width={640} footer={<Button variant="primary" onClick={close}>닫기</Button>}>
+        <p>
+          새로 저장 {result.created}개 · <strong>중복 이미지 {result.duplicates.length}개</strong>는 새로 만들지 않고 기존 항목에 태그만 더했습니다.
+        </p>
+        <ul className="dup-list">
+          {result.duplicates.map((d) => (
+            <li key={d.existing.id}>
+              <span className="mini-thumb">
+                <SmartImage src={d.existing.imageUrl} />
+              </span>
+              <div>
+                <strong>{d.existing.title || "(제목 없음)"}</strong>
+                <DupWho existing={d.existing} />
+                <div className="ref-tags">
+                  {d.existing.tags.map((t) => (
+                    <span key={t} className="tag tag-sm">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setFocusRef(d.existing.id);
+                  close();
+                }}
+              >
+                열어서 편집
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </Modal>
+    );
   }
 
   return (
@@ -238,9 +292,26 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
                       <button className="candidate-thumb" onClick={() => updateItem(c.key, { checked: !c.checked })}>
                         <SmartImage src={c.imageUrl} fit="contain" onNatural={(w, h) => updateItem(c.key, { width: w, height: h })} />
                         <span className="check">{c.checked ? "✓" : ""}</span>
+                        {c.duplicate && <span className="dup-badge">중복</span>}
                         {c.width && c.height ? <span className="dims">{c.width}×{c.height}</span> : null}
                       </button>
-                      <input value={c.title} placeholder="제목" onChange={(e) => updateItem(c.key, { title: e.target.value })} />
+                      {c.duplicate ? (
+                        <div className="dup-note">
+                          <DupWho existing={c.duplicate} />
+                          <button
+                            className="link-btn"
+                            onClick={() => {
+                              setFocusRef(c.duplicate!.id);
+                              close();
+                            }}
+                          >
+                            기존 항목 편집
+                          </button>
+                          {c.checked && <span className="muted small">선택하면 태그만 기존 항목에 추가됩니다</span>}
+                        </div>
+                      ) : (
+                        <input value={c.title} placeholder="제목" onChange={(e) => updateItem(c.key, { title: e.target.value })} />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -318,4 +389,13 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
 function extractImgFromHtml(html: string): string {
   if (!html) return "";
   return [...html.matchAll(/<img[^>]+src="([^"]+)"/gi)].map((m) => m[1]).join("\n");
+}
+
+/** 중복 이미지: 누가 언제 추가했는지 */
+export function DupWho({ existing }: { existing: Reference }) {
+  return (
+    <span className="dup-who">
+      {existing.createdByName ?? "팀원"} · {new Date(existing.createdAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })} 추가
+    </span>
+  );
 }

@@ -1,12 +1,15 @@
 import { create } from "zustand";
-import type { DocumentData, Page, PageElement } from "../../shared/types";
-import { api } from "../api";
+import { mergeDocuments } from "../../shared/merge";
+import type { DocumentData, Page, PageElement, PresenceUser } from "../../shared/types";
+import { api, ApiError } from "../api";
+import { toast } from "./toast";
 
 export type Tool = "select" | "text" | "rect" | "ellipse" | "line";
 
 export type EditorModal =
   | { type: "picker"; mode: "add" | "replace"; targetId?: string }
   | { type: "ai"; pageIds: string[] }
+  | { type: "history" }
   | null;
 
 interface EditorState {
@@ -25,8 +28,14 @@ interface EditorState {
   txBase: DocumentData | null;
   lastKey: { key: string; at: number } | null;
   modal: EditorModal;
+  /** 서버에 저장된 버전 (동시 편집 병합 기준) */
+  version: number;
+  /** 보기 전용 권한이면 편집 불가 */
+  readOnly: boolean;
+  /** 같은 문서를 보고 있는 팀원 */
+  presence: PresenceUser[];
 
-  open: (doc: DocumentData) => void;
+  open: (doc: DocumentData, opts?: { readOnly?: boolean }) => void;
   close: () => void;
   /** draft(깊은 복사본)를 수정하는 방식의 변경 — 실행 취소 기록이 남는다. key 가 같으면 연속 입력을 하나로 묶는다. */
   update: (recipe: (draft: DocumentData) => void, opts?: { key?: string }) => void;
@@ -63,10 +72,17 @@ export const useEditor = create<EditorState>((set, get) => ({
   txBase: null,
   lastKey: null,
   modal: null,
+  version: 1,
+  readOnly: false,
+  presence: [],
 
-  open(doc) {
+  open(doc, opts) {
+    serverDoc = doc;
     set({
       doc,
+      version: doc.version ?? 1,
+      readOnly: !!opts?.readOnly,
+      presence: [],
       pageId: doc.pages[0]?.id ?? null,
       selection: [],
       editingId: null,
@@ -85,8 +101,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   update(recipe, opts) {
-    const { doc, past, txBase, lastKey } = get();
-    if (!doc) return;
+    const { doc, past, txBase, lastKey, readOnly } = get();
+    if (!doc || readOnly) return;
     const draft = structuredClone(doc);
     recipe(draft);
     shareUnchanged(draft, doc);
@@ -120,8 +136,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   patchTransient(pageId, patches) {
-    const { doc } = get();
-    if (!doc) return;
+    const { doc, readOnly } = get();
+    if (!doc || readOnly) return;
     set({
       doc: {
         ...doc,
@@ -208,21 +224,82 @@ export function withPage(draft: DocumentData, pageId: string, fn: (page: Page, i
   if (out) draft.pages[idx] = out;
 }
 
-// ─── autosave ───────────────────────────────────────────────
+// ─── autosave & 동시 편집 ─────────────────────────────────────
 
+/** 서버가 알고 있는 마지막 문서 상태 (state.version 에 해당) */
+let serverDoc: DocumentData | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let saving: Promise<void> | null = null;
 
+const meta = (d: DocumentData, from: DocumentData): DocumentData => ({ ...d, id: from.id, teamId: from.teamId, version: from.version });
+
+/**
+ * base 를 기준으로 만든 로컬 상태(현재 문서·실행 취소 기록)에 theirs(다른 사람 변경이 포함된 서버 문서)를 합친다.
+ * 실행 취소 기록도 함께 옮겨서, 되돌리기를 해도 다른 사람의 변경은 사라지지 않게 한다.
+ */
+function rebaseOnto(base: DocumentData, theirs: DocumentData) {
+  const st = useEditor.getState();
+  if (!st.doc) return;
+  const fix = (d: DocumentData) => (d === base ? theirs : meta(mergeDocuments(base, d, theirs).value, theirs));
+  const doc = fix(st.doc);
+  const pages = new Set(doc.pages.map((p) => p.id));
+  const elements = new Set(doc.pages.flatMap((p) => p.elements.map((e) => e.id)));
+  useEditor.setState({
+    doc,
+    past: st.past.slice(-30).map(fix),
+    future: st.future.slice(0, 30).map(fix),
+    txBase: st.txBase ? fix(st.txBase) : null,
+    pageId: st.pageId && pages.has(st.pageId) ? st.pageId : (doc.pages[0]?.id ?? null),
+    selection: st.selection.filter((id) => elements.has(id)),
+    editingId: st.editingId && elements.has(st.editingId) ? st.editingId : null,
+  });
+}
+
+function scheduleSave(delay = 700) {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    saving = doSave().finally(() => {
+      saving = null;
+    });
+  }, delay);
+}
+
 async function doSave(): Promise<void> {
-  const { doc } = useEditor.getState();
-  if (!doc) return;
+  const st = useEditor.getState();
+  const snapshot = st.doc;
+  if (!snapshot || st.readOnly) return;
+  if (snapshot === serverDoc) {
+    useEditor.setState({ saveState: "saved" });
+    return;
+  }
+  // 드래그 중에는 끝난 뒤 저장
+  if (st.txBase) {
+    scheduleSave(400);
+    return;
+  }
   useEditor.setState({ saveState: "saving" });
   try {
-    await api.saveDocument(doc);
-    if (useEditor.getState().doc === doc) useEditor.setState({ saveState: "saved" });
-    else useEditor.setState({ saveState: "dirty" });
-  } catch {
+    const res = await api.saveDocument(snapshot, st.version);
+    if (useEditor.getState().doc?.id !== snapshot.id) return;
+    if (res.merged && res.doc) {
+      rebaseOnto(snapshot, res.doc);
+      serverDoc = res.doc;
+    } else {
+      serverDoc = snapshot;
+    }
+    const now = useEditor.getState();
+    useEditor.setState({ version: res.version, saveState: now.doc === serverDoc ? "saved" : "dirty" });
+    if (now.doc !== serverDoc) scheduleSave(300);
+  } catch (err) {
     useEditor.setState({ saveState: "error" });
+    if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+      useEditor.setState({ readOnly: true });
+      toast.error("이 문서를 편집할 권한이 없습니다: " + err.message);
+    } else {
+      // 네트워크 오류 등 — 잠시 후 다시 시도
+      scheduleSave(5000);
+    }
   }
 }
 
@@ -230,23 +307,41 @@ export function flushSave(): Promise<void> {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
-    saving = doSave();
+    saving = doSave().finally(() => {
+      saving = null;
+    });
   }
   return saving ?? Promise.resolve();
 }
 
+/** 다른 팀원이 저장했다는 알림을 받으면 최신 문서를 받아 내 편집과 합친다 */
+export async function pullRemote(version: number, byName?: string) {
+  const st = useEditor.getState();
+  if (!st.doc || version <= st.version) return;
+  if (saveTimer || saving || st.doc !== serverDoc) {
+    // 내 저장할 변경이 있으면 저장하면서 서버가 병합한다
+    await flushSave();
+    if (useEditor.getState().version >= version) return;
+  }
+  const fresh = await api.document(st.doc.id);
+  const cur = useEditor.getState();
+  if (!cur.doc || cur.doc.id !== fresh.id || (fresh.version ?? 0) <= cur.version || !serverDoc) return;
+  rebaseOnto(serverDoc, fresh);
+  serverDoc = fresh;
+  useEditor.setState({ version: fresh.version ?? cur.version });
+  if (useEditor.getState().doc !== fresh) scheduleSave(300);
+  if (byName) toast.info(`${byName} 님의 변경 사항을 반영했습니다`);
+}
+
 useEditor.subscribe((state, prev) => {
-  if (!state.doc || !prev.doc || state.doc === prev.doc || state.doc.id !== prev.doc.id) return;
-  if (state.saveState !== "dirty") useEditor.setState({ saveState: "dirty" });
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    saving = doSave();
-  }, 700);
+  if (!state.doc || !prev.doc || state.doc === prev.doc || state.doc.id !== prev.doc.id || state.readOnly) return;
+  if (state.doc === serverDoc) return;
+  if (state.saveState !== "dirty" && state.saveState !== "saving") useEditor.setState({ saveState: "dirty" });
+  scheduleSave();
 });
 
 window.addEventListener("beforeunload", (e) => {
-  if (saveTimer || useEditor.getState().saveState === "saving") {
+  if (saveTimer || saving) {
     void flushSave();
     e.preventDefault();
   }

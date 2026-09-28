@@ -12,7 +12,7 @@ pause_and_exit() {
 
 node_ok() {
   command -v node >/dev/null 2>&1 &&
-    node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=12)||(a===20&&b>=19)?0:1)'
+    node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'
 }
 
 echo "RefBoard 준비 중..."
@@ -23,7 +23,7 @@ if ! node_ok; then
     brew install node || brew upgrade node
   fi
   if ! node_ok; then
-    echo "Node.js 22 이상이 필요합니다."
+    echo "Node.js 22.13 이상이 필요합니다."
     echo "열리는 페이지에서 macOS 설치 파일(.pkg)을 받아 설치한 뒤, 이 파일을 다시 실행하세요."
     open "https://nodejs.org/ko/download"
     pause_and_exit 1

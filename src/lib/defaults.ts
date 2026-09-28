@@ -6,10 +6,10 @@ export const EN_DISPLAY = "Poppins";
 /** 첨부 예시(보고서형 케이스 스터디) 기준 기본 타이포 — A4 가로 pt 단위 */
 export const REPORT_TYPOGRAPHY: Record<TextRole, TextStyle> = {
   title: { fontFamily: EN_DISPLAY, fontSize: 20, fontWeight: 600, tracking: -10, lineHeight: 1.15, color: "#111111" },
-  subtitle: { fontFamily: EN_DISPLAY, fontSize: 11, fontWeight: 400, tracking: 0, lineHeight: 1.35, color: "#111111" },
-  highlight: { fontFamily: KO_SANS, fontSize: 8.5, fontWeight: 700, tracking: -10, lineHeight: 1.4, color: "accent" },
-  body: { fontFamily: KO_SANS, fontSize: 7, fontWeight: 400, tracking: -15, lineHeight: 1.65, color: "#333333" },
-  section: { fontFamily: KO_SANS, fontSize: 8, fontWeight: 700, tracking: 0, lineHeight: 1.3, color: "#111111" },
+  subtitle: { fontFamily: EN_DISPLAY, fontSize: 12.5, fontWeight: 400, tracking: -5, lineHeight: 1.2, color: "#111111" },
+  highlight: { fontFamily: KO_SANS, fontSize: 8.5, fontWeight: 700, tracking: -10, lineHeight: 1.3, color: "accent" },
+  body: { fontFamily: KO_SANS, fontSize: 7.2, fontWeight: 400, tracking: -15, lineHeight: 1.4, color: "#333333" },
+  section: { fontFamily: KO_SANS, fontSize: 8.5, fontWeight: 700, tracking: 0, lineHeight: 1.3, color: "#111111" },
   label: {
     fontFamily: KO_SANS,
     fontSize: 6.5,
@@ -17,7 +17,7 @@ export const REPORT_TYPOGRAPHY: Record<TextRole, TextStyle> = {
     tracking: 0,
     lineHeight: 1.5,
     color: "#222222",
-    background: "#dcdcdc",
+    background: "#d9d9d9",
     bgMode: "inline",
     padding: 2,
   },
@@ -66,7 +66,7 @@ export const FOOTER_PRESETS: { key: string; label: string; footer: FooterSetting
       show: true,
       left: "SHINSEGAE BRAND OFFICE",
       center: "",
-      right: "UNTITLED",
+      right: "{title}",
       pageNumber: true,
       pageNumberPos: "right",
       pageNumberFormat: "{n}",
@@ -117,12 +117,14 @@ export const FOOTER_PRESETS: { key: string; label: string; footer: FooterSetting
   },
 ];
 
-export const DEFAULT_LAYOUT: PageLayout = { mode: "mosaic", columns: 3, rows: 0, gap: 6, seed: 0 };
+/** 템플릿 기본 배치 — 케이스: 보고서형, 레퍼런스: 세로 정렬(메이슨리) */
+export const DEFAULT_LAYOUT: PageLayout = { mode: "report", columns: 3, rows: 0, gap: 6, seed: 0 };
 
 export function defaultSettings(): DocSettings {
   return {
     pageSize: "a4-landscape",
-    margin: { top: 34, right: 20, bottom: 28, left: 20 },
+    // 첨부 보고서 템플릿(A4 가로) 실측 기준
+    margin: { top: 34, right: 20, bottom: 22, left: 20 },
     background: "#ffffff",
     accent: "#c8102e",
     footer: { ...FOOTER_PRESETS[0].footer },

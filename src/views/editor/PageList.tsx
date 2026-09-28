@@ -5,8 +5,8 @@ import { Button, Menu, MenuItem } from "../../components/ui";
 import { useEditor } from "../../store/editor";
 import { addPage, deletePage, duplicatePage, movePage } from "./actions";
 
-const Thumb = memo(function Thumb({ page, settings, index, total }: { page: Page; settings: DocSettings; index: number; total: number }) {
-  return <PageView page={page} settings={settings} index={index} total={total} mode="thumb" />;
+const Thumb = memo(function Thumb({ page, settings, index, total, title }: { page: Page; settings: DocSettings; index: number; total: number; title: string }) {
+  return <PageView page={page} settings={settings} index={index} total={total} mode="thumb" docTitle={title} />;
 });
 
 const KIND_LABEL: Record<Page["kind"], string> = { case: "케이스", reference: "레퍼런스", cover: "표지", section: "간지", blank: "빈 페이지" };
@@ -65,7 +65,7 @@ export function PageList() {
           >
             <span className="page-num">{i + 1}</span>
             <div className="page-thumb">
-              <Thumb page={p} settings={doc.settings} index={i} total={doc.pages.length} />
+              <Thumb page={p} settings={doc.settings} index={i} total={doc.pages.length} title={doc.title} />
             </div>
             <div className="page-item-meta">
               <span className="ellipsis">{p.group || KIND_LABEL[p.kind]}</span>

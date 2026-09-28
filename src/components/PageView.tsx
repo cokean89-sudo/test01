@@ -71,12 +71,14 @@ interface Props {
   editingId?: string | null;
   onTextCommit?: (id: string, text: string) => void;
   onImageNatural?: (id: string, w: number, h: number) => void;
+  /** 하단/상단 문구의 {title} 자리에 들어갈 문서 제목 */
+  docTitle?: string;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
 }
 
-export function PageView({ page, settings, index, total, mode = "view", editingId, onTextCommit, onImageNatural, className, style, children }: Props) {
+export function PageView({ page, settings, index, total, mode = "view", editingId, onTextCommit, onImageNatural, docTitle, className, style, children }: Props) {
   const { W, H } = pageSize(settings);
   const u = (pt: number) => `${(pt / W) * 100}cqw`;
   return (
@@ -99,7 +101,7 @@ export function PageView({ page, settings, index, total, mode = "view", editingI
           onImageNatural={onImageNatural}
         />
       ))}
-      <Chrome page={page} settings={settings} index={index} total={total} W={W} H={H} u={u} />
+      <Chrome page={page} settings={settings} index={index} total={total} W={W} H={H} u={u} docTitle={docTitle} />
       {children}
     </div>
   );
@@ -361,10 +363,16 @@ function ShapeView({ el, W, H, u, settings }: { el: ShapeElement; W: number; H: 
 }
 
 /** 문서 양식: 헤더 / 하단 태그라인 / 페이지 번호 */
-function Chrome({ page, settings, index, total, W, H, u }: { page: Page; settings: DocSettings; index: number; total: number; W: number; H: number; u: U }) {
+/** 문구 안의 {title} 을 문서 제목으로 바꾼다 */
+export function fillTitle(text: string, docTitle?: string): string {
+  return text.includes("{title}") ? text.replaceAll("{title}", docTitle?.trim() || "Untitled") : text;
+}
+
+function Chrome({ page, settings, index, total, W, H, u, docTitle }: { page: Page; settings: DocSettings; index: number; total: number; W: number; H: number; u: U; docTitle?: string }) {
   if (page.hideFooter) return null;
   const m = settings.margin;
-  const { footer, header } = settings;
+  const footer = { ...settings.footer, left: fillTitle(settings.footer.left, docTitle), center: fillTitle(settings.footer.center, docTitle), right: fillTitle(settings.footer.right, docTitle) };
+  const header = { ...settings.header, left: fillTitle(settings.header.left, docTitle), right: fillTitle(settings.header.right, docTitle) };
   const st = resolveStyle(settings, "footer");
   const css: CSSProperties = { ...textCss(st, u), position: "absolute", whiteSpace: "nowrap" };
   const num = footer.pageNumber ? formatPageNumber(footer.pageNumberFormat, index + settings.pageNumberStart, total + settings.pageNumberStart - 1) : "";
@@ -379,7 +387,8 @@ function Chrome({ page, settings, index, total, W, H, u }: { page: Page; setting
       </span>
     );
   };
-  const fy = H - m.bottom * 0.62;
+  // 템플릿 기준: 하단 태그라인은 본문 영역 바로 아래 (A4 가로 575pt)
+  const fy = H - m.bottom + 2;
   const hy = m.top * 0.32;
   return (
     <>

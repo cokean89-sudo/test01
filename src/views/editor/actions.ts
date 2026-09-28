@@ -17,6 +17,7 @@ import type {
 } from "../../../shared/types";
 import { pageSize } from "../../components/PageView";
 import { createBlankPage, createCasePage, createReferencePage, createSectionPage, imageFromRef, relayoutPage, scalePage } from "../../layout/templates";
+import { dummyText, isDummyText } from "../../lib/dummy";
 import { uid } from "../../lib/id";
 import { parseQuery } from "../../lib/search";
 import { useEditor, withPage } from "../../store/editor";
@@ -78,7 +79,7 @@ export function addElement(el: PageElement, opts: { edit?: boolean } = {}) {
   if (opts.edit) st().setEditing(el.id);
 }
 
-export function newText(rect: Rect, role: TextRole = "free", text = ""): TextElement {
+export function newText(rect: Rect, role: TextRole = "free", text = dummyText(role)): TextElement {
   return { id: uid("t"), type: "text", role, text, ...rect };
 }
 
@@ -263,7 +264,27 @@ export function addRefsToPage(refs: Reference[], managed: boolean) {
   const page = getPage(doc, pageId);
   if (!doc || !page) return;
   const { W, H } = pageSize(doc.settings);
-  const els = refs.map((r, i) => {
+  // 자동 레이아웃에 넣을 때는 회색 박스(빈 자리)부터 채운다
+  const slots = managed ? page.elements.filter((e) => e.type === "image" && e.managed && !e.logo && !e.src).map((e) => e.id) : [];
+  const filled = refs.slice(0, slots.length);
+  const rest = refs.slice(slots.length);
+  if (filled.length) {
+    updatePage(page.id, (p) => {
+      filled.forEach((r, i) => {
+        const el = p.elements.find((e): e is ImageElement => e.id === slots[i] && e.type === "image");
+        if (el) {
+          Object.assign(el, { src: r.imageUrl, refId: r.id, natW: r.width, natH: r.height, sourceUrl: r.sourceUrl, caption: r.title || el.caption });
+          if (r.kind === "logo") el.fit = "contain";
+        }
+      });
+      return rest.length ? p : relayoutPage(p);
+    });
+    if (!rest.length) {
+      st().select(slots.slice(0, filled.length));
+      return;
+    }
+  }
+  const els = rest.map((r, i) => {
     const el = imageFromRef(r, managed);
     el.logo = undefined;
     if (!managed) {
@@ -287,7 +308,8 @@ export function replaceImage(elId: string, ref: Reference) {
     const el = page.elements.find((e): e is ImageElement => e.id === elId && e.type === "image");
     if (!el) return;
     Object.assign(el, { src: ref.imageUrl, refId: ref.id, natW: ref.width, natH: ref.height, sourceUrl: ref.sourceUrl });
-    if (!el.caption && ref.title) el.caption = ref.title;
+    if (ref.kind === "logo") el.fit = "contain";
+    if (isDummyText(el.caption) && ref.title) el.caption = ref.title;
     return el.managed || el.logo ? relayoutPage(page) : page;
   });
 }
@@ -308,11 +330,11 @@ export function addPage(kind: NewPageKind, afterIndex?: number) {
   const s = doc.settings;
   const page =
     kind === "reference"
-      ? createReferencePage(s, { title: "", images: [] })
+      ? createReferencePage(s, { title: "", images: [], placeholders: 6 })
       : kind === "case"
-        ? createCasePage(s, { title: "", images: [], logos: [] })
+        ? createCasePage(s, { title: "", images: [], logos: [], placeholders: { images: 6, logos: 2 } })
         : kind === "section"
-          ? createSectionPage(s, { title: "섹션" })
+          ? createSectionPage(s, { title: "" })
           : createBlankPage(s);
   const idx = afterIndex ?? doc.pages.findIndex((p) => p.id === pageId);
   st().update((d) => void d.pages.splice(idx + 1, 0, page));
@@ -375,16 +397,23 @@ function absoluteUrl(src: string): string {
   }
 }
 
+/** 분석·캡션 대상 이미지 — 로고와 빈 회색 박스는 제외 */
+export function contentImages(page: Page): ImageElement[] {
+  return page.elements.filter((e): e is ImageElement => e.type === "image" && !e.logo && !!e.src);
+}
+
 export function analyzeRequestFor(page: Page, doc: DocumentData, instruction?: string): AnalyzeRequest {
   const lib = useLibrary.getState();
   const refMap = new Map(lib.refs.map((r) => [r.id, r]));
-  const images = page.elements
-    .filter((e): e is ImageElement => e.type === "image" && !e.logo)
-    .map((img) => {
-      const ref = img.refId ? refMap.get(img.refId) : undefined;
-      return { url: absoluteUrl(img.src), title: ref?.title ?? img.caption, note: ref?.note, tags: ref?.tags };
-    });
-  const textOf = (role: TextRole) => page.elements.find((e): e is TextElement => e.type === "text" && e.role === role)?.text;
+  const images = contentImages(page).map((img) => {
+    const ref = img.refId ? refMap.get(img.refId) : undefined;
+    return { url: absoluteUrl(img.src), title: ref?.title ?? (isDummyText(img.caption) ? undefined : img.caption), note: ref?.note, tags: ref?.tags };
+  });
+  // Lorem Ipsum 더미 텍스트는 '비어 있음'으로 취급
+  const textOf = (role: TextRole) => {
+    const text = page.elements.find((e): e is TextElement => e.type === "text" && e.role === role)?.text;
+    return isDummyText(text) ? undefined : text;
+  };
   const c = page.caseId ? lib.cases.find((x) => x.id === page.caseId) : undefined;
   return {
     kind: page.kind,
@@ -424,8 +453,7 @@ export function applyAnalysis(page: Page, result: AnalyzeResult, fields: Set<AiF
     }
   }
   if (fields.has("captions")) {
-    const imgs = next.elements.filter((e): e is ImageElement => e.type === "image" && !e.logo);
-    imgs.forEach((img, i) => {
+    contentImages(next).forEach((img, i) => {
       const cap = result.captions[i];
       if (cap?.trim()) img.caption = cap.trim();
       if (captionPos) img.captionPos = captionPos;

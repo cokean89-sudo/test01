@@ -160,7 +160,8 @@ export async function exportPptx(doc: DocumentData): Promise<void> {
         if (img) {
           slide.addImage({ data: renderBox(img, el, el.w, imgH), x: box.x, y: box.y, w: box.w, h: inch(imgH), rotate: box.rotate, transparency });
         } else {
-          slide.addText("이미지를 불러올 수 없음", { x: box.x, y: box.y, w: box.w, h: inch(imgH), fill: { color: "EEEEEE" }, color: "888888", fontSize: 8, align: "center", valign: "middle" });
+          // 빈 자리·불러오지 못한 이미지는 회색 박스로
+          slide.addShape("rect", { x: box.x, y: box.y, w: box.w, h: inch(imgH), fill: { color: "D9D9D9" }, line: { type: "none" } });
         }
         if (showCap) {
           const capColor = below && !el.captionStyle?.color ? "333333" : hex(cs.color, "FFFFFF");

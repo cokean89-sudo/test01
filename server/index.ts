@@ -1,4 +1,5 @@
 import "./env";
+import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -14,7 +15,9 @@ import { sampleData } from "./sample";
 import { scrapeUrl } from "./scrape";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const isProd = process.env.NODE_ENV === "production";
+// --prod: 빌드된 dist/ 제공, --open: 시작 후 브라우저 열기 (Windows 에서도 동작하도록 환경변수 대신 인자로)
+const isProd = process.env.NODE_ENV === "production" || process.argv.includes("--prod");
+const openOnStart = process.argv.includes("--open") || process.env.OPEN_BROWSER === "1";
 const PORT = Number(process.env.PORT) || 5178;
 const HOST = process.env.HOST || "127.0.0.1";
 const db = new JsonDb(process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(root, "data"));
@@ -383,10 +386,22 @@ async function start() {
     const vite = await createServer({ root, server: { middlewareMode: true, hmr: { server } }, appType: "spa" });
     app.use(vite.middlewares);
   }
+  const url = `http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`;
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`\n  포트 ${PORT} 가 이미 사용 중입니다. RefBoard 가 이미 켜져 있다면 브라우저에서 ${url} 을 여세요.`);
+      console.error("  다른 포트로 실행하려면 .env 에 PORT=5179 처럼 지정하세요.\n");
+      if (openOnStart) openBrowser(url);
+      process.exit(1);
+    }
+    throw err;
+  });
   server.listen(PORT, HOST, () => {
     const status = aiStatus();
-    console.log(`\n  RefBoard  →  http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`);
-    console.log(`  AI: ${status.ai ? `Claude (${status.model})` : "미설정 — " + status.aiReason}\n`);
+    console.log(`\n  RefBoard  →  ${url}`);
+    console.log(`  AI: ${status.ai ? `Claude (${status.model})` : "미설정 — " + status.aiReason}`);
+    console.log("  종료: 이 창에서 Ctrl+C\n");
+    if (openOnStart) openBrowser(url);
   });
   const shutdown = () => {
     db.flush();
@@ -394,6 +409,14 @@ async function start() {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function openBrowser(url: string) {
+  const [cmd, args] =
+    process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
+  spawn(cmd, args, { stdio: "ignore", detached: true })
+    .on("error", () => console.log(`  브라우저를 자동으로 열지 못했습니다. 직접 ${url} 을 여세요.`))
+    .unref();
 }
 
 start();

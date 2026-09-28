@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1818" viewBox="0 0 1200 1818">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050510"/><stop offset="1" stop-color="#15153a"/></linearGradient></defs>
-<rect width="1200" height="1818" fill="url(#g)"/>
-<circle cx="540" cy="581.76" r="336.00000000000006" fill="#fff" stroke="#3d5afe" stroke-width="18"/><path d="M 936 218.16 Q 1140 909 600 1308.96" stroke="#f5c400" stroke-width="40" fill="none"/><rect x="552" y="1308.96" width="72" height="509.04" fill="#1c3f8f"/>
-<text x="36" y="1782" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Arrow sign · Night</text>
+<rect width="1200" height="1818" fill="#d9d9d9"/>
+<g fill="none" stroke="#bdbdbd" stroke-width="19.2" stroke-linejoin="round">
+  <rect x="408" y="755.4" width="384" height="307.2" rx="23"/>
+  <path d="M408 985.8 L523.2 884.4 L607.7 958.2 L669.1 909 L792 1025.7"/>
+  <circle cx="676.8" cy="841.4" r="30.7"/>
+</g>
 </svg>

@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="706" viewBox="0 0 1200 706">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d0508"/><stop offset="1" stop-color="#6b0f1a"/></linearGradient></defs>
-<rect width="1200" height="706" fill="url(#g)"/>
-<rect x="0" y="437.71999999999997" width="1200" height="268.28000000000003" fill="#2e7d32"/>
-    <path d="M0 437.71999999999997 Q 600 211.79999999999998 1200 437.71999999999997" fill="#d11a2a" opacity=".85"/>
-    <ellipse cx="600" cy="155.32" rx="384" ry="98.84" fill="#111" opacity=".75"/>
-<text x="36" y="670" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Stadium · Match day</text>
+<rect width="1200" height="706" fill="#d9d9d9"/>
+<g fill="none" stroke="#bdbdbd" stroke-width="11.3" stroke-linejoin="round">
+  <rect x="487" y="262.6" width="225.9" height="180.7" rx="13.6"/>
+  <path d="M487 398.2 L554.8 338.5 L604.5 381.9 L640.7 353 L713 421.7"/>
+  <circle cx="645.2" cy="313.2" r="18.1"/>
+</g>
 </svg>

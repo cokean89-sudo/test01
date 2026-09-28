@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1143" viewBox="0 0 1200 1143">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a2a55"/><stop offset="1" stop-color="#3a5fa8"/></linearGradient></defs>
-<rect width="1200" height="1143" fill="url(#g)"/>
-<ellipse cx="600" cy="662.9399999999999" rx="480" ry="228.60000000000002" fill="#f2b705" opacity=".9"/>
-    <line x1="144" y1="457.20000000000005" x2="240" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="213.60000000000002" y1="457.20000000000005" x2="300" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="283.20000000000005" y1="457.20000000000005" x2="360" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="352.8" y1="457.20000000000005" x2="420" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="422.40000000000003" y1="457.20000000000005" x2="480" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="492" y1="457.20000000000005" x2="540" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="561.6" y1="457.20000000000005" x2="600" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="631.2" y1="457.20000000000005" x2="660" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="700.8000000000001" y1="457.20000000000005" x2="720" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="770.4" y1="457.20000000000005" x2="780" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="840" y1="457.20000000000005" x2="840" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="909.6" y1="457.20000000000005" x2="900" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="979.2" y1="457.20000000000005" x2="960" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/><line x1="1048.8000000000002" y1="457.20000000000005" x2="1020" y2="868.6800000000001" stroke="#fff" stroke-opacity=".35" stroke-width="3"/>
-<text x="36" y="1107" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Stadium · Light show</text>
+<rect width="1200" height="1143" fill="#d9d9d9"/>
+<g fill="none" stroke="#bdbdbd" stroke-width="18.3" stroke-linejoin="round">
+  <rect x="417.1" y="425.2" width="365.8" height="292.6" rx="21.9"/>
+  <path d="M417.1 644.7 L526.8 548.1 L607.3 618.3 L665.8 571.5 L782.9 682.7"/>
+  <circle cx="673.2" cy="507.1" r="29.3"/>
+</g>
 </svg>

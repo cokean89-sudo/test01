@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1154" viewBox="0 0 1200 1154">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f1320"/><stop offset="1" stop-color="#2a3350"/></linearGradient></defs>
-<rect width="1200" height="1154" fill="url(#g)"/>
-<polygon points="0,0 660,346.2 660,807.8 0,1154" fill="#000" opacity=".35"/><rect x="744" y="230.8" width="360" height="692.4" fill="#d61f2c"/><circle cx="924" cy="577" r="230.8" fill="#fff" opacity=".8"/>
-<text x="36" y="1118" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Museum · Corridor</text>
+<rect width="1200" height="1154" fill="#d9d9d9"/>
+<g fill="none" stroke="#bdbdbd" stroke-width="18.5" stroke-linejoin="round">
+  <rect x="415.4" y="429.3" width="369.3" height="295.4" rx="22.2"/>
+  <path d="M415.4 650.9 L526.1 553.4 L607.4 624.3 L666.5 577 L784.6 689.3"/>
+  <circle cx="673.9" cy="512" r="29.5"/>
+</g>
 </svg>

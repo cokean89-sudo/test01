@@ -14,6 +14,7 @@ import {
   type TextStyle,
 } from "../../shared/types";
 import { formatPageNumber, REPORT_TYPOGRAPHY } from "../lib/defaults";
+import { dummyText } from "../lib/dummy";
 import { fontStack } from "../lib/fonts";
 import { SmartImage } from "./SmartImage";
 
@@ -24,8 +25,10 @@ export const PAGE_CSS = `
 .rb-text{white-space:pre-wrap;word-break:keep-all;overflow-wrap:break-word}
 .rb-editable{outline:none;cursor:text;min-height:1em}
 .rb-placeholder{color:#9aa0a6!important;font-style:italic}
-.img-missing{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:repeating-linear-gradient(45deg,#f1f1f1,#f1f1f1 6px,#e7e7e7 6px,#e7e7e7 12px);color:#888;font:11px/1.3 sans-serif;text-align:center;padding:4px}
-.img-missing small{opacity:.7;font-size:10px}
+.img-missing{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:#d9d9d9;color:#9a9a9a;font:11px/1.3 sans-serif;text-align:center;padding:4px;overflow:hidden}
+.img-missing svg{width:min(22%,48px);height:auto;flex:none}
+.img-missing span{font-size:10px;color:#8a8a8a}
+.img-missing small{opacity:.7;font-size:9px}
 `;
 
 export type PageMode = "view" | "edit" | "thumb" | "print";
@@ -58,18 +61,6 @@ export function resolveColor(c: string | undefined, settings: DocSettings): stri
   if (!c) return undefined;
   return c === "accent" ? settings.accent : c;
 }
-
-const ROLE_PLACEHOLDER: Record<TextRole, string> = {
-  title: "타이틀",
-  subtitle: "서브타이틀",
-  highlight: "강조 라인 (예: 스폰서 / 소유)",
-  body: "설명을 입력하거나 AI 분석을 실행하세요",
-  section: "섹션 라벨",
-  label: "라벨",
-  caption: "캡션",
-  footer: "태그라인",
-  free: "텍스트",
-};
 
 interface Props {
   page: Page;
@@ -193,7 +184,7 @@ function TextView({
   if (editing) {
     content = <EditableText text={el.text} onCommit={(t) => onTextCommit?.(el.id, t)} />;
   } else if (empty) {
-    content = <span className="rb-placeholder">{ROLE_PLACEHOLDER[el.role]}</span>;
+    content = <span className="rb-placeholder">{dummyText(el.role)}</span>;
   } else if (st.bgMode === "inline" && st.background) {
     content = (
       <span
@@ -289,6 +280,7 @@ function ImageView({
       fit={el.fit}
       position={`${el.focusX ?? 50}% ${el.focusY ?? 50}%`}
       loading={mode === "print" ? "eager" : "lazy"}
+      hint={mode === "edit" ? "더블클릭해서 이미지 선택" : undefined}
       style={below ? { height: "auto", flex: 1, minHeight: 0, borderRadius: radius } : undefined}
       onNatural={onImageNatural && (!el.natW || !el.natH) ? (w, h) => onImageNatural(el.id, w, h) : undefined}
     />

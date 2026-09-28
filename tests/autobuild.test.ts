@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { CaseStudy, ImageElement, Reference, TextElement } from "../shared/types";
 import { buildDocument, buildGroups, ETC_LABEL, paginate, type BuildOptions } from "../src/layout/autobuild";
-import { createCasePage, relayoutPage, scalePage } from "../src/layout/templates";
+import { createCasePage, createReferencePage, relayoutPage, scalePage } from "../src/layout/templates";
 import { DEFAULT_LAYOUT, defaultSettings } from "../src/lib/defaults";
+import { isDummyText, LOREM } from "../src/lib/dummy";
 
 let t = 1;
 const ref = (id: string, tags: string[], extra: Partial<Reference> = {}): Reference => ({
@@ -142,5 +143,45 @@ describe("templates", () => {
     expect(scaled.area.w).toBeCloseTo(page.area.w * 2, 5);
     const title = scaled.elements.find((e) => e.type === "text")!;
     expect(title.x).toBeCloseTo(page.elements[0].x * 2, 5);
+  });
+});
+
+describe("dummy content", () => {
+  const settings = defaultSettings();
+  it("빈 템플릿은 Lorem Ipsum 텍스트와 회색 박스(빈 이미지 자리)로 채운다", () => {
+    const page = createReferencePage(settings, { title: "", images: [], placeholders: 6 });
+    const texts = page.elements.filter((e): e is TextElement => e.type === "text");
+    expect(texts.find((t) => t.role === "title")!.text).toBe(LOREM.title);
+    expect(texts.find((t) => t.role === "body")!.text.startsWith("Lorem ipsum")).toBe(true);
+    const slots = page.elements.filter((e): e is ImageElement => e.type === "image");
+    expect(slots).toHaveLength(6);
+    expect(slots.every((s) => s.src === "" && s.managed)).toBe(true);
+    // 회색 박스도 레이아웃 영역을 채운다
+    expect(Math.max(...slots.map((s) => s.x + s.w))).toBeCloseTo(page.area.x + page.area.w, 3);
+  });
+
+  it("케이스 템플릿은 로고 자리 + 라벨도 만든다", () => {
+    const page = createCasePage(settings, { title: "", images: [], logos: [], placeholders: { images: 5, logos: 2 } });
+    const logos = page.elements.filter((e): e is ImageElement => e.type === "image" && !!e.logo);
+    expect(logos).toHaveLength(2);
+    expect(page.elements.filter((e) => e.type === "text" && e.labelFor)).toHaveLength(2);
+    const highlight = page.elements.find((e): e is TextElement => e.type === "text" && e.role === "highlight")!;
+    expect(highlight.text).toBe(LOREM.highlight);
+  });
+
+  it("실제 값이 있으면 더미 대신 사용하고, 캡션 기본값은 제목 또는 Lorem", () => {
+    const page = createReferencePage(settings, { title: "조형물", subtitle: "구장 조형물", images: [refs[0], { ...refs[1], title: "별 사인" }] });
+    const text = (role: string) => page.elements.find((e): e is TextElement => e.type === "text" && e.role === role)!.text;
+    expect([text("title"), text("subtitle")]).toEqual(["조형물", "구장 조형물"]);
+    const caps = page.elements.filter((e): e is ImageElement => e.type === "image").map((e) => e.caption);
+    expect(caps).toEqual([LOREM.caption, "별 사인"]);
+  });
+
+  it("더미 텍스트 판별", () => {
+    expect(isDummyText("")).toBe(true);
+    expect(isDummyText(LOREM.body)).toBe(true);
+    expect(isDummyText(LOREM.subtitle)).toBe(true);
+    expect(isDummyText("Ideation")).toBe(false);
+    expect(isDummyText("Reference")).toBe(false);
   });
 });

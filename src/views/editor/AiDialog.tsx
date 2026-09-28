@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import type { AnalyzeResult, CaptionPos, ImageElement } from "../../../shared/types";
+import type { AnalyzeResult, CaptionPos } from "../../../shared/types";
 import { api } from "../../api";
 import { SmartImage } from "../../components/SmartImage";
 import { Button, Modal, Select, Spinner } from "../../components/ui";
 import { useEditor } from "../../store/editor";
 import { toast } from "../../store/toast";
-import { AI_FIELDS, analyzeRequestFor, applyAnalysis, getPage, updatePage, type AiField } from "./actions";
+import { AI_FIELDS, analyzeRequestFor, applyAnalysis, contentImages, getPage, updatePage, type AiField } from "./actions";
 
 /** 현재 페이지 AI 분석 → 결과 확인·수정 후 선택한 항목만 적용 */
 export function AiDialog({ pageId }: { pageId: string }) {
@@ -20,7 +20,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
   const [capPos, setCapPos] = useState<CaptionPos | "">("");
 
   const close = () => setModal(null);
-  const images = (page?.elements.filter((e) => e.type === "image" && !e.logo) ?? []) as ImageElement[];
+  const images = page ? contentImages(page) : [];
   const hasRole = (role?: string) => !role || !!page?.elements.some((e) => e.type === "text" && e.role === role && !e.labelFor);
 
   async function run() {

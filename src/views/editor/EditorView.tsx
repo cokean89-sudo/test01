@@ -5,7 +5,8 @@ import { Spinner } from "../../components/ui";
 import { flushSave, useEditor } from "../../store/editor";
 import { toast } from "../../store/toast";
 import { PENDING_AI_KEY } from "../BuildDialog";
-import { AI_FIELDS, analyzeRequestFor, applyAnalysis, copySelection, deleteSelection, duplicateSelection, nudge, paste, reorder, type AiField } from "./actions";
+import { isDummyText } from "../../lib/dummy";
+import { AI_FIELDS, analyzeRequestFor, applyAnalysis, contentImages, copySelection, deleteSelection, duplicateSelection, nudge, paste, reorder, type AiField } from "./actions";
 import { AiDialog } from "./AiDialog";
 import { Canvas } from "./Canvas";
 import { ImagePicker } from "./ImagePicker";
@@ -50,7 +51,7 @@ export function EditorView({ id }: { id: string }) {
   async function runAiAll() {
     const start = useEditor.getState().doc;
     if (!start) return;
-    const targets = start.pages.filter((p) => (p.kind === "case" || p.kind === "reference") && p.elements.some((e) => e.type === "image"));
+    const targets = start.pages.filter((p) => (p.kind === "case" || p.kind === "reference") && contentImages(p).length > 0);
     if (!targets.length) {
       toast.info("분석할 이미지 페이지가 없습니다");
       return;
@@ -74,13 +75,12 @@ export function EditorView({ id }: { id: string }) {
           const current = textOf(f.role);
           const autoTitle = f.key === "title" && page.kind === "reference" && current === (page.group ?? "");
           const autoSection = f.key === "sectionLabel" && /^Reference(\s*\(\d+\/\d+\))?$/.test(current);
-          if (!current || autoTitle || autoSection) fields.add(f.key);
+          if (isDummyText(current) || autoTitle || autoSection) fields.add(f.key);
         }
         const filled = applyAnalysis(page, result, fields);
-        // 캡션은 비어 있는 것만
-        const imgs = filled.elements.filter((e) => e.type === "image" && !e.logo);
-        imgs.forEach((img, k) => {
-          if (img.type === "image" && !img.caption?.trim() && result.captions[k]) img.caption = result.captions[k];
+        // 캡션은 비어 있거나 더미(Lorem Ipsum)인 것만
+        contentImages(filled).forEach((img, k) => {
+          if (isDummyText(img.caption) && result.captions[k]) img.caption = result.captions[k];
         });
         useEditor.getState().update((d) => {
           const idx = d.pages.findIndex((p) => p.id === page.id);

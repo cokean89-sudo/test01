@@ -15,6 +15,7 @@ import {
   type TextStyle,
 } from "../../shared/types";
 import { DEFAULT_LAYOUT } from "../lib/defaults";
+import { dummyText, LOREM, PLACEHOLDER_ASPECTS, placeholderImage } from "../lib/dummy";
 import { uid } from "../lib/id";
 import { computeLayout, safeAspect } from "./engine";
 
@@ -67,7 +68,7 @@ export function imageFromRef(ref: Reference, managed = true): ImageElement {
     fit: ref.kind === "logo" ? "contain" : "cover",
     managed,
     logo: ref.kind === "logo" && managed ? true : undefined,
-    caption: ref.title ?? "",
+    caption: ref.title || LOREM.caption,
     captionPos: "none",
     sourceUrl: ref.sourceUrl,
     x: 0,
@@ -93,6 +94,8 @@ export interface CasePageInput {
   images: Reference[];
   logos: Reference[];
   layout?: Partial<PageLayout>;
+  /** 이미지가 없을 때 채울 회색 박스 자리 수 */
+  placeholders?: { images: number; logos: number };
 }
 
 /** 예시 1: 케이스 스터디 페이지 (타이틀 | 리그/팀 | 강조 라인+설명, 로고 패널 + 이미지 모자이크) */
@@ -101,18 +104,24 @@ export function createCasePage(settings: DocSettings, input: CasePageInput): Pag
   const m = settings.margin;
   const cols = headerColumns(settings);
   const elements: PageElement[] = [
-    textEl("title", input.title, cols.title),
-    textEl("subtitle", input.subtitle ?? "", cols.subtitle),
-    textEl("highlight", input.highlight ?? "", { ...cols.text, h: 12 }),
-    textEl("body", input.description ?? "", { ...cols.text, y: cols.text.y + 13, h: cols.text.h - 13 }),
+    textEl("title", input.title || dummyText("title"), cols.title),
+    textEl("subtitle", input.subtitle || dummyText("subtitle"), cols.subtitle),
+    textEl("highlight", input.highlight || dummyText("highlight"), { ...cols.text, h: 12 }),
+    textEl("body", input.description || dummyText("body"), { ...cols.text, y: cols.text.y + 13, h: cols.text.h - 13 }),
   ];
+  const addLogo = (img: ImageElement, label: string) =>
+    elements.push(img, { ...textEl("label", label, { x: 0, y: 0, w: 80, h: 10 }), labelFor: img.id });
   for (const logo of input.logos.slice(0, 3)) {
     const img = imageFromRef(logo, true);
     img.logo = true;
     img.fit = "contain";
-    elements.push(img, { ...textEl("label", logo.logoLabel || logo.title || "Logo", { x: 0, y: 0, w: 80, h: 10 }), labelFor: img.id });
+    addLogo(img, logo.logoLabel || logo.title || "Logo");
   }
   for (const ref of input.images) elements.push(imageFromRef(ref, true));
+  if (!input.logos.length && !input.images.length && input.placeholders) {
+    for (let i = 0; i < input.placeholders.logos; i++) addLogo(placeholderImage(1.6, { logo: true }), "Logo");
+    for (let i = 0; i < input.placeholders.images; i++) elements.push(placeholderImage(PLACEHOLDER_ASPECTS[i % PLACEHOLDER_ASPECTS.length]));
+  }
   const page: Page = {
     id: uid("p"),
     kind: "case",
@@ -133,6 +142,8 @@ export interface ReferencePageInput {
   group?: string;
   images: Reference[];
   layout?: Partial<PageLayout>;
+  /** 이미지가 없을 때 채울 회색 박스 자리 수 */
+  placeholders?: number;
 }
 
 /** 예시 2: 레퍼런스/아이데이션 페이지 (타이틀 | 서브타이틀 | 설명, "Reference" 라벨 + 이미지 배치) */
@@ -143,12 +154,15 @@ export function createReferencePage(settings: DocSettings, input: ReferencePageI
   const labelY = cols.bottom + 2;
   const areaY = labelY + 20;
   const elements: PageElement[] = [
-    textEl("title", input.title, cols.title),
-    textEl("subtitle", input.subtitle ?? "", cols.subtitle),
-    textEl("body", input.description ?? "", { ...cols.text, y: cols.text.y + 2 }),
+    textEl("title", input.title || dummyText("title"), cols.title),
+    textEl("subtitle", input.subtitle || dummyText("subtitle"), cols.subtitle),
+    textEl("body", input.description || dummyText("body"), { ...cols.text, y: cols.text.y + 2 }),
     textEl("section", input.sectionLabel ?? "Reference", { x: m.left, y: labelY, w: 240, h: 12 }),
     ...input.images.map((r) => imageFromRef(r, true)),
   ];
+  if (!input.images.length && input.placeholders) {
+    for (let i = 0; i < input.placeholders; i++) elements.push(placeholderImage(PLACEHOLDER_ASPECTS[i % PLACEHOLDER_ASPECTS.length]));
+  }
   const page: Page = {
     id: uid("p"),
     kind: "reference",
@@ -170,8 +184,8 @@ export function createCoverPage(
   const textW = input.image ? inner * 0.46 : inner;
   const elements: PageElement[] = [
     { id: uid("s"), type: "shape", shape: "rect", x: m.left, y: H * 0.36, w: 28, h: 3, fill: settings.accent },
-    textEl("title", input.title, { x: m.left, y: H * 0.36 + 14, w: textW, h: 90 }, { fontSize: 34, lineHeight: 1.1 }),
-    textEl("subtitle", input.subtitle ?? "", { x: m.left, y: H * 0.36 + 110, w: textW, h: 40 }),
+    textEl("title", input.title || dummyText("title"), { x: m.left, y: H * 0.36 + 14, w: textW, h: 90 }, { fontSize: 34, lineHeight: 1.1 }),
+    textEl("subtitle", input.subtitle || dummyText("subtitle"), { x: m.left, y: H * 0.36 + 110, w: textW, h: 40 }),
     textEl("footer", input.meta ?? "", { x: m.left, y: H - m.bottom - 10, w: textW, h: 10 }),
   ];
   if (input.image) {
@@ -200,8 +214,8 @@ export function createSectionPage(settings: DocSettings, input: { title: string;
     );
   }
   elements.push(
-    textEl("title", input.title, { x: m.left, y: H * 0.4, w: inner * 0.7, h: 50 }, { fontSize: 30 }),
-    textEl("subtitle", input.subtitle ?? "", { x: m.left, y: H * 0.4 + 52, w: inner * 0.7, h: 30 }),
+    textEl("title", input.title || dummyText("title"), { x: m.left, y: H * 0.4, w: inner * 0.7, h: 50 }, { fontSize: 30 }),
+    textEl("subtitle", input.subtitle || dummyText("subtitle"), { x: m.left, y: H * 0.4 + 52, w: inner * 0.7, h: 30 }),
   );
   return {
     id: uid("p"),

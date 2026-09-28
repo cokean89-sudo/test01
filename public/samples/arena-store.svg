@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="706" viewBox="0 0 1200 706">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b0f12"/><stop offset="1" stop-color="#8a1b24"/></linearGradient></defs>
+<rect width="1200" height="706" fill="url(#g)"/>
+<rect x="96" y="211.79999999999998" width="120" height="317.7" rx="12" fill="#fff" opacity=".9"/><rect x="270" y="211.79999999999998" width="120" height="317.7" rx="12" fill="#e02a36" opacity=".9"/><rect x="444" y="211.79999999999998" width="120" height="317.7" rx="12" fill="#fff" opacity=".9"/><rect x="618" y="211.79999999999998" width="120" height="317.7" rx="12" fill="#e02a36" opacity=".9"/><rect x="792" y="211.79999999999998" width="120" height="317.7" rx="12" fill="#fff" opacity=".9"/><rect x="965.9999999999999" y="211.79999999999998" width="120" height="317.7" rx="12" fill="#e02a36" opacity=".9"/>
+<text x="36" y="670" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Megastore · Kit wall</text>
+</svg>

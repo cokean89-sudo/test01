@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="571" viewBox="0 0 1200 571">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b18"/><stop offset="1" stop-color="#1b2340"/></linearGradient></defs>
+<rect width="1200" height="571" fill="url(#g)"/>
+<path d="M 216 399.7 Q 660 28.55 1140 428.25" stroke="#cfd8ff" stroke-width="26" fill="none" stroke-dasharray="4 10"/><polygon points="240.0,285.5 253.8,355.0 312.7,315.6 273.2,374.5 342.8,388.3 273.2,402.0 312.7,461.0 253.8,421.5 240.0,491.1 226.2,421.5 167.3,461.0 206.8,402.0 137.2,388.3 206.8,374.5 167.3,315.6 226.2,355.0" fill="#fff"/>
+<text x="36" y="535" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Shooting star light</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="706" viewBox="0 0 1200 706">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b0a0d"/><stop offset="1" stop-color="#b3131f"/></linearGradient></defs>
+<rect width="1200" height="706" fill="url(#g)"/>
+<circle cx="180" cy="296.52" r="56.480000000000004" fill="#fff" opacity=".85"/><rect x="120" y="367.12" width="120" height="282.40000000000003" rx="20" fill="#1d1d1d"/><circle cx="384" cy="296.52" r="56.480000000000004" fill="#fff" opacity=".85"/><rect x="324" y="367.12" width="120" height="282.40000000000003" rx="20" fill="#1d1d1d"/><circle cx="588" cy="296.52" r="56.480000000000004" fill="#fff" opacity=".85"/><rect x="528" y="367.12" width="120" height="282.40000000000003" rx="20" fill="#1d1d1d"/><circle cx="792" cy="296.52" r="56.480000000000004" fill="#fff" opacity=".85"/><rect x="732" y="367.12" width="120" height="282.40000000000003" rx="20" fill="#1d1d1d"/><circle cx="996.0000000000001" cy="296.52" r="56.480000000000004" fill="#fff" opacity=".85"/><rect x="936.0000000000001" y="367.12" width="120" height="282.40000000000003" rx="20" fill="#1d1d1d"/>
+<text x="36" y="670" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Stadium tour · Visitors</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1395" viewBox="0 0 1200 1395">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#07070d"/><stop offset="1" stop-color="#20202e"/></linearGradient></defs>
+<rect width="1200" height="1395" fill="url(#g)"/>
+<polygon points="600.0,217.5 645.9,586.6 939.4,358.1 710.9,651.6 1080.0,697.5 710.9,743.4 939.4,1036.9 645.9,808.4 600.0,1177.5 554.1,808.4 260.6,1036.9 489.1,743.4 120.0,697.5 489.1,651.6 260.6,358.1 554.1,586.6" fill="none" stroke="#e8f0ff" stroke-width="6"/><polygon points="600.0,337.5 634.4,614.4 854.6,442.9 683.1,663.1 960.0,697.5 683.1,731.9 854.6,952.1 634.4,780.6 600.0,1057.5 565.6,780.6 345.4,952.1 516.9,731.9 240.0,697.5 516.9,663.1 345.4,442.9 565.6,614.4" fill="none" stroke="#fff" stroke-width="3"/>
+<text x="36" y="1359" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Wire star sculpture</text>
+</svg>

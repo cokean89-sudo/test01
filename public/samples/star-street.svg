@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1395" viewBox="0 0 1200 1395">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a2140"/><stop offset="1" stop-color="#4b5a8c"/></linearGradient></defs>
+<rect width="1200" height="1395" fill="url(#g)"/>
+<path d="M 216 976.4999999999999 Q 660 69.75 1140 1046.25" stroke="#ff3b3b" stroke-width="26" fill="none" stroke-dasharray="4 10"/><polygon points="240.0,697.5 273.6,867.4 417.6,771.0 321.2,915.0 491.1,948.6 321.2,982.2 417.6,1126.2 273.6,1029.8 240.0,1199.7 206.4,1029.8 62.4,1126.2 158.8,982.2 -11.1,948.6 158.8,915.0 62.4,771.0 206.4,867.4" fill="#fff"/>
+<text x="36" y="1359" font-family="Arial, sans-serif" font-size="34" fill="#fff" fill-opacity=".85">SAMPLE · Street star lights</text>
+</svg>

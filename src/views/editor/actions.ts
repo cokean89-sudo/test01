@@ -1,0 +1,435 @@
+// 편집기 동작 — 도구 모음/단축키/인스펙터가 공통으로 호출한다.
+
+import type {
+  AnalyzeRequest,
+  AnalyzeResult,
+  CaptionPos,
+  DocumentData,
+  ImageElement,
+  Page,
+  PageElement,
+  PageKind,
+  PageLayout,
+  Rect,
+  Reference,
+  TextElement,
+  TextRole,
+} from "../../../shared/types";
+import { pageSize } from "../../components/PageView";
+import { createBlankPage, createCasePage, createReferencePage, createSectionPage, imageFromRef, relayoutPage, scalePage } from "../../layout/templates";
+import { uid } from "../../lib/id";
+import { parseQuery } from "../../lib/search";
+import { useEditor, withPage } from "../../store/editor";
+import { useLibrary } from "../../store/library";
+
+const st = () => useEditor.getState();
+
+export function getPage(doc: DocumentData | null, pageId: string | null): Page | undefined {
+  return doc?.pages.find((p) => p.id === pageId);
+}
+
+export function selectedElements(): PageElement[] {
+  const { doc, pageId, selection } = st();
+  const page = getPage(doc, pageId);
+  return page ? page.elements.filter((e) => selection.includes(e.id)) : [];
+}
+
+export function bbox(els: Rect[]): Rect {
+  const x = Math.min(...els.map((e) => e.x));
+  const y = Math.min(...els.map((e) => e.y));
+  const r = Math.max(...els.map((e) => e.x + e.w));
+  const b = Math.max(...els.map((e) => e.y + e.h));
+  return { x, y, w: r - x, h: b - y };
+}
+
+/** 위치/크기를 직접 바꾸면 자동 레이아웃에서 분리한다 */
+function detachIfMoved(el: PageElement, patch: Partial<PageElement>) {
+  if (el.type !== "image" || !(el.managed || el.logo)) return;
+  if (["x", "y", "w", "h"].some((k) => k in patch)) {
+    el.managed = false;
+    el.logo = undefined;
+  }
+}
+
+export function patchElements(ids: string[], patch: Partial<PageElement> | ((el: PageElement) => Partial<PageElement>), key?: string) {
+  const { pageId } = st();
+  if (!pageId || !ids.length) return;
+  st().update((d) => {
+    withPage(d, pageId, (page) => {
+      for (const el of page.elements) {
+        if (!ids.includes(el.id)) continue;
+        const p = typeof patch === "function" ? patch(el) : patch;
+        detachIfMoved(el, p);
+        Object.assign(el, p);
+      }
+    });
+  }, key ? { key } : undefined);
+}
+
+export function updatePage(pageId: string, fn: (page: Page) => Page | void, key?: string) {
+  st().update((d) => withPage(d, pageId, fn), key ? { key } : undefined);
+}
+
+export function addElement(el: PageElement, opts: { edit?: boolean } = {}) {
+  const { pageId } = st();
+  if (!pageId) return;
+  st().update((d) => withPage(d, pageId, (page) => void page.elements.push(el)));
+  st().select([el.id]);
+  if (opts.edit) st().setEditing(el.id);
+}
+
+export function newText(rect: Rect, role: TextRole = "free", text = ""): TextElement {
+  return { id: uid("t"), type: "text", role, text, ...rect };
+}
+
+export function deleteSelection() {
+  const { pageId, selection } = st();
+  if (!pageId || !selection.length) return;
+  st().update((d) =>
+    withPage(d, pageId, (page) => {
+      page.elements = page.elements.filter((e) => !selection.includes(e.id) && !(e.type === "text" && e.labelFor && selection.includes(e.labelFor)));
+    }),
+  );
+  st().select([]);
+}
+
+function cloneForPaste(els: PageElement[], offset: number): PageElement[] {
+  return els.map((e) => {
+    const c = structuredClone(e) as PageElement;
+    c.id = uid(e.type[0]);
+    c.x += offset;
+    c.y += offset;
+    if (c.type === "image") {
+      c.managed = false;
+      c.logo = undefined;
+    }
+    if (c.type === "text") delete c.labelFor;
+    return c;
+  });
+}
+
+export function duplicateSelection() {
+  const els = selectedElements();
+  if (!els.length) return;
+  const copies = cloneForPaste(els, 10);
+  const { pageId } = st();
+  st().update((d) => withPage(d, pageId!, (page) => void page.elements.push(...copies)));
+  st().select(copies.map((c) => c.id));
+}
+
+export function copySelection() {
+  const els = selectedElements();
+  if (els.length) st().setClipboard(structuredClone(els));
+}
+
+export function paste() {
+  const { clipboard, pageId } = st();
+  if (!clipboard.length || !pageId) return;
+  const copies = cloneForPaste(clipboard, 10);
+  st().update((d) => withPage(d, pageId, (page) => void page.elements.push(...copies)));
+  st().select(copies.map((c) => c.id));
+}
+
+export function nudge(dx: number, dy: number) {
+  const ids = selectedElements()
+    .filter((e) => !e.locked)
+    .map((e) => e.id);
+  patchElements(ids, (el) => ({ x: el.x + dx, y: el.y + dy }), "nudge");
+}
+
+export type AlignKind = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
+
+export function align(kind: AlignKind) {
+  const { doc } = st();
+  const els = selectedElements().filter((e) => !e.locked);
+  if (!doc || !els.length) return;
+  const { W, H } = pageSize(doc.settings);
+  const m = doc.settings.margin;
+  const ref: Rect = els.length > 1 ? bbox(els) : { x: m.left, y: m.top, w: W - m.left - m.right, h: H - m.top - m.bottom };
+  patchElements(
+    els.map((e) => e.id),
+    (el) => {
+      switch (kind) {
+        case "left":
+          return { x: ref.x };
+        case "hcenter":
+          return { x: ref.x + (ref.w - el.w) / 2 };
+        case "right":
+          return { x: ref.x + ref.w - el.w };
+        case "top":
+          return { y: ref.y };
+        case "vcenter":
+          return { y: ref.y + (ref.h - el.h) / 2 };
+        case "bottom":
+          return { y: ref.y + ref.h - el.h };
+      }
+    },
+  );
+}
+
+export function distribute(axis: "h" | "v") {
+  const els = selectedElements().filter((e) => !e.locked);
+  if (els.length < 3) return;
+  const sorted = [...els].sort((a, b) => (axis === "h" ? a.x - b.x : a.y - b.y));
+  const box = bbox(sorted);
+  const total = sorted.reduce((acc, e) => acc + (axis === "h" ? e.w : e.h), 0);
+  const gap = ((axis === "h" ? box.w : box.h) - total) / (sorted.length - 1);
+  const pos = new Map<string, number>();
+  let cur = axis === "h" ? box.x : box.y;
+  for (const e of sorted) {
+    pos.set(e.id, cur);
+    cur += (axis === "h" ? e.w : e.h) + gap;
+  }
+  patchElements(
+    sorted.map((e) => e.id),
+    (el) => (axis === "h" ? { x: pos.get(el.id)! } : { y: pos.get(el.id)! }),
+  );
+}
+
+export function reorder(kind: "front" | "back" | "forward" | "backward") {
+  const { pageId, selection } = st();
+  if (!pageId || !selection.length) return;
+  st().update((d) =>
+    withPage(d, pageId, (page) => {
+      const sel = page.elements.filter((e) => selection.includes(e.id));
+      const rest = page.elements.filter((e) => !selection.includes(e.id));
+      if (kind === "front") page.elements = [...rest, ...sel];
+      else if (kind === "back") page.elements = [...sel, ...rest];
+      else {
+        const els = [...page.elements];
+        const idxs = els.map((e, i) => (selection.includes(e.id) ? i : -1)).filter((i) => i >= 0);
+        const order = kind === "forward" ? [...idxs].reverse() : idxs;
+        for (const i of order) {
+          const j = kind === "forward" ? i + 1 : i - 1;
+          if (j < 0 || j >= els.length || selection.includes(els[j].id)) continue;
+          [els[i], els[j]] = [els[j], els[i]];
+        }
+        page.elements = els;
+      }
+    }),
+  );
+}
+
+// ─── layout ─────────────────────────────────────────────────
+
+export function relayout(pageId: string, patch?: Partial<PageLayout>, key?: string) {
+  updatePage(
+    pageId,
+    (page) => {
+      if (patch) page.layout = { ...page.layout, ...patch };
+      return relayoutPage(page);
+    },
+    key,
+  );
+}
+
+export function setArea(pageId: string, area: Partial<Rect>) {
+  updatePage(pageId, (page) => relayoutPage({ ...page, area: { ...page.area, ...area } }), "area");
+}
+
+/** 자동 레이아웃 이미지 두 장의 순서를 바꾸고 다시 배치 */
+export function swapManaged(pageId: string, a: string, b: string) {
+  updatePage(pageId, (page) => {
+    const ia = page.elements.findIndex((e) => e.id === a);
+    const ib = page.elements.findIndex((e) => e.id === b);
+    if (ia < 0 || ib < 0) return;
+    [page.elements[ia], page.elements[ib]] = [page.elements[ib], page.elements[ia]];
+    return relayoutPage(page);
+  });
+}
+
+/** 자동 레이아웃 순서에서 앞/뒤로 이동 */
+export function shiftManaged(pageId: string, id: string, dir: -1 | 1) {
+  const page = getPage(st().doc, pageId);
+  if (!page) return;
+  const managed = page.elements.filter((e) => e.type === "image" && e.managed && !e.logo);
+  const i = managed.findIndex((e) => e.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= managed.length) return;
+  swapManaged(pageId, id, managed[j].id);
+}
+
+export function includeInLayout(ids: string[]) {
+  const { pageId } = st();
+  if (!pageId) return;
+  updatePage(pageId, (page) => {
+    for (const el of page.elements) if (ids.includes(el.id) && el.type === "image") el.managed = true;
+    return relayoutPage(page);
+  });
+}
+
+export function addRefsToPage(refs: Reference[], managed: boolean) {
+  const { doc, pageId } = st();
+  const page = getPage(doc, pageId);
+  if (!doc || !page) return;
+  const { W, H } = pageSize(doc.settings);
+  const els = refs.map((r, i) => {
+    const el = imageFromRef(r, managed);
+    el.logo = undefined;
+    if (!managed) {
+      const ratio = r.width && r.height ? r.width / r.height : 4 / 3;
+      const w = Math.min(W * 0.3, H * 0.4 * ratio);
+      Object.assign(el, { x: W / 2 - w / 2 + i * 12, y: H / 2 - w / ratio / 2 + i * 12, w, h: w / ratio });
+    }
+    return el;
+  });
+  updatePage(page.id, (p) => {
+    p.elements.push(...els);
+    return managed ? relayoutPage(p) : p;
+  });
+  st().select(els.map((e) => e.id));
+}
+
+export function replaceImage(elId: string, ref: Reference) {
+  const { pageId } = st();
+  if (!pageId) return;
+  updatePage(pageId, (page) => {
+    const el = page.elements.find((e): e is ImageElement => e.id === elId && e.type === "image");
+    if (!el) return;
+    Object.assign(el, { src: ref.imageUrl, refId: ref.id, natW: ref.width, natH: ref.height, sourceUrl: ref.sourceUrl });
+    if (!el.caption && ref.title) el.caption = ref.title;
+    return el.managed || el.logo ? relayoutPage(page) : page;
+  });
+}
+
+export function setCaptionsVisible(pageId: string, pos: CaptionPos) {
+  updatePage(pageId, (page) => {
+    for (const el of page.elements) if (el.type === "image" && !el.logo) el.captionPos = pos;
+  });
+}
+
+// ─── pages ──────────────────────────────────────────────────
+
+export type NewPageKind = PageKind;
+
+export function addPage(kind: NewPageKind, afterIndex?: number) {
+  const { doc, pageId } = st();
+  if (!doc) return;
+  const s = doc.settings;
+  const page =
+    kind === "reference"
+      ? createReferencePage(s, { title: "", images: [] })
+      : kind === "case"
+        ? createCasePage(s, { title: "", images: [], logos: [] })
+        : kind === "section"
+          ? createSectionPage(s, { title: "섹션" })
+          : createBlankPage(s);
+  const idx = afterIndex ?? doc.pages.findIndex((p) => p.id === pageId);
+  st().update((d) => void d.pages.splice(idx + 1, 0, page));
+  st().setPage(page.id);
+}
+
+export function duplicatePage(id: string) {
+  const { doc } = st();
+  const idx = doc?.pages.findIndex((p) => p.id === id) ?? -1;
+  if (!doc || idx < 0) return;
+  const copy = structuredClone(doc.pages[idx]);
+  copy.id = uid("p");
+  const idMap = new Map<string, string>();
+  for (const el of copy.elements) {
+    const nid = uid(el.type[0]);
+    idMap.set(el.id, nid);
+    el.id = nid;
+  }
+  for (const el of copy.elements) if (el.type === "text" && el.labelFor) el.labelFor = idMap.get(el.labelFor);
+  st().update((d) => void d.pages.splice(idx + 1, 0, copy));
+  st().setPage(copy.id);
+}
+
+export function deletePage(id: string) {
+  const { doc } = st();
+  if (!doc || doc.pages.length <= 1) return;
+  st().update((d) => {
+    d.pages = d.pages.filter((p) => p.id !== id);
+  });
+}
+
+export function movePage(id: string, toIndex: number) {
+  st().update((d) => {
+    const from = d.pages.findIndex((p) => p.id === id);
+    if (from < 0) return;
+    const [p] = d.pages.splice(from, 1);
+    d.pages.splice(Math.max(0, Math.min(toIndex, d.pages.length)), 0, p);
+  });
+}
+
+/** 페이지 크기 변경 — 모든 페이지 요소를 비례 변환 */
+export function changePageSize(next: DocumentData["settings"]["pageSize"]) {
+  const { doc } = st();
+  if (!doc || doc.settings.pageSize === next) return;
+  const a = pageSize(doc.settings);
+  const b = pageSize({ ...doc.settings, pageSize: next });
+  st().update((d) => {
+    d.settings.pageSize = next;
+    d.pages = d.pages.map((p) => scalePage(p, b.W / a.W, b.H / a.H));
+  });
+}
+
+// ─── AI ─────────────────────────────────────────────────────
+
+function absoluteUrl(src: string): string {
+  try {
+    return new URL(src, location.href).href;
+  } catch {
+    return src;
+  }
+}
+
+export function analyzeRequestFor(page: Page, doc: DocumentData, instruction?: string): AnalyzeRequest {
+  const lib = useLibrary.getState();
+  const refMap = new Map(lib.refs.map((r) => [r.id, r]));
+  const images = page.elements
+    .filter((e): e is ImageElement => e.type === "image" && !e.logo)
+    .map((img) => {
+      const ref = img.refId ? refMap.get(img.refId) : undefined;
+      return { url: absoluteUrl(img.src), title: ref?.title ?? img.caption, note: ref?.note, tags: ref?.tags };
+    });
+  const textOf = (role: TextRole) => page.elements.find((e): e is TextElement => e.type === "text" && e.role === role)?.text;
+  const c = page.caseId ? lib.cases.find((x) => x.id === page.caseId) : undefined;
+  return {
+    kind: page.kind,
+    language: doc.settings.aiLanguage,
+    group: page.group,
+    keywords: parseQuery(doc.query ?? "")
+      .filter((t) => !t.exclude)
+      .map((t) => t.text),
+    caseInfo: c ? { name: c.name, subtitle: c.subtitle, highlight: c.highlight, description: c.description } : undefined,
+    current: { title: textOf("title"), subtitle: textOf("subtitle"), highlight: textOf("highlight"), description: textOf("body") },
+    images,
+    instruction,
+  };
+}
+
+export type AiField = "title" | "subtitle" | "highlight" | "description" | "sectionLabel" | "captions";
+
+export const AI_FIELDS: { key: AiField; label: string; role?: TextRole }[] = [
+  { key: "title", label: "타이틀", role: "title" },
+  { key: "subtitle", label: "서브타이틀", role: "subtitle" },
+  { key: "highlight", label: "강조 라인", role: "highlight" },
+  { key: "description", label: "설명", role: "body" },
+  { key: "sectionLabel", label: "섹션 라벨", role: "section" },
+  { key: "captions", label: "이미지 캡션" },
+];
+
+export function applyAnalysis(page: Page, result: AnalyzeResult, fields: Set<AiField>, captionPos?: CaptionPos): Page {
+  const next = structuredClone(page);
+  for (const f of AI_FIELDS) {
+    if (!f.role || !fields.has(f.key)) continue;
+    const value = result[f.key as Exclude<AiField, "captions">];
+    const el = next.elements.find((e): e is TextElement => e.type === "text" && e.role === f.role && !e.labelFor);
+    if (el && typeof value === "string" && value.trim()) {
+      // 이어지는 페이지 표시 "(2/3)" 는 유지
+      const suffix = f.key === "sectionLabel" ? el.text.match(/\s*\(\d+\/\d+\)$/)?.[0] ?? "" : "";
+      el.text = value.trim() + suffix;
+    }
+  }
+  if (fields.has("captions")) {
+    const imgs = next.elements.filter((e): e is ImageElement => e.type === "image" && !e.logo);
+    imgs.forEach((img, i) => {
+      const cap = result.captions[i];
+      if (cap?.trim()) img.caption = cap.trim();
+      if (captionPos) img.captionPos = captionPos;
+    });
+  }
+  return next;
+}

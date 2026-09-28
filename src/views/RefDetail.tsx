@@ -35,7 +35,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
       const out = await api.suggestTags({ imageUrl: ref.imageUrl, title: ref.title, note: ref.note, existingTags: ref.tags, vocabulary: vocab, language: "ko" });
       await updateRef(ref.id, { tags: normalizeTags([...ref.tags, ...out.tags]), ...(ref.title ? {} : { title: out.title }) });
       if (!ref.title && out.title) setTitle(out.title);
-      toast.success(out.engine === "ai" ? "AI 태그를 추가했습니다" : out.notice ?? "규칙 기반 태그를 추가했습니다");
+      toast.success(out.engine === "ai" ? "AI 태그를 추가했어요" : out.notice ?? "규칙 기반 태그를 추가했어요");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -109,7 +109,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
           />
         </Field>
         {ref.kind === "logo" && (
-          <Field label="로고 라벨" hint="케이스 페이지 로고 패널에 표시됩니다">
+          <Field label="로고 라벨" hint="케이스 페이지 로고 패널에 표시돼요">
             <input value={logoLabel} onChange={(e) => setLogoLabel(e.target.value)} onBlur={() => updateRef(ref.id, { logoLabel })} />
           </Field>
         )}

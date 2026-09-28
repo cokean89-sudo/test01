@@ -99,6 +99,7 @@ export function PageView({ page, settings, index, total, mode = "view", editingI
           editing={editingId === el.id}
           onTextCommit={onTextCommit}
           onImageNatural={onImageNatural}
+          docTitle={docTitle}
         />
       ))}
       <Chrome page={page} settings={settings} index={index} total={total} W={W} H={H} u={u} docTitle={docTitle} />
@@ -130,6 +131,7 @@ function ElementView(props: {
   editing: boolean;
   onTextCommit?: (id: string, text: string) => void;
   onImageNatural?: (id: string, w: number, h: number) => void;
+  docTitle?: string;
 }) {
   const { el } = props;
   if (el.type === "text") return <TextView {...props} el={el} />;
@@ -160,6 +162,7 @@ function TextView({
   mode,
   editing,
   onTextCommit,
+  docTitle,
 }: {
   el: TextElement;
   settings: DocSettings;
@@ -169,6 +172,7 @@ function TextView({
   mode: PageMode;
   editing: boolean;
   onTextCommit?: (id: string, text: string) => void;
+  docTitle?: string;
 }) {
   const st = resolveStyle(settings, el.role, el.style);
   const box: CSSProperties = {
@@ -182,7 +186,8 @@ function TextView({
   const empty = !el.text.trim();
   if (empty && mode !== "edit" && !editing) return null;
 
-  let content: ReactNode = el.text;
+  const shown = fillTokens(el.text, settings, docTitle);
+  let content: ReactNode = shown;
   if (editing) {
     content = <EditableText text={el.text} onCommit={(t) => onTextCommit?.(el.id, t)} />;
   } else if (empty) {
@@ -197,7 +202,7 @@ function TextView({
           WebkitBoxDecorationBreak: "clone",
         }}
       >
-        {el.text}
+        {shown}
       </span>
     );
   }
@@ -362,11 +367,19 @@ function ShapeView({ el, W, H, u, settings }: { el: ShapeElement; W: number; H: 
   );
 }
 
-/** 문서 양식: 헤더 / 하단 태그라인 / 페이지 번호 */
 /** 문구 안의 {title} 을 문서 제목으로 바꾼다 */
 export function fillTitle(text: string, docTitle?: string): string {
   return text.includes("{title}") ? text.replaceAll("{title}", docTitle?.trim() || "Untitled") : text;
 }
+
+/** 본문 글의 자리표시 — {title} 문서 제목, {dept} 부서명(하단 왼쪽 문구) */
+export function fillTokens(text: string, settings: DocSettings, docTitle?: string): string {
+  if (!text.includes("{")) return text;
+  const dept = fillTitle(settings.footer.left, docTitle).trim() || "OO TEAM";
+  return fillTitle(text, docTitle).replaceAll("{dept}", dept);
+}
+
+/** 문서 양식: 헤더 / 하단 태그라인 / 페이지 번호 */
 
 function Chrome({ page, settings, index, total, W, H, u, docTitle }: { page: Page; settings: DocSettings; index: number; total: number; W: number; H: number; u: U; docTitle?: string }) {
   if (page.hideFooter) return null;
@@ -380,15 +393,18 @@ function Chrome({ page, settings, index, total, W, H, u, docTitle }: { page: Pag
     const withNum = footer.pageNumber && footer.pageNumberPos === pos ? [text, num].filter(Boolean) : [text].filter(Boolean);
     if (!withNum.length) return null;
     return (
-      <span style={{ display: "inline-flex", gap: u(st.fontSize * 3) }}>
+      <span style={{ display: "inline-flex", gap: u(st.fontSize * 2.5) }}>
         {withNum.map((t, i) => (
-          <span key={i}>{t}</span>
+          // 페이지 번호는 두 단계 굵게 (템플릿: Light 문구 + Medium 번호)
+          <span key={i} style={t === num && footer.pageNumberPos === pos ? { fontWeight: Math.min(900, st.fontWeight + 200) } : undefined}>
+            {t}
+          </span>
         ))}
       </span>
     );
   };
-  // 템플릿 기준: 하단 태그라인은 본문 영역 바로 아래 (A4 가로 575pt)
-  const fy = H - m.bottom + 2;
+  // 템플릿 기준: 하단 태그라인 기준선은 페이지 아래에서 약 15pt (A4 가로 580.4pt)
+  const fy = H - 20;
   const hy = m.top * 0.32;
   return (
     <>

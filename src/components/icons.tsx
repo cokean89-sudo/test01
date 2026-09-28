@@ -52,6 +52,20 @@ const paths: Record<string, string> = {
   dots: "M5 12h.01M12 12h.01M19 12h.01",
   swap: "M7 7h13l-4-4M17 17H4l4 4",
   upload: "M12 20V8M6 13l6-6 6 6M4 4h16",
+  arrowRight: "M4 12h15M13 6l6 6-6 6",
+  arrowDown: "M12 4v15M6 13l6 6 6-6",
+  arrowLeft: "M20 12H5M11 6l-6 6 6 6",
+  gap: "M4 5v14M20 5v14M9 12h6M9 9v6M15 9v6",
+  padX: "M3 4v16M21 4v16M7 8h10v8H7z",
+  padY: "M4 3h16M4 21h16M8 7h8v10H8z",
+  fill: "M4 4h16v16H4zM4 4l16 16M20 4L4 20",
+  fit: "M4 7h16v10H4zM9 4v16M15 4v16",
+  bulb: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z",
+  help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01",
+  textLeft: "M4 6h16M4 10h10M4 14h16M4 18h10",
+  sidebar: "M4 4h16v16H4zM9 4v16",
+  heading: "M4 4h16v6H4zM4 14h16M4 18h10",
+  pin: "M12 21s-6-5.3-6-11a6 6 0 0 1 12 0c0 5.7-6 11-6 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
 };
 
 export type IconName = keyof typeof paths;

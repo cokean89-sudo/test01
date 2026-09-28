@@ -8,7 +8,11 @@ import {
   type DocSettings,
   type ImageElement,
   type PageElement,
+  type AlignPos,
+  type Page,
+  type PageLayout,
   type PageSizeKey,
+  type Rect,
   type ShapeElement,
   type TextElement,
   type TextStyle,
@@ -32,6 +36,7 @@ import {
   relayout,
   setArea,
   setCaptionsVisible,
+  setTextFlow,
   shiftManaged,
   updatePage,
 } from "./actions";
@@ -166,7 +171,7 @@ function TextPanel({ el }: { el: TextElement }) {
           value={el.text}
           onChange={(e) => patchElements([el.id], { text: e.target.value }, `text:${el.id}`)}
         />
-        <Field label="역할" hint="역할별 기본 스타일은 '타이포' 탭에서 문서 전체에 적용됩니다">
+        <Field label="역할" hint="역할별 기본 스타일은 '타이포' 탭에서 문서 전체에 적용돼요">
           <Select value={el.role} onChange={(role) => patchElements([el.id], { role })} options={TEXT_ROLES.map((r) => ({ value: r.key, label: r.label }))} />
         </Field>
       </Section>
@@ -263,7 +268,7 @@ function ImagePanel({ el, pageId }: { el: ImageElement; pageId: string }) {
             )}
           </div>
         )}
-        {el.managed && <p className="muted small">드래그해서 다른 이미지 위에 놓으면 자리가 바뀝니다. 다른 곳에 놓으면 자유 배치로 전환됩니다.</p>}
+        {el.managed && <p className="muted small">드래그해서 다른 이미지 위에 놓으면 자리가 바뀌어요. 다른 곳에 놓으면 자유 배치로 전환돼요.</p>}
       </Section>
       <Section title="캡션">
         <textarea rows={2} value={el.caption ?? ""} placeholder="이미지 위/아래에 표시할 캡션" onChange={(e) => set({ caption: e.target.value }, `cap:${el.id}`)} />
@@ -339,57 +344,23 @@ function PagePanel({ onAiPage }: { onAiPage: () => void }) {
         </Button>
       </Section>
 
-      <Section
-        title={`자동 레이아웃 · 이미지 ${managed}장`}
-        right={
-          <span className="row">
-            <Button size="sm" icon="shuffle" title="다른 배열 (모자이크)" onClick={() => relayout(page.id, { seed: L.seed + 1, mode: L.mode === "mosaic" ? "mosaic" : L.mode })} />
-            <Button size="sm" icon="refresh" title="다시 배치" onClick={() => relayout(page.id)} />
-          </span>
-        }
-      >
-        <div className="layout-modes">
-          {LAYOUT_MODES.map((m) => (
-            <button key={m.key} className={L.mode === m.key ? "on" : ""} onClick={() => relayout(page.id, { mode: m.key })} title={m.hint}>
-              <LayoutGlyph mode={m.key} />
-              <span>{m.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="grid-2">
-          {L.mode === "grid" && (
-            <Field label="열(단) 수">
-              <NumberInput value={L.columns} min={1} max={8} onChange={(columns) => relayout(page.id, { columns }, `cols:${page.id}`)} />
-            </Field>
-          )}
-          {L.mode === "columns" && (
-            <Field label="열 수 (0=자동)">
-              <NumberInput value={L.columns} min={0} max={8} onChange={(columns) => relayout(page.id, { columns }, `cols:${page.id}`)} />
-            </Field>
-          )}
-          {L.mode === "rows" && (
-            <Field label="줄 수 (0=자동)">
-              <NumberInput value={L.rows} min={0} max={8} onChange={(rows) => relayout(page.id, { rows }, `rows:${page.id}`)} />
-            </Field>
-          )}
-          {L.mode === "mosaic" && (
-            <Field label="배열 변형">
-              <NumberInput value={L.seed} min={0} onChange={(seed) => relayout(page.id, { seed }, `seed:${page.id}`)} />
-            </Field>
-          )}
-          <Field label="간격 (pt)">
-            <NumberInput value={L.gap} min={0} max={60} step={0.5} onChange={(gap) => relayout(page.id, { gap }, `gap:${page.id}`)} />
-          </Field>
-        </div>
-        <Field label="이미지 영역 (pt)" hint="점선 영역 — 헤더를 늘리거나 줄일 때 조정">
-          <div className="grid-4">
-            <NumberInput value={page.area.x} onChange={(x) => setArea(page.id, { x })} />
-            <NumberInput value={page.area.y} onChange={(y) => setArea(page.id, { y })} />
-            <NumberInput value={page.area.w} min={10} onChange={(w) => setArea(page.id, { w })} />
-            <NumberInput value={page.area.h} min={10} onChange={(h) => setArea(page.id, { h })} />
-          </div>
-        </Field>
-      </Section>
+      {page.flow && <TextFlowSection pageId={page.id} flow={page.flow} />}
+
+      {(page.kind === "cover" || page.kind === "section") && managed === 0 ? (
+        <Section title={page.kind === "cover" ? "표지" : "간지"}>
+          <p className="help-text">
+            가운데 제목은 아래쪽, 설명은 위쪽에 붙어 있어서 줄이 늘어도 겹치지 않아요.
+            {page.kind === "cover" && (
+              <>
+                <br />
+                <b>{"{title}"}</b>은 문서 제목, <b>{"{dept}"}</b>는 부서명(하단 왼쪽 문구)으로 바뀌어 보여요.
+              </>
+            )}
+          </p>
+        </Section>
+      ) : (
+        <AutoLayoutSection pageId={page.id} layout={L} count={managed} area={page.area} />
+      )}
 
       {images.length > 0 && (
         <Section title="캡션 일괄">
@@ -420,12 +391,180 @@ function LayoutGlyph({ mode }: { mode: string }) {
     rows: [r(1, 1, 9, 5, 1), r(11, 1, 10, 5, 2), r(1, 7, 5, 5, 3), r(7, 7, 8, 5, 4), r(16, 7, 5, 5, 5)],
     columns: [r(1, 1, 6, 4, 1), r(1, 6, 6, 6, 2), r(8, 1, 6, 7, 3), r(8, 9, 6, 3, 4), r(15, 1, 6, 11, 5)],
     mosaic: [r(1, 1, 10, 7, 1), r(1, 9, 10, 3, 2), r(12, 1, 9, 4, 3), r(12, 6, 4, 6, 4), r(17, 6, 4, 6, 5)],
-    report: [r(1, 1, 6, 3.3, 1), r(1, 5, 6, 3, 2), r(1, 9, 6, 3, 3), r(8, 1, 8, 6, 4), r(17, 1, 4, 11, 5), r(8, 8, 8, 4, 6)],
+    report: [r(1, 1, 5, 3.3, 1), r(1, 5, 5, 3, 2), r(1, 9, 5, 3, 3), r(7, 1, 9, 6, 4), r(17, 1, 4, 11, 5), r(7, 8, 9, 4, 6)],
   };
   return (
-    <svg width="44" height="26" viewBox="0 0 22 13" fill="currentColor">
+    <svg width="36" height="22" viewBox="0 0 22 13" fill="currentColor">
       {shapes[mode]}
     </svg>
+  );
+}
+
+const FLOW_OPTIONS: { value: "auto" | "header" | "side"; label: string; icon: "sparkle" | "heading" | "sidebar"; hint: string }[] = [
+  { value: "auto", label: "자동", icon: "sparkle", hint: "글 길이를 보고 알아서 골라요" },
+  { value: "header", label: "짧은 글", icon: "heading", hint: "제목 옆(3~5단)에 두고, 이미지는 전체 폭" },
+  { value: "side", label: "긴 글", icon: "sidebar", hint: "왼쪽 단에 두고, 이미지는 2~5단" },
+];
+
+/** 글 배치 — 첨부 템플릿의 '짧은 텍스트 / 긴 텍스트' 구성 */
+function TextFlowSection({ pageId, flow }: { pageId: string; flow: NonNullable<Page["flow"]> }) {
+  const resolved = flow.resolved ?? "header";
+  return (
+    <Section title="글 배치">
+      <div className="choice-row">
+        {FLOW_OPTIONS.map((o) => (
+          <button key={o.value} className={"choice" + (flow.mode === o.value ? " on" : "")} onClick={() => setTextFlow(pageId, o.value)} title={o.hint}>
+            <Icon name={o.icon} size={18} />
+            <span>{o.label}</span>
+          </button>
+        ))}
+      </div>
+      {flow.mode === "fixed" ? (
+        <div className="note-box">
+          글 상자를 직접 옮겨서 자동 배치가 꺼졌어요.
+          <button className="link-btn" onClick={() => setTextFlow(pageId, "auto")}>
+            다시 자동으로
+          </button>
+        </div>
+      ) : (
+        <p className="help-text">
+          {flow.mode === "auto" ? `지금은 ${resolved === "header" ? "짧은 글 — 제목 옆에" : "긴 글 — 왼쪽 단에"} 두었어요. ` : ""}
+          {FLOW_OPTIONS.find((o) => o.value === flow.mode)?.hint}
+        </p>
+      )}
+    </Section>
+  );
+}
+
+/** 이미지 영역 오토 레이아웃 — 피그마의 Auto layout 패널처럼 방향 · 간격 · 여백 · 크기 · 정렬을 한곳에서 */
+function AutoLayoutSection({ pageId, layout: L, count, area }: { pageId: string; layout: PageLayout; count: number; area: Rect }) {
+  const set = (patch: Partial<PageLayout>, key?: string) => relayout(pageId, patch, key);
+  const sizing = L.sizing ?? "fill";
+  const countField: { label: string; key: "rows" | "columns"; min: number; auto: boolean } | null =
+    L.mode === "rows"
+      ? { label: "줄 수", key: "rows", min: 0, auto: true }
+      : L.mode === "columns"
+        ? { label: "열 수", key: "columns", min: 0, auto: true }
+        : L.mode === "grid"
+          ? { label: "열 수", key: "columns", min: 1, auto: false }
+          : null;
+  const countValue = countField ? L[countField.key] : 0;
+  return (
+    <Section
+      title="오토 레이아웃"
+      right={
+        <span className="row">
+          <span className="muted small">이미지 {count}장</span>
+          <Button size="sm" variant="ghost" icon="shuffle" title="다른 배열로 섞기" onClick={() => set({ seed: L.seed + 1 })} />
+        </span>
+      }
+    >
+      <div className="al-modes">
+        {LAYOUT_MODES.map((m) => (
+          <button key={m.key} className={L.mode === m.key ? "on" : ""} onClick={() => set({ mode: m.key })} title={m.hint}>
+            <LayoutGlyph mode={m.key} />
+            <span>{m.label}</span>
+          </button>
+        ))}
+      </div>
+      <p className="help-text">{LAYOUT_MODES.find((m) => m.key === L.mode)?.hint}</p>
+
+      <div className="al-grid">
+        <AlignPad
+          alignX={L.alignX ?? "center"}
+          alignY={L.alignY ?? "center"}
+          disabled={sizing === "fill"}
+          onChange={(alignX, alignY) => set({ alignX, alignY, sizing: "fit" })}
+        />
+        <div className="al-fields">
+          <label className="al-field" title="이미지 사이 간격 (pt)">
+            <Icon name="gap" size={15} />
+            <NumberInput value={L.gap} min={0} max={80} step={1} onChange={(gap) => set({ gap }, `gap:${pageId}`)} />
+          </label>
+          {countField ? (
+            <div className="al-field al-stepper" title={countField.label + (countField.auto ? " (0 = 자동)" : "")}>
+              <span className="al-field-label">{countField.label}</span>
+              <button onClick={() => set({ [countField.key]: Math.max(countField.min, countValue - 1) })} aria-label="줄이기">
+                −
+              </button>
+              <strong>{countField.auto && countValue === 0 ? "자동" : countValue}</strong>
+              <button onClick={() => set({ [countField.key]: Math.min(8, countValue + 1) })} aria-label="늘리기">
+                +
+              </button>
+            </div>
+          ) : (
+            <div className="al-field al-stepper" title="배열 변형">
+              <span className="al-field-label">배열</span>
+              <button onClick={() => set({ seed: Math.max(0, L.seed - 1) })} aria-label="이전 배열">
+                ‹
+              </button>
+              <strong>{L.seed + 1}</strong>
+              <button onClick={() => set({ seed: L.seed + 1 })} aria-label="다음 배열">
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="al-pads">
+        <label className="al-field" title="좌우 안쪽 여백 (pt)">
+          <Icon name="padX" size={15} />
+          <NumberInput value={L.padX ?? 0} min={0} max={200} onChange={(padX) => set({ padX }, `padx:${pageId}`)} />
+        </label>
+        <label className="al-field" title="위아래 안쪽 여백 (pt)">
+          <Icon name="padY" size={15} />
+          <NumberInput value={L.padY ?? 0} min={0} max={200} onChange={(padY) => set({ padY }, `pady:${pageId}`)} />
+        </label>
+      </div>
+
+      <div className="choice-row two">
+        <button className={"choice" + (sizing === "fill" ? " on" : "")} onClick={() => set({ sizing: "fill" })} title="영역을 빈틈없이 채워요. 비율이 다르면 이미지 가장자리가 조금 잘려요">
+          <Icon name="fill" size={18} />
+          <span>꽉 채우기</span>
+        </button>
+        <button className={"choice" + (sizing === "fit" ? " on" : "")} onClick={() => set({ sizing: "fit" })} title="이미지를 자르지 않아요. 남는 공간은 정렬 위치에 따라 비워 둬요">
+          <Icon name="fit" size={18} />
+          <span>비율 유지</span>
+        </button>
+      </div>
+      <p className="help-text">{sizing === "fill" ? "영역을 꽉 채워요 — 비율이 다르면 가장자리가 살짝 잘려요." : "자르지 않고 원본 비율 그대로 — 남는 공간은 위 3×3 정렬 칸으로 위치를 정해요."}</p>
+
+      <details className="al-more">
+        <summary>이미지 영역 직접 조정</summary>
+        <div className="grid-4">
+          <Field label="X">
+            <NumberInput value={area.x} onChange={(x) => setArea(pageId, { x })} />
+          </Field>
+          <Field label="Y">
+            <NumberInput value={area.y} onChange={(y) => setArea(pageId, { y })} />
+          </Field>
+          <Field label="W">
+            <NumberInput value={area.w} min={10} onChange={(w) => setArea(pageId, { w })} />
+          </Field>
+          <Field label="H">
+            <NumberInput value={area.h} min={10} onChange={(h) => setArea(pageId, { h })} />
+          </Field>
+        </div>
+        <p className="help-text">편집 화면의 점선이 이미지 영역이에요. 단위 pt.</p>
+      </details>
+    </Section>
+  );
+}
+
+const ALIGNS: AlignPos[] = ["start", "center", "end"];
+
+/** 3×3 정렬 칸 (피그마 오토 레이아웃의 정렬 박스) */
+function AlignPad({ alignX, alignY, disabled, onChange }: { alignX: AlignPos; alignY: AlignPos; disabled: boolean; onChange: (x: AlignPos, y: AlignPos) => void }) {
+  return (
+    <div className={"align-pad" + (disabled ? " disabled" : "")} title={disabled ? "‘비율 유지’일 때 남는 공간의 정렬 위치 (누르면 비율 유지로 바뀌어요)" : "정렬 위치"}>
+      {ALIGNS.map((y) =>
+        ALIGNS.map((x) => (
+          <button key={x + y} className={!disabled && x === alignX && y === alignY ? "on" : ""} onClick={() => onChange(x, y)} aria-label={`정렬 ${x} ${y}`}>
+            <span />
+          </button>
+        )),
+      )}
+    </div>
   );
 }
 
@@ -453,7 +592,7 @@ function DocPanel() {
   return (
     <>
       <Section title="팀 기본 양식">
-        <p className="muted small">새 문서는 &lsquo;{team?.name}&rsquo; 팀의 기본 양식(부서명·하단 태그라인·타이포)으로 시작합니다.</p>
+        <p className="muted small">새 문서는 &lsquo;{team?.name}&rsquo; 팀의 기본 양식(부서명·하단 태그라인·타이포)으로 시작해요.</p>
         <div className="row wrap">
           <Button
             size="sm"
@@ -461,7 +600,7 @@ function DocPanel() {
               if (!team) return;
               const d = await teamApi.detail(team.id);
               set((x) => Object.assign(x, structuredClone(d.defaults)));
-              toast.success("팀 기본 양식을 이 문서에 적용했습니다 (Ctrl+Z 로 되돌리기)");
+              toast.success("팀 기본 양식을 이 문서에 적용했어요 (Ctrl+Z 로 되돌리기)");
             }}
           >
             팀 기본 양식 적용
@@ -470,10 +609,10 @@ function DocPanel() {
             <Button
               size="sm"
               onClick={async () => {
-                if (!team || !confirm(`이 문서의 양식을 '${team.name}' 팀의 기본값으로 저장할까요? 이후 새로 만드는 문서에 적용됩니다.`)) return;
+                if (!team || !confirm(`이 문서의 양식을 '${team.name}' 팀의 기본값으로 저장할까요? 이후 새로 만드는 문서에 적용돼요.`)) return;
                 try {
                   await teamApi.saveDefaults(team.id, s);
-                  toast.success("팀 기본 양식으로 저장했습니다");
+                  toast.success("팀 기본 양식으로 저장했어요");
                 } catch (err) {
                   toast.error((err as Error).message);
                 }
@@ -488,7 +627,7 @@ function DocPanel() {
         <Field label="크기">
           <Select value={s.pageSize} onChange={(v) => changePageSize(v)} options={Object.entries(PAGE_SIZES).map(([k, v]) => ({ value: k as PageSizeKey, label: `${v.label} (${v.w}×${v.h}pt)` }))} />
         </Field>
-        <Field label="여백 (위 · 오른쪽 · 아래 · 왼쪽, pt)" hint="템플릿과 하단 태그라인 위치의 기준">
+        <Field label="여백 (위 · 오른쪽 · 아래 · 왼쪽, pt)" hint="템플릿 기준 위 13mm · 좌우 10mm · 아래 12mm (1mm ≈ 2.83pt). 새로 추가하는 페이지부터 적용돼요">
           <div className="grid-4">
             {(["top", "right", "bottom", "left"] as const).map((k) => (
               <NumberInput key={k} value={s.margin[k]} min={0} max={200} onChange={(v) => set((x) => void (x.margin[k] = v), `margin:${k}`)} />
@@ -567,7 +706,7 @@ function DocPanel() {
               </>
             )}
             <Toggle checked={f.divider} onChange={(v) => set((x) => void (x.footer.divider = v))} label="구분선" />
-            <p className="muted small">글꼴·크기·자간은 &lsquo;타이포&rsquo; 탭의 &lsquo;하단 태그라인&rsquo;에서 조정합니다.</p>
+            <p className="muted small">글꼴·크기·자간은 &lsquo;타이포&rsquo; 탭의 &lsquo;하단 태그라인&rsquo;에서 조정해요.</p>
           </>
         )}
       </Section>
@@ -631,7 +770,7 @@ function TypePanel() {
             </option>
           ))}
         </select>
-        <p className="muted small">역할별 스타일은 문서의 모든 페이지에 적용됩니다. 개별 요소에서 따로 바꾼 값은 유지됩니다.</p>
+        <p className="muted small">역할별 스타일은 문서의 모든 페이지에 적용돼요. 개별 요소에서 따로 바꾼 값은 유지돼요.</p>
       </Section>
       {TEXT_ROLES.map((r) => {
         const st = resolveStyle(s, r.key);

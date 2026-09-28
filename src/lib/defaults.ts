@@ -3,28 +3,37 @@ import type { DocSettings, FooterSettings, PageLayout, TextRole, TextStyle } fro
 export const KO_SANS = "Pretendard";
 export const EN_DISPLAY = "Poppins";
 
-/** 첨부 예시(보고서형 케이스 스터디) 기준 기본 타이포 — A4 가로 pt 단위 */
+/** 텍스트 기본색 — 첨부 A4 템플릿의 먹색 */
+export const INK = "#231f20";
+
+/**
+ * 첨부 A4 템플릿(A4_Template_New.pdf) 실측 기본 타이포 — pt 단위.
+ * Title 17/21 · Sub-Title 12/16 · 본문 10/17 · 하단 5.5
+ */
 export const REPORT_TYPOGRAPHY: Record<TextRole, TextStyle> = {
-  title: { fontFamily: EN_DISPLAY, fontSize: 20, fontWeight: 600, tracking: -10, lineHeight: 1.15, color: "#111111" },
-  subtitle: { fontFamily: EN_DISPLAY, fontSize: 12.5, fontWeight: 400, tracking: -5, lineHeight: 1.2, color: "#111111" },
-  highlight: { fontFamily: KO_SANS, fontSize: 8.5, fontWeight: 700, tracking: -10, lineHeight: 1.3, color: "accent" },
-  body: { fontFamily: KO_SANS, fontSize: 7.2, fontWeight: 400, tracking: -15, lineHeight: 1.4, color: "#333333" },
-  section: { fontFamily: KO_SANS, fontSize: 8.5, fontWeight: 700, tracking: 0, lineHeight: 1.3, color: "#111111" },
+  title: { fontFamily: EN_DISPLAY, fontSize: 17, fontWeight: 600, tracking: 0, lineHeight: 21 / 17, color: INK },
+  subtitle: { fontFamily: EN_DISPLAY, fontSize: 12, fontWeight: 400, tracking: 0, lineHeight: 16 / 12, color: INK },
+  highlight: { fontFamily: KO_SANS, fontSize: 10, fontWeight: 600, tracking: 0, lineHeight: 1.7, color: "accent" },
+  body: { fontFamily: KO_SANS, fontSize: 10, fontWeight: 300, tracking: 0, lineHeight: 1.7, color: INK },
+  section: { fontFamily: EN_DISPLAY, fontSize: 10, fontWeight: 500, tracking: 0, lineHeight: 1.4, color: INK },
   label: {
     fontFamily: KO_SANS,
     fontSize: 6.5,
     fontWeight: 600,
     tracking: 0,
     lineHeight: 1.5,
-    color: "#222222",
-    background: "#d9d9d9",
+    color: INK,
+    background: "#e6e7e8",
     bgMode: "inline",
     padding: 2,
   },
   caption: { fontFamily: KO_SANS, fontSize: 6.5, fontWeight: 500, tracking: -10, lineHeight: 1.4, color: "#ffffff" },
-  footer: { fontFamily: KO_SANS, fontSize: 5.5, fontWeight: 400, tracking: 20, lineHeight: 1.2, color: "#333333", uppercase: true },
-  free: { fontFamily: KO_SANS, fontSize: 9, fontWeight: 400, tracking: 0, lineHeight: 1.5, color: "#111111" },
+  footer: { fontFamily: EN_DISPLAY, fontSize: 5.5, fontWeight: 300, tracking: 0, lineHeight: 1.2, color: INK, uppercase: true },
+  free: { fontFamily: KO_SANS, fontSize: 10, fontWeight: 400, tracking: 0, lineHeight: 1.6, color: INK },
 };
+
+/** 부서명 기본 문구 — 팀 기본 설정에서 바꾼다 */
+export const DEFAULT_DEPT = "OO TEAM";
 
 export const TYPOGRAPHY_PRESETS: { key: string; label: string; apply: Partial<Record<TextRole, TextStyle>> }[] = [
   { key: "report", label: "리포트 (Poppins + Pretendard)", apply: REPORT_TYPOGRAPHY },
@@ -61,10 +70,10 @@ export const TYPOGRAPHY_PRESETS: { key: string; label: string; apply: Partial<Re
 export const FOOTER_PRESETS: { key: string; label: string; footer: FooterSettings }[] = [
   {
     key: "report",
-    label: "보고서 (좌 조직명 · 우 문서명+번호)",
+    label: "보고서 (좌 부서명 · 우 문서명+번호)",
     footer: {
       show: true,
-      left: "SHINSEGAE BRAND OFFICE",
+      left: DEFAULT_DEPT,
       center: "",
       right: "{title}",
       pageNumber: true,
@@ -92,7 +101,7 @@ export const FOOTER_PRESETS: { key: string; label: string; footer: FooterSetting
     label: "구분선 + 좌우 태그라인",
     footer: {
       show: true,
-      left: "BRAND STRATEGY",
+      left: DEFAULT_DEPT,
       center: "",
       right: "CASE STUDY",
       pageNumber: true,
@@ -117,14 +126,17 @@ export const FOOTER_PRESETS: { key: string; label: string; footer: FooterSetting
   },
 ];
 
-/** 템플릿 기본 배치 — 케이스: 보고서형, 레퍼런스: 세로 정렬(메이슨리) */
-export const DEFAULT_LAYOUT: PageLayout = { mode: "report", columns: 3, rows: 0, gap: 6, seed: 0 };
+/** 이미지 영역 기본 오토 레이아웃 — 가로 줄(높이 맞춤), 간격 6pt, 꽉 채우기 */
+export const DEFAULT_LAYOUT: PageLayout = { mode: "rows", columns: 3, rows: 0, gap: 6, seed: 0, padX: 0, padY: 0, sizing: "fill", alignX: "center", alignY: "center" };
+
+/** mm → pt */
+export const MM = 72 / 25.4;
 
 export function defaultSettings(): DocSettings {
   return {
     pageSize: "a4-landscape",
-    // 첨부 보고서 템플릿(A4 가로) 실측 기준
-    margin: { top: 34, right: 20, bottom: 22, left: 20 },
+    // 첨부 A4 템플릿 실측: 좌우 10mm, 헤더 시작 13mm, 본문 끝 198mm(하단 12mm)
+    margin: { top: round2(13 * MM), right: round2(10 * MM), bottom: round2(12 * MM), left: round2(10 * MM) },
     background: "#ffffff",
     accent: "#c8102e",
     footer: { ...FOOTER_PRESETS[0].footer },
@@ -133,6 +145,10 @@ export function defaultSettings(): DocSettings {
     typography: structuredClone(REPORT_TYPOGRAPHY),
     aiLanguage: "ko",
   };
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
 }
 
 export function formatPageNumber(format: string, n: number, total: number): string {

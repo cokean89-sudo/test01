@@ -30,7 +30,7 @@ export function sessionMiddleware(repo: Repo) {
 }
 
 export function requireUser(req: Request): UserRow {
-  if (!req.user) throw new HttpError(401, "로그인이 필요합니다.", "unauthenticated");
+  if (!req.user) throw new HttpError(401, "로그인이 필요해요.", "unauthenticated");
   return req.user;
 }
 
@@ -46,8 +46,8 @@ export function teamRole(repo: Repo, min: Role) {
     const teamId = String(req.params.teamId ?? "");
     const role = repo.getRole(teamId, user.id);
     // 팀이 없는 것과 권한이 없는 것을 구분하지 않는다 (팀 id 추측 방지)
-    if (!role) throw new HttpError(404, "팀을 찾을 수 없습니다.", "not_found");
-    if (ROLE_RANK[role] < ROLE_RANK[min]) throw new HttpError(403, "이 작업을 할 권한이 없습니다.", "forbidden");
+    if (!role) throw new HttpError(404, "팀을 찾을 수 없어요.", "not_found");
+    if (ROLE_RANK[role] < ROLE_RANK[min]) throw new HttpError(403, "이 작업을 할 권한이 없어요.", "forbidden");
     req.teamId = teamId;
     req.role = role;
     next();

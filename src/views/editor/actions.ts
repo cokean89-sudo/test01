@@ -16,7 +16,7 @@ import type {
   TextRole,
 } from "../../../shared/types";
 import { pageSize } from "../../components/PageView";
-import { createBlankPage, createCasePage, createReferencePage, createSectionPage, imageFromRef, relayoutPage, scalePage } from "../../layout/templates";
+import { createBlankPage, createCasePage, createCoverPage, createReferencePage, createSectionPage, imageFromRef, relayoutPage as relayoutWith, scalePage } from "../../layout/templates";
 import { dummyText, isDummyText } from "../../lib/dummy";
 import { uid } from "../../lib/id";
 import { parseQuery } from "../../lib/search";
@@ -24,6 +24,11 @@ import { useEditor, withPage } from "../../store/editor";
 import { useLibrary } from "../../store/library";
 
 const st = () => useEditor.getState();
+
+/** 문서 타이포를 반영해 다시 배치 (글 길이 판단에 본문 크기·행간이 필요) */
+function relayoutPage(page: Page): Page {
+  return relayoutWith(page, st().doc?.settings);
+}
 
 export function getPage(doc: DocumentData | null, pageId: string | null): Page | undefined {
   return doc?.pages.find((p) => p.id === pageId);
@@ -43,13 +48,19 @@ export function bbox(els: Rect[]): Rect {
   return { x, y, w: r - x, h: b - y };
 }
 
-/** 위치/크기를 직접 바꾸면 자동 레이아웃에서 분리한다 */
-function detachIfMoved(el: PageElement, patch: Partial<PageElement>) {
-  if (el.type !== "image" || !(el.managed || el.logo)) return;
-  if (["x", "y", "w", "h"].some((k) => k in patch)) {
+/** 글 배치(짧은 글/긴 글)를 따르는 요소인지 */
+export function isFlowText(el: PageElement): boolean {
+  return el.type === "text" && !el.labelFor && (el.role === "body" || el.role === "highlight");
+}
+
+/** 위치/크기를 직접 바꾸면 자동 레이아웃에서 분리한다 (피그마의 'Absolute position' 과 같음) */
+function detachIfMoved(page: Page, el: PageElement, patch: Partial<PageElement>) {
+  if (!["x", "y", "w", "h"].some((k) => k in patch)) return;
+  if (el.type === "image" && (el.managed || el.logo)) {
     el.managed = false;
     el.logo = undefined;
   }
+  if (page.flow && isFlowText(el)) page.flow.mode = "fixed";
 }
 
 export function patchElements(ids: string[], patch: Partial<PageElement> | ((el: PageElement) => Partial<PageElement>), key?: string) {
@@ -57,14 +68,27 @@ export function patchElements(ids: string[], patch: Partial<PageElement> | ((el:
   if (!pageId || !ids.length) return;
   st().update((d) => {
     withPage(d, pageId, (page) => {
+      let reflow = false;
       for (const el of page.elements) {
         if (!ids.includes(el.id)) continue;
         const p = typeof patch === "function" ? patch(el) : patch;
-        detachIfMoved(el, p);
+        detachIfMoved(page, el, p);
         Object.assign(el, p);
+        if ("text" in p && isFlowText(el) && page.flow?.mode === "auto") reflow = true;
       }
+      // 본문 길이가 바뀌면 짧은 글/긴 글 배치를 다시 고른다
+      if (reflow) return relayoutPage(page);
     });
   }, key ? { key } : undefined);
+}
+
+/** 글 배치 방식 변경 */
+export function setTextFlow(pageId: string, mode: "auto" | "header" | "side") {
+  updatePage(pageId, (page) => {
+    if (!page.flow) return;
+    page.flow = { ...page.flow, mode };
+    return relayoutPage(page);
+  });
 }
 
 export function updatePage(pageId: string, fn: (page: Page) => Page | void, key?: string) {
@@ -330,12 +354,14 @@ export function addPage(kind: NewPageKind, afterIndex?: number) {
   const s = doc.settings;
   const page =
     kind === "reference"
-      ? createReferencePage(s, { title: "", images: [], placeholders: 6 })
+      ? createReferencePage(s, { title: "", images: [], placeholders: 5 })
       : kind === "case"
-        ? createCasePage(s, { title: "", images: [], logos: [], placeholders: { images: 6, logos: 2 } })
+        ? createCasePage(s, { title: "", images: [], logos: [], placeholders: { images: 4, logos: 2 } })
         : kind === "section"
           ? createSectionPage(s, { title: "" })
-          : createBlankPage(s);
+          : kind === "cover"
+            ? createCoverPage(s)
+            : createBlankPage(s);
   const idx = afterIndex ?? doc.pages.findIndex((p) => p.id === pageId);
   st().update((d) => void d.pages.splice(idx + 1, 0, page));
   st().setPage(page.id);
@@ -383,7 +409,7 @@ export function changePageSize(next: DocumentData["settings"]["pageSize"]) {
   const b = pageSize({ ...doc.settings, pageSize: next });
   st().update((d) => {
     d.settings.pageSize = next;
-    d.pages = d.pages.map((p) => scalePage(p, b.W / a.W, b.H / a.H));
+    d.pages = d.pages.map((p) => scalePage(p, b.W / a.W, b.H / a.H, d.settings));
   });
 }
 
@@ -448,7 +474,7 @@ export function applyAnalysis(page: Page, result: AnalyzeResult, fields: Set<AiF
     const el = next.elements.find((e): e is TextElement => e.type === "text" && e.role === f.role && !e.labelFor);
     if (el && typeof value === "string" && value.trim()) {
       // 이어지는 페이지 표시 "(2/3)" 는 유지
-      const suffix = f.key === "sectionLabel" ? el.text.match(/\s*\(\d+\/\d+\)$/)?.[0] ?? "" : "";
+      const suffix = f.key === "sectionLabel" || f.key === "title" ? (el.text.match(/\s*\(\d+\/\d+\)$/)?.[0] ?? "") : "";
       el.text = value.trim() + suffix;
     }
   }
@@ -459,5 +485,6 @@ export function applyAnalysis(page: Page, result: AnalyzeResult, fields: Set<AiF
       if (captionPos) img.captionPos = captionPos;
     });
   }
-  return next;
+  // 설명 길이가 바뀌었을 수 있으니 글 배치를 다시 고른다
+  return next.flow ? relayoutPage(next) : next;
 }

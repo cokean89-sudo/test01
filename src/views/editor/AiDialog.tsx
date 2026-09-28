@@ -46,7 +46,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
   const apply = () => {
     if (!result) return;
     updatePage(page.id, (p) => applyAnalysis(p, result, fields, capPos || undefined));
-    toast.success("AI 결과를 적용했습니다 (Ctrl+Z 로 되돌리기)");
+    toast.success("AI 결과를 적용했어요 (Ctrl+Z 로 되돌리기)");
     close();
   };
 
@@ -88,7 +88,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
       {error && <div className="error-box">{error}</div>}
       {result && !loading && (
         <div className="ai-result">
-          {result.engine === "heuristic" && <div className="notice">{result.notice ?? "AI 가 연결되지 않아 규칙 기반으로 제안했습니다."}</div>}
+          {result.engine === "heuristic" && <div className="notice">{result.notice ?? "AI 가 연결되지 않아 규칙 기반으로 제안했어요."}</div>}
           {AI_FIELDS.filter((f) => f.key !== "captions").map((f) => (
             <div key={f.key} className={"ai-field" + (hasRole(f.role) ? "" : " disabled")}>
               <label className="toggle">
@@ -100,7 +100,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
               ) : (
                 <input value={result[f.key as "title"]} onChange={(e) => setResult({ ...result, [f.key]: e.target.value })} />
               )}
-              {!hasRole(f.role) && <small className="muted">이 페이지에 해당 텍스트 칸이 없습니다</small>}
+              {!hasRole(f.role) && <small className="muted">이 페이지에 해당 텍스트 칸이 없어요</small>}
             </div>
           ))}
           <div className="ai-field">

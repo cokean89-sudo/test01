@@ -233,7 +233,7 @@ export async function scrapeUrl(raw: string): Promise<ScrapeResult> {
     const kind = classifyPinterestUrl(finalUrl);
     if (kind.type === "pin") {
       const pin = parsePinterestPin(page.text, finalUrl);
-      if (!pin.item) throw new FetchError("핀에서 이미지를 찾지 못했습니다", 422);
+      if (!pin.item) throw new FetchError("핀에서 이미지를 찾지 못했어요", 422);
       return { kind: "pinterest-pin", url: finalUrl.href, title: pin.title, description: pin.description, items: [pin.item] };
     }
     if (kind.type === "board" || kind.type === "profile") {
@@ -252,13 +252,13 @@ export async function scrapeUrl(raw: string): Promise<ScrapeResult> {
     }
     const items = extractPinimgUrls(page.text);
     const meta = parseHtmlPage(page.text, finalUrl);
-    if (!items.length) throw new FetchError("핀터레스트 페이지에서 이미지를 찾지 못했습니다. 핀(개별) 링크나 공개 보드 링크를 사용해 보세요.", 422);
+    if (!items.length) throw new FetchError("핀터레스트 페이지에서 이미지를 찾지 못했어요. 핀(개별) 링크나 공개 보드 링크를 사용해 보세요.", 422);
     return { kind: "pinterest-board", url: finalUrl.href, title: meta.title, items };
   }
 
-  if (!page.ok) throw new FetchError(`페이지를 열 수 없습니다 (HTTP ${page.status})`, 502);
+  if (!page.ok) throw new FetchError(`페이지를 열 수 없어요 (HTTP ${page.status})`, 502);
   const meta = parseHtmlPage(page.text, finalUrl);
-  if (!meta.images.length) throw new FetchError("페이지에서 이미지를 찾지 못했습니다", 422);
+  if (!meta.images.length) throw new FetchError("페이지에서 이미지를 찾지 못했어요", 422);
   return {
     kind: "webpage",
     url: finalUrl.href,

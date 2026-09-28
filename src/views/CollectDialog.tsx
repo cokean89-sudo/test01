@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DuplicateInfo, Reference, RefSource, ScrapeResult } from "../../shared/types";
 import { api, type RefInput } from "../api";
 import { SmartImage } from "../components/SmartImage";
+import { Icon } from "../components/icons";
 import { Button, Field, Modal, Segmented, Spinner, TagInput, Toggle } from "../components/ui";
 import { normalizeTags } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
@@ -74,7 +75,7 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
   async function fetchAll(text: string) {
     const urls = extractUrls(text).filter((u) => !blocks.some((b) => b.url === u));
     if (!urls.length) {
-      toast.error("링크를 찾지 못했습니다. http(s):// 로 시작하는 주소를 붙여넣으세요.");
+      toast.error("링크를 찾지 못했어요. http(s):// 로 시작하는 주소를 붙여넣으세요.");
       return;
     }
     setInput("");
@@ -185,7 +186,7 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
     return (
       <Modal title="저장 결과" onClose={close} width={640} footer={<Button variant="primary" onClick={close}>닫기</Button>}>
         <p>
-          새로 저장 {result.created}개 · <strong>중복 이미지 {result.duplicates.length}개</strong>는 새로 만들지 않고 기존 항목에 태그만 더했습니다.
+          새로 저장 {result.created}개 · <strong>중복 이미지 {result.duplicates.length}개</strong>는 새로 만들지 않고 기존 항목에 태그만 더했어요.
         </p>
         <ul className="dup-list">
           {result.duplicates.map((d) => (
@@ -222,15 +223,15 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
 
   return (
     <Modal
-      title="레퍼런스 추가"
+      title="어떤 레퍼런스를 모을까요?"
       onClose={close}
       wide
       footer={
         <>
-          <span className="muted">{selected.length}개 선택됨 · 이미지는 저장하지 않고 링크로 연결됩니다</span>
+          <span className="muted">{selected.length ? `${selected.length}개를 골랐어요` : "저장할 이미지를 골라 주세요"} · 이미지는 링크로만 연결돼요</span>
           <Button onClick={close}>취소</Button>
           <Button variant="primary" onClick={save} disabled={!selected.length || saving}>
-            {saving ? <Spinner /> : null} 저장
+            {saving ? <Spinner /> : null} {selected.length ? `${selected.length}개 저장하기` : "저장하기"}
           </Button>
         </>
       }
@@ -248,13 +249,28 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={"핀터레스트 핀/보드, 웹페이지, 이미지 링크를 붙여넣으세요 (여러 개는 줄바꿈)\n예) https://www.pinterest.com/pin/123456/\n     https://www.pinterest.com/username/board-name/\n     https://www.behance.net/gallery/…"}
+            placeholder={"여기에 링크를 붙여넣어 주세요 (여러 개는 줄을 바꿔서)\n\n예) https://pin.it/3xAbCdE — 핀터레스트 공유 → 링크 복사\n     https://i.pinimg.com/originals/… — 이미지 우클릭 → 이미지 주소 복사\n     https://www.pinterest.com/아이디/보드이름/ — 보드 전체"}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void fetchAll(input);
             }}
           />
           <div className="collect-input-actions">
-            <span className="muted">다른 탭의 이미지를 여기로 끌어다 놓아도 됩니다</span>
+            <div className="collect-howto">
+              <span className="howto-chip">
+                <b>핀터레스트</b> 공유 → 링크 복사
+              </span>
+              <span className="howto-chip">
+                이미지 우클릭 → <b>이미지 주소 복사</b>
+              </span>
+              <span className="howto-chip">이미지를 여기로 끌어다 놓기</span>
+              <a
+                className="link-btn blue"
+                href="#/guide/pinterest"
+                onClick={() => close()}
+              >
+                <Icon name="bulb" size={14} /> 자세히 보기
+              </a>
+            </div>
             <Button variant="primary" icon="link" onClick={() => fetchAll(input)} disabled={!input.trim()}>
               가져오기
             </Button>
@@ -263,7 +279,7 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
 
         <div className="collect-grid">
           <div className="collect-sources">
-            {blocks.length === 0 && <div className="empty-hint">링크를 가져오면 이미지 후보가 여기에 표시됩니다.</div>}
+            {blocks.length === 0 && <div className="empty-hint">링크를 붙여넣고 &lsquo;가져오기&rsquo;를 누르면 이미지 후보가 여기에 나와요.</div>}
             {blocks.map((b) => (
               <section key={b.url} className="source-block">
                 <header>
@@ -307,7 +323,7 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
                           >
                             기존 항목 편집
                           </button>
-                          {c.checked && <span className="muted small">선택하면 태그만 기존 항목에 추가됩니다</span>}
+                          {c.checked && <span className="muted small">선택하면 태그만 기존 항목에 추가돼요</span>}
                         </div>
                       ) : (
                         <input value={c.title} placeholder="제목" onChange={(e) => updateItem(c.key, { title: e.target.value })} />
@@ -320,7 +336,7 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
           </div>
 
           <aside className="collect-meta">
-            <Field label="키워드 태그" hint="검색·자동 그룹핑의 기준이 됩니다">
+            <Field label="키워드 태그" hint="검색·자동 그룹핑의 기준이 돼요">
               <TagInput value={tags} onChange={setTags} suggestions={vocab} />
             </Field>
             {vocab.length > 0 && (

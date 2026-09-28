@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CaseStudy, ImageElement, Reference, TextElement } from "../shared/types";
 import { buildDocument, buildGroups, ETC_LABEL, paginate, type BuildOptions } from "../src/layout/autobuild";
-import { createCasePage, createReferencePage, relayoutPage, scalePage } from "../src/layout/templates";
+import { colX, createCasePage, createCoverPage, createReferencePage, pageGrid, relayoutPage, scalePage } from "../src/layout/templates";
 import { DEFAULT_LAYOUT, defaultSettings } from "../src/lib/defaults";
 import { isDummyText, LOREM } from "../src/lib/dummy";
 
@@ -98,8 +98,14 @@ describe("buildDocument", () => {
   it("표지 + 그룹별 페이지를 만든다 (페이지당 최대 수 초과 시 분할)", () => {
     const doc = buildDocument(refs, cases, defaultSettings(), opts({ query: "조형물 굿즈샵", cover: true, maxPerPage: 4 }));
     expect(doc.pages.map((p) => p.kind)).toEqual(["cover", "reference", "reference", "reference"]);
-    const labels = doc.pages.slice(1).map((p) => p.elements.find((e): e is TextElement => e.type === "text" && e.role === "section")?.text);
-    expect(labels).toEqual(["Reference (1/2)", "Reference (2/2)", "Reference"]);
+    const titles = doc.pages.slice(1).map((p) => p.elements.find((e): e is TextElement => e.type === "text" && e.role === "title")?.text);
+    expect(titles[0]).toMatch(/\(1\/2\)$/);
+    expect(titles[1]).toMatch(/\(2\/2\)$/);
+    expect(titles[2]).not.toMatch(/\(\d\/\d\)$/);
+    // 표지는 문서 제목·부서명과 연결된 자리표시를 쓴다
+    const cover = doc.pages[0].elements.filter((e): e is TextElement => e.type === "text").map((t) => t.text);
+    expect(cover).toEqual(["{title}", "PRESENTED BY {dept}"]);
+    expect(doc.pages[0].hideFooter).toBe(true);
   });
 
   it("케이스 페이지에 케이스 정보와 로고 패널이 들어간다", () => {
@@ -183,5 +189,65 @@ describe("dummy content", () => {
     expect(isDummyText(LOREM.subtitle)).toBe(true);
     expect(isDummyText("Ideation")).toBe(false);
     expect(isDummyText("Reference")).toBe(false);
+  });
+});
+
+describe("A4 템플릿 그리드 · 글 배치", () => {
+  const settings = defaultSettings();
+  const text = (page: ReturnType<typeof createReferencePage>, role: string) =>
+    page.elements.find((e): e is TextElement => e.type === "text" && e.role === role)!;
+
+  it("5단 그리드 (좌우 10mm, 단 간격 3mm) 에 헤더를 맞춘다", () => {
+    const g = pageGrid(settings);
+    expect(g.cols).toBe(5);
+    expect(g.left).toBeCloseTo(28.35, 1);
+    expect(colX(g, 1)).toBeCloseTo(187.1, 0);
+    expect(colX(g, 2)).toBeCloseTo(345.8, 0);
+    const page = createReferencePage(settings, { title: "Option A", subtitle: "Welcome to", description: "짧은 설명", images: refs.slice(0, 5) });
+    expect(text(page, "title").x).toBeCloseTo(28.35, 1);
+    expect(text(page, "subtitle").x).toBeCloseTo(187.1, 0);
+    expect(text(page, "body").x).toBeCloseTo(345.8, 0);
+    // 이미지 영역: 34.5mm ~ 198mm, 전체 폭
+    expect(page.area.y).toBeCloseTo(97.8, 0);
+    expect(page.area.y + page.area.h).toBeCloseTo(561, 0);
+  });
+
+  it("짧은 글은 헤더(3~5단), 긴 글은 왼쪽 1단으로 가고 이미지 영역이 2~5단으로 좁아진다", () => {
+    const short = createReferencePage(settings, { title: "T", description: "클래스와 소셜링으로 문화적 취향을 소통하는 컬처클럽", images: refs.slice(0, 4) });
+    expect(short.flow?.resolved).toBe("header");
+    expect(Math.min(...short.elements.filter((e) => e.type === "image").map((e) => e.x))).toBeCloseTo(28.35, 1);
+
+    const long = createReferencePage(settings, { title: "T", description: "2019년 인스타그램 쇼핑에 AR 가상피팅 기능 추가. ".repeat(12), images: refs.slice(0, 4) });
+    expect(long.flow?.resolved).toBe("side");
+    const body = text(long, "body");
+    expect(body.x).toBeCloseTo(28.35, 1);
+    expect(body.w).toBeLessThan(160);
+    for (const img of long.elements.filter((e) => e.type === "image")) expect(img.x).toBeGreaterThanOrEqual(187.1 - 0.5);
+  });
+
+  it("직접 고정하면 글 길이가 바뀌어도 배치를 유지한다", () => {
+    const page = createReferencePage(settings, { title: "T", description: "짧은 글", images: refs.slice(0, 3) });
+    page.flow!.mode = "side";
+    const side = relayoutPage(page, settings);
+    expect(side.flow?.resolved).toBe("side");
+    expect(text(side, "body").x).toBeCloseTo(28.35, 1);
+  });
+
+  it("표지·간지는 가운데 정렬, 타이틀은 아래·설명은 위로 붙어 줄이 늘어도 겹치지 않는다", () => {
+    const cover = createCoverPage(settings);
+    const [title, sub] = cover.elements as TextElement[];
+    expect(title.style?.vAlign).toBe("bottom");
+    expect(sub.style?.vAlign).toBe("top");
+    expect(title.y + title.h).toBeLessThanOrEqual(sub.y + 0.01);
+    expect(title.style?.align).toBe("center");
+  });
+
+  it("비율 유지(fit) 는 크롭 없이 원본 비율로 영역 안에 넣는다", () => {
+    const page = createReferencePage(settings, { title: "T", description: "짧은 글", images: refs.slice(0, 4), layout: { sizing: "fit", mode: "grid", columns: 2 } });
+    for (const img of page.elements.filter((e): e is ImageElement => e.type === "image")) {
+      expect(img.w / img.h).toBeCloseTo((img.natW ?? 4) / (img.natH ?? 3), 2);
+      expect(img.x).toBeGreaterThanOrEqual(page.area.x - 0.01);
+      expect(img.y + img.h).toBeLessThanOrEqual(page.area.y + page.area.h + 0.01);
+    }
   });
 });

@@ -28,7 +28,7 @@ export function aiStatus(): AppStatus {
   return {
     ai: env || profile,
     model: MODEL,
-    aiReason: env || profile ? undefined : "ANTHROPIC_API_KEY 가 설정되지 않아 규칙 기반 제안으로 동작합니다.",
+    aiReason: env || profile ? undefined : "ANTHROPIC_API_KEY 가 설정되지 않아 규칙 기반 제안으로 동작해요.",
   };
 }
 
@@ -131,9 +131,9 @@ async function callStructured<T extends z.ZodType>(
     messages: [{ role: "user", content }],
   });
   if (response.stop_reason === "refusal") {
-    throw new RefusalError(response.stop_details?.explanation ?? "모델이 요청을 거절했습니다.");
+    throw new RefusalError(response.stop_details?.explanation ?? "모델이 요청을 거절했어요.");
   }
-  if (!response.parsed_output) throw new Error("AI 응답을 해석하지 못했습니다 (stop_reason: " + response.stop_reason + ")");
+  if (!response.parsed_output) throw new Error("AI 응답을 해석하지 못했어요 (stop_reason: " + response.stop_reason + ")");
   return response.parsed_output as z.infer<T>;
 }
 
@@ -142,7 +142,7 @@ function describeError(err: unknown): string {
   if (err instanceof Anthropic.RateLimitError) return "요청 한도 초과 — 잠시 후 다시 시도하세요.";
   if (err instanceof Anthropic.BadRequestError) return "요청 오류: " + err.message;
   if (err instanceof Anthropic.APIError) return `API 오류 ${err.status ?? ""}: ${err.message}`;
-  if (err instanceof RefusalError) return "AI 가 요청을 처리하지 않았습니다: " + err.message;
+  if (err instanceof RefusalError) return "AI 가 요청을 처리하지 않았어요: " + err.message;
   return err instanceof Error ? err.message : String(err);
 }
 

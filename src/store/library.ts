@@ -20,7 +20,6 @@ interface LibraryState {
   createCase: (input: CaseInput) => Promise<CaseStudy>;
   updateCase: (id: string, patch: Partial<CaseInput>) => Promise<void>;
   deleteCase: (id: string) => Promise<void>;
-  loadSample: () => Promise<number>;
 }
 
 export const useLibrary = create<LibraryState>((set, get) => ({
@@ -102,12 +101,6 @@ export const useLibrary = create<LibraryState>((set, get) => ({
         return next;
       }),
     });
-  },
-
-  async loadSample() {
-    const { added } = await api.loadSample();
-    await get().load();
-    return added;
   },
 }));
 

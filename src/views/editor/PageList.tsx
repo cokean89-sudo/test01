@@ -28,10 +28,21 @@ export function PageList() {
         >
           {(close) => (
             <>
-              <MenuItem onClick={() => (close(), addPage("reference"))}>레퍼런스 템플릿</MenuItem>
-              <MenuItem onClick={() => (close(), addPage("case"))}>케이스 스터디 템플릿</MenuItem>
-              <MenuItem onClick={() => (close(), addPage("section"))}>간지(섹션)</MenuItem>
-              <MenuItem onClick={() => (close(), addPage("blank"))}>빈 페이지</MenuItem>
+              <MenuItem icon="grid" hint="짧은 글 + 이미지" onClick={() => (close(), addPage("reference"))}>
+                레퍼런스
+              </MenuItem>
+              <MenuItem icon="sidebar" hint="긴 글 + 로고" onClick={() => (close(), addPage("case"))}>
+                케이스 스터디
+              </MenuItem>
+              <MenuItem icon="file" hint="가운데 제목" onClick={() => (close(), addPage("cover"))}>
+                표지
+              </MenuItem>
+              <MenuItem icon="heading" hint="섹션 구분" onClick={() => (close(), addPage("section"))}>
+                간지
+              </MenuItem>
+              <MenuItem icon="rect" onClick={() => (close(), addPage("blank"))}>
+                빈 페이지
+              </MenuItem>
             </>
           )}
         </Menu>

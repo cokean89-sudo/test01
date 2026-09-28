@@ -79,7 +79,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
       if (runAi) sessionStorage.setItem(PENDING_AI_KEY, doc.id);
       close();
       navigate("edit/" + doc.id);
-      toast.success(`${doc.pages.length}페이지 문서를 만들었습니다`);
+      toast.success(`${doc.pages.length}페이지 문서를 만들었어요`);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -89,7 +89,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
 
   return (
     <Modal
-      title="키워드로 문서 자동 생성"
+      title="어떤 키워드로 문서를 만들까요?"
       onClose={close}
       wide
       footer={
@@ -99,7 +99,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
           </span>
           <Button onClick={close}>취소</Button>
           <Button variant="primary" onClick={create} disabled={!groups.length || creating}>
-            문서 만들기
+            {preview.pages.length ? `${preview.pages.length}페이지 만들기` : "문서 만들기"}
           </Button>
         </>
       }
@@ -116,7 +116,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
             />
           </Field>
           {opts.refIds ? (
-            <p className="muted small">라이브러리에서 선택한 {opts.refIds.length}개 레퍼런스로 만듭니다.</p>
+            <p className="muted small">라이브러리에서 선택한 {opts.refIds.length}개 레퍼런스로 만들어요.</p>
           ) : (
             <>
               <Field label="키워드" hint="공백으로 구분 · #태그 정확히 · -제외">
@@ -145,42 +145,6 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
               ]}
             />
           </Field>
-          <Field label="이미지 배치">
-            <Select<string>
-              value={opts.layoutAuto ? "auto" : opts.layout.mode}
-              onChange={(mode) =>
-                mode === "auto"
-                  ? setOpts((o) => ({ ...o, layoutAuto: true }))
-                  : setOpts((o) => ({ ...o, layoutAuto: false, layout: { ...o.layout, mode: mode as typeof o.layout.mode } }))
-              }
-              options={[
-                { value: "auto", label: "템플릿 기본 (케이스: 보고서형 · 레퍼런스: 세로 정렬)" },
-                ...LAYOUT_MODES.map((m) => ({ value: m.key, label: m.label })),
-              ]}
-            />
-          </Field>
-          <div className="grid-2">
-            {opts.layoutAuto ? (
-              <Field label="배열 변형">
-                <NumberInput value={opts.layout.seed} min={0} onChange={(seed) => set("layout", { ...opts.layout, seed })} />
-              </Field>
-            ) : opts.layout.mode === "grid" || opts.layout.mode === "columns" ? (
-              <Field label={opts.layout.mode === "grid" ? "열(단) 수" : "열 수 (0=자동)"}>
-                <NumberInput value={opts.layout.columns} min={0} max={8} onChange={(columns) => set("layout", { ...opts.layout, columns })} />
-              </Field>
-            ) : opts.layout.mode === "rows" ? (
-              <Field label="줄 수 (0=자동)">
-                <NumberInput value={opts.layout.rows} min={0} max={8} onChange={(rows) => set("layout", { ...opts.layout, rows })} />
-              </Field>
-            ) : (
-              <Field label="배열 변형">
-                <NumberInput value={opts.layout.seed} min={0} onChange={(seed) => set("layout", { ...opts.layout, seed })} />
-              </Field>
-            )}
-            <Field label="간격 (pt)">
-              <NumberInput value={opts.layout.gap} min={0} max={40} step={0.5} onChange={(gap) => set("layout", { ...opts.layout, gap })} />
-            </Field>
-          </div>
           <div className="grid-2">
             <Field label="페이지당 최대 이미지">
               <NumberInput value={opts.maxPerPage} min={1} max={30} onChange={(v) => set("maxPerPage", v)} />
@@ -191,23 +155,64 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
               </Field>
             )}
           </div>
-          <Field label="페이지 크기">
-            <Select value={pageSize} onChange={setPageSize} options={Object.entries(PAGE_SIZES).map(([k, v]) => ({ value: k as PageSizeKey, label: v.label }))} />
-          </Field>
-          <Field label="문서 양식 (하단 태그라인)">
-            <Select value={footerKey} onChange={setFooterKey} options={[{ value: "team", label: `팀 기본 설정${teamDefaults?.footer.left ? ` (${teamDefaults.footer.left})` : ""}` }, ...FOOTER_PRESETS.map((f) => ({ value: f.key, label: f.label }))]} />
-          </Field>
-          <Field label="타이포 프리셋">
-            <Select value={typoKey} onChange={setTypoKey} options={[{ value: "team", label: "팀 기본 설정" }, ...TYPOGRAPHY_PRESETS.map((t) => ({ value: t.key, label: t.label }))]} />
-          </Field>
-          <Toggle checked={opts.cover} onChange={(v) => set("cover", v)} label="표지 페이지" />
-          <Toggle checked={opts.sections} onChange={(v) => set("sections", v)} label="그룹마다 간지(섹션) 페이지" />
+          <Toggle checked={opts.cover} onChange={(v) => set("cover", v)} label="표지 페이지 넣기" />
+          <Toggle checked={opts.sections} onChange={(v) => set("sections", v)} label="그룹마다 간지(섹션) 페이지 넣기" />
+          <details className="al-more">
+            <summary>배치 · 양식 세부 설정</summary>
+            <div className="build-options" style={{ paddingBottom: 6 }}>
+              <Field label="이미지 배치">
+                <Select<string>
+                  value={opts.layoutAuto ? "auto" : opts.layout.mode}
+                  onChange={(mode) =>
+                    mode === "auto"
+                      ? setOpts((o) => ({ ...o, layoutAuto: true }))
+                      : setOpts((o) => ({ ...o, layoutAuto: false, layout: { ...o.layout, mode: mode as typeof o.layout.mode } }))
+                  }
+                  options={[
+                    { value: "auto", label: "템플릿 기본 (가로 줄 · 높이 맞춤)" },
+                    ...LAYOUT_MODES.map((m) => ({ value: m.key, label: m.label })),
+                  ]}
+                />
+              </Field>
+              <div className="grid-2">
+                {opts.layoutAuto ? (
+                  <Field label="배열 변형">
+                    <NumberInput value={opts.layout.seed} min={0} onChange={(seed) => set("layout", { ...opts.layout, seed })} />
+                  </Field>
+                ) : opts.layout.mode === "grid" || opts.layout.mode === "columns" ? (
+                  <Field label={opts.layout.mode === "grid" ? "열(단) 수" : "열 수 (0=자동)"}>
+                    <NumberInput value={opts.layout.columns} min={0} max={8} onChange={(columns) => set("layout", { ...opts.layout, columns })} />
+                  </Field>
+                ) : opts.layout.mode === "rows" ? (
+                  <Field label="줄 수 (0=자동)">
+                    <NumberInput value={opts.layout.rows} min={0} max={8} onChange={(rows) => set("layout", { ...opts.layout, rows })} />
+                  </Field>
+                ) : (
+                  <Field label="배열 변형">
+                    <NumberInput value={opts.layout.seed} min={0} onChange={(seed) => set("layout", { ...opts.layout, seed })} />
+                  </Field>
+                )}
+                <Field label="간격 (pt)">
+                  <NumberInput value={opts.layout.gap} min={0} max={40} step={0.5} onChange={(gap) => set("layout", { ...opts.layout, gap })} />
+                </Field>
+              </div>
+              <Field label="페이지 크기">
+                <Select value={pageSize} onChange={setPageSize} options={Object.entries(PAGE_SIZES).map(([k, v]) => ({ value: k as PageSizeKey, label: v.label }))} />
+              </Field>
+              <Field label="문서 양식 (하단 태그라인)">
+                <Select value={footerKey} onChange={setFooterKey} options={[{ value: "team", label: `팀 기본 설정${teamDefaults?.footer.left ? ` (${teamDefaults.footer.left})` : ""}` }, ...FOOTER_PRESETS.map((f) => ({ value: f.key, label: f.label }))]} />
+              </Field>
+              <Field label="타이포 프리셋">
+                <Select value={typoKey} onChange={setTypoKey} options={[{ value: "team", label: "팀 기본 설정" }, ...TYPOGRAPHY_PRESETS.map((t) => ({ value: t.key, label: t.label }))]} />
+              </Field>
+            </div>
+          </details>
           <Toggle
             checked={runAi}
             onChange={setRunAi}
             label={
               <>
-                생성 후 AI 로 타이틀·설명·캡션 작성
+                만든 뒤 AI 로 타이틀·설명·캡션 채우기
                 {!status?.ai && <small className="muted"> (API 키 없음 → 규칙 기반)</small>}
               </>
             }
@@ -215,8 +220,8 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
         </div>
 
         <div className="build-preview">
-          <h4>그룹 미리보기</h4>
-          {rawGroups.length === 0 && <p className="muted">키워드와 일치하는 레퍼런스가 없습니다.</p>}
+          <h4>이렇게 묶을게요</h4>
+          {rawGroups.length === 0 && <p className="muted">키워드와 일치하는 레퍼런스가 없어요.</p>}
           <div className="group-list">
             {rawGroups.map((g) => {
               const ov = overrides[g.key] ?? {};
@@ -241,7 +246,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
               );
             })}
           </div>
-          <h4>페이지 미리보기</h4>
+          <h4>미리보기</h4>
           <div className="page-preview-grid">
             {preview.pages.slice(0, 24).map((p, i) => (
               <div key={p.id} className="page-preview">

@@ -22,6 +22,7 @@ export function fontStack(name?: string): string {
 }
 
 export const FONT_WEIGHTS = [
+  { value: 200, label: "ExtraLight 200" },
   { value: 300, label: "Light 300" },
   { value: 400, label: "Regular 400" },
   { value: 500, label: "Medium 500" },

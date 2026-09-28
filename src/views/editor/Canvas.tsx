@@ -3,7 +3,8 @@ import type { ImageElement, PageElement, Rect } from "../../../shared/types";
 import { PageView, pageSize } from "../../components/PageView";
 import { uid } from "../../lib/id";
 import { useCurrentPage, useEditor, withPage } from "../../store/editor";
-import { addElement, bbox, newText, swapManaged } from "./actions";
+import { effectiveArea } from "../../layout/templates";
+import { addElement, bbox, isFlowText, newText, patchElements, swapManaged } from "./actions";
 import { snapLines, snapMove, snapValue } from "./snap";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
@@ -117,14 +118,16 @@ export function Canvas() {
           ed.patchTransient(page.id, { [swapSource.id]: orig.get(swapSource.id)! });
           swapManaged(page.id, swapSource.id, target);
         } else {
-          // 직접 옮긴 이미지는 자동 레이아웃에서 분리
+          // 직접 옮긴 이미지는 자동 레이아웃에서, 본문 글은 글 배치에서 분리
           ed.update((d) =>
             withPage(d, page.id, (pg) => {
               for (const el of pg.elements) {
-                if (el.type === "image" && orig.has(el.id) && (el.managed || el.logo)) {
+                if (!orig.has(el.id)) continue;
+                if (el.type === "image" && (el.managed || el.logo)) {
                   el.managed = false;
                   el.logo = undefined;
                 }
+                if (pg.flow && isFlowText(el)) pg.flow.mode = "fixed";
               }
             }),
           );
@@ -200,7 +203,7 @@ export function Canvas() {
         setGuides({ x: [], y: [] });
         if (!moved) return;
         const ed = useEditor.getState();
-        if (el.type === "image" && (el.managed || el.logo)) {
+        if ((el.type === "image" && (el.managed || el.logo)) || (page.flow && isFlowText(el))) {
           ed.update((d) =>
             withPage(d, page.id, (pg) => {
               const t = pg.elements.find((x) => x.id === el.id);
@@ -208,6 +211,7 @@ export function Canvas() {
                 t.managed = false;
                 t.logo = undefined;
               }
+              if (t && pg.flow && isFlowText(t)) pg.flow.mode = "fixed";
             }),
           );
         }
@@ -289,19 +293,15 @@ export function Canvas() {
                 // 내용 없이 끝낸 자유 텍스트 상자는 지운다
                 ed.update((d) => withPage(d, page.id, (pg) => void (pg.elements = pg.elements.filter((x) => x.id !== id))));
               } else if (cur?.type === "text" && cur.text !== text) {
-                ed.update((d) =>
-                  withPage(d, page.id, (pg) => {
-                    const t = pg.elements.find((x) => x.id === id);
-                    if (t?.type === "text") t.text = text;
-                  }),
-                );
+                // 본문 길이에 따라 짧은 글/긴 글 배치를 다시 고른다
+                patchElements([id], { text });
               }
             }}
             onImageNatural={(id, w, h) => useEditor.getState().patchTransient(page.id, { [id]: { natW: w, natH: h } })}
           />
         </div>
         <div className="canvas-overlay">
-          {managedCount > 0 && <div className="area-outline" style={rectPx(page.area)} title="자동 레이아웃 영역" />}
+          {managedCount > 0 && <div className="area-outline" style={rectPx(effectiveArea(page))} title="자동 레이아웃 영역" />}
           {page.elements.map((el) => (
             <div
               key={el.id}

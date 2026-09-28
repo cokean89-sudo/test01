@@ -33,7 +33,7 @@ export function EditorView({ id }: { id: string }) {
         // 다른 팀의 문서 링크로 들어왔으면 그 팀으로 전환
         if (d.teamId && d.teamId !== useSession.getState().teamId) useSession.getState().switchTeam(d.teamId);
         useEditor.getState().open(d, { readOnly: d.role === "viewer" });
-        if (d.role === "viewer") toast.info("보기 전용 권한입니다 — 편집할 수 없습니다");
+        if (d.role === "viewer") toast.info("보기 전용 권한이에요 — 편집할 수 없어요");
         if (sessionStorage.getItem(PENDING_AI_KEY) === d.id) {
           sessionStorage.removeItem(PENDING_AI_KEY);
           setTimeout(() => void runAiAll(), 300);
@@ -63,7 +63,7 @@ export function EditorView({ id }: { id: string }) {
       if (data.docId === id) useEditor.setState({ presence: data.users });
     });
     es.addEventListener("removed", () => {
-      toast.error("이 팀에 대한 접근 권한이 없어졌습니다");
+      toast.error("이 팀에 대한 접근 권한이 없어졌어요");
       navigate("docs");
     });
     return () => es.close();
@@ -88,7 +88,7 @@ export function EditorView({ id }: { id: string }) {
     if (!start || useEditor.getState().readOnly) return;
     const targets = start.pages.filter((p) => (p.kind === "case" || p.kind === "reference") && contentImages(p).length > 0);
     if (!targets.length) {
-      toast.info("분석할 이미지 페이지가 없습니다");
+      toast.info("분석할 이미지 페이지가 없어요");
       return;
     }
     const ed = useEditor.getState();
@@ -108,7 +108,7 @@ export function EditorView({ id }: { id: string }) {
         for (const f of AI_FIELDS) {
           if (!f.role) continue;
           const current = textOf(f.role);
-          const autoTitle = f.key === "title" && page.kind === "reference" && current === (page.group ?? "");
+          const autoTitle = f.key === "title" && page.kind === "reference" && current.replace(/\s*\(\d+\/\d+\)$/, "") === (page.group ?? "");
           const autoSection = f.key === "sectionLabel" && /^Reference(\s*\(\d+\/\d+\))?$/.test(current);
           if (isDummyText(current) || autoTitle || autoSection) fields.add(f.key);
         }
@@ -123,7 +123,7 @@ export function EditorView({ id }: { id: string }) {
         });
         done++;
       }
-      toast.success(notice ? `규칙 기반으로 ${done}페이지 작성 — ${notice}` : `AI 가 ${done}페이지의 빈 칸을 채웠습니다 (Ctrl+Z 로 되돌리기)`);
+      toast.success(notice ? `규칙 기반으로 ${done}페이지 작성 — ${notice}` : `AI 가 ${done}페이지의 빈 칸을 채웠어요 (Ctrl+Z 로 되돌리기)`);
     } catch (err) {
       toast.error(`AI 작성 중단 (${done}/${targets.length}): ${(err as Error).message}`);
     } finally {
@@ -200,7 +200,7 @@ export function EditorView({ id }: { id: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (error) return <div className="center-msg error-box">문서를 열 수 없습니다: {error}</div>;
+  if (error) return <div className="center-msg error-box">문서를 열 수 없어요: {error}</div>;
   if (!doc || doc.id !== id) {
     return (
       <div className="center-msg">

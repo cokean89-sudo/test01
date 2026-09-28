@@ -59,7 +59,7 @@ export function teamsRouter(repo: Repo): Router {
 
   r.delete("/:teamId", teamRole(repo, "owner"), (req, res) => {
     const team = repo.getTeam(req.teamId!)!;
-    if (team.personal) throw new HttpError(400, "개인 작업공간은 삭제할 수 없습니다.");
+    if (team.personal) throw new HttpError(400, "개인 작업공간은 삭제할 수 없어요.");
     const { confirm } = z.object({ confirm: z.string() }).parse(req.body ?? {});
     if (confirm !== team.name) throw new HttpError(400, "확인을 위해 팀 이름을 정확히 입력하세요.");
     publish(req.teamId!, "removed", { teamId: req.teamId });
@@ -70,7 +70,7 @@ export function teamsRouter(repo: Repo): Router {
 
   r.put("/:teamId/defaults", teamRole(repo, "admin"), (req, res) => {
     const defaults = defaultsSchema.parse(req.body?.defaults) as unknown as DocSettings;
-    if (JSON.stringify(defaults).length > 100_000) throw new HttpError(413, "설정이 너무 큽니다.");
+    if (JSON.stringify(defaults).length > 100_000) throw new HttpError(413, "설정이 너무 커요.");
     repo.setDefaults(req.teamId!, defaults);
     repo.log(req.teamId!, req.user!.id, "team.defaults", "문서 기본 설정 변경");
     publish(req.teamId!, "team", {});
@@ -85,12 +85,12 @@ export function teamsRouter(repo: Repo): Router {
     const targetId = String(req.params.userId);
     const { role: next } = z.object({ role }).parse(req.body);
     const current = repo.getRole(teamId, targetId);
-    if (!current) throw new HttpError(404, "멤버를 찾을 수 없습니다.");
+    if (!current) throw new HttpError(404, "멤버를 찾을 수 없어요.");
     const iAmOwner = req.role === "owner";
     if (!iAmOwner && (current === "owner" || next === "owner" || (next === "admin" && current !== "admin"))) {
-      throw new HttpError(403, "소유자만 소유자·관리자 권한을 바꿀 수 있습니다.");
+      throw new HttpError(403, "소유자만 소유자·관리자 권한을 바꿀 수 있어요.");
     }
-    if (current === "owner" && next !== "owner" && repo.ownerCount(teamId) <= 1) throw new HttpError(400, "팀에는 소유자가 최소 한 명 있어야 합니다.");
+    if (current === "owner" && next !== "owner" && repo.ownerCount(teamId) <= 1) throw new HttpError(400, "팀에는 소유자가 최소 한 명 있어야 해요.");
     repo.setRole(teamId, targetId, next);
     const target = repo.getUser(targetId);
     repo.log(teamId, me.id, "member.role", `${target?.name ?? "멤버"} 권한: ${ROLE_LABEL[current]} → ${ROLE_LABEL[next]}`);
@@ -105,12 +105,12 @@ export function teamsRouter(repo: Repo): Router {
     const targetId = String(req.params.userId);
     const self = targetId === me.id;
     const current = repo.getRole(teamId, targetId);
-    if (!current) throw new HttpError(404, "멤버를 찾을 수 없습니다.");
+    if (!current) throw new HttpError(404, "멤버를 찾을 수 없어요.");
     const team = repo.getTeam(teamId)!;
-    if (self && team.personal) throw new HttpError(400, "개인 작업공간에서는 나갈 수 없습니다.");
-    if (!self && ROLE_RANK[req.role!] < ROLE_RANK.admin) throw new HttpError(403, "멤버를 내보낼 권한이 없습니다.");
-    if (!self && current === "owner" && req.role !== "owner") throw new HttpError(403, "소유자는 다른 소유자만 내보낼 수 있습니다.");
-    if (current === "owner" && repo.ownerCount(teamId) <= 1) throw new HttpError(400, "마지막 소유자는 나갈 수 없습니다. 먼저 다른 멤버를 소유자로 지정하세요.");
+    if (self && team.personal) throw new HttpError(400, "개인 작업공간에서는 나갈 수 없어요.");
+    if (!self && ROLE_RANK[req.role!] < ROLE_RANK.admin) throw new HttpError(403, "멤버를 내보낼 권한이 없어요.");
+    if (!self && current === "owner" && req.role !== "owner") throw new HttpError(403, "소유자는 다른 소유자만 내보낼 수 있어요.");
+    if (current === "owner" && repo.ownerCount(teamId) <= 1) throw new HttpError(400, "마지막 소유자는 나갈 수 없어요. 먼저 다른 멤버를 소유자로 지정하세요.");
     const target = repo.getUser(targetId);
     repo.removeMember(teamId, targetId);
     repo.log(teamId, me.id, self ? "member.leave" : "member.remove", self ? `${me.name} 님이 팀을 나감` : `${target?.name ?? "멤버"} 님을 내보냄`);
@@ -124,8 +124,8 @@ export function teamsRouter(repo: Repo): Router {
 
   /** 초대 권한: 관리자 이상, 자기보다 높은 권한으로는 초대 불가, 소유자 초대는 불가 */
   const inviteRole = (requester: Role, wanted: Role) => {
-    if (wanted === "owner") throw new HttpError(400, "소유자 권한으로는 초대할 수 없습니다. 가입 후 권한을 변경하세요.");
-    if (ROLE_RANK[wanted] > ROLE_RANK[requester]) throw new HttpError(403, "자신보다 높은 권한으로 초대할 수 없습니다.");
+    if (wanted === "owner") throw new HttpError(400, "소유자 권한으로는 초대할 수 없어요. 가입 후 권한을 변경하세요.");
+    if (ROLE_RANK[wanted] > ROLE_RANK[requester]) throw new HttpError(403, "자신보다 높은 권한으로 초대할 수 없어요.");
     return wanted;
   };
 
@@ -135,11 +135,11 @@ export function teamsRouter(repo: Repo): Router {
 
   r.post("/:teamId/invites/email", teamRole(repo, "admin"), async (req, res) => {
     const me = req.user!;
-    enforceLimit(`invite:${me.id}`, 50, DAY, "하루 초대 한도를 넘었습니다.");
-    const body = z.object({ email: z.string().trim().toLowerCase().email("올바른 메일 주소가 아닙니다.").max(254), role: role.default("editor") }).parse(req.body);
+    enforceLimit(`invite:${me.id}`, 50, DAY, "하루 초대 한도를 넘었어요.");
+    const body = z.object({ email: z.string().trim().toLowerCase().email("올바른 메일 주소가 아니에요.").max(254), role: role.default("editor") }).parse(req.body);
     const wanted = inviteRole(req.role!, body.role);
     const existing = repo.findUserByEmail(body.email);
-    if (existing && repo.getRole(req.teamId!, existing.id)) throw new HttpError(409, "이미 팀 멤버입니다.");
+    if (existing && repo.getRole(req.teamId!, existing.id)) throw new HttpError(409, "이미 팀 멤버예요.");
     const team = repo.getTeam(req.teamId!)!;
     const { id, token } = repo.createEmailInvite(req.teamId!, body.email, wanted, me.id);
     const mail = await sendInviteMail(body.email, team.name, me.name, token);
@@ -150,7 +150,7 @@ export function teamsRouter(repo: Repo): Router {
 
   r.post("/:teamId/invites/code", teamRole(repo, "admin"), async (req, res) => {
     const me = req.user!;
-    enforceLimit(`invite:${me.id}`, 50, DAY, "하루 초대 한도를 넘었습니다.");
+    enforceLimit(`invite:${me.id}`, 50, DAY, "하루 초대 한도를 넘었어요.");
     const body = z
       .object({
         role: role.default("editor"),
@@ -161,8 +161,8 @@ export function teamsRouter(repo: Repo): Router {
       .parse(req.body);
     const wanted = inviteRole(req.role!, body.role);
     const password = body.password?.trim() || randomCode(8);
-    if (password.length < 6) throw new HttpError(400, "초대 비밀번호는 6자 이상이어야 합니다.");
-    if (isCommonPassword(password)) throw new HttpError(400, "너무 흔한 비밀번호입니다.");
+    if (password.length < 6) throw new HttpError(400, "초대 비밀번호는 6자 이상이어야 해요.");
+    if (isCommonPassword(password)) throw new HttpError(400, "너무 흔한 비밀번호예요.");
     const code = randomCode(10);
     const id = repo.createCodeInvite(req.teamId!, {
       code,
@@ -178,7 +178,7 @@ export function teamsRouter(repo: Repo): Router {
   });
 
   r.delete("/:teamId/invites/:inviteId", teamRole(repo, "admin"), (req, res) => {
-    if (!repo.revokeInvite(req.teamId!, String(req.params.inviteId))) throw new HttpError(404, "초대를 찾을 수 없습니다.");
+    if (!repo.revokeInvite(req.teamId!, String(req.params.inviteId))) throw new HttpError(404, "초대를 찾을 수 없어요.");
     repo.log(req.teamId!, req.user!.id, "invite.revoke", "초대 취소");
     res.json(repo.listInvites(req.teamId!));
   });
@@ -192,7 +192,7 @@ export function teamsRouter(repo: Repo): Router {
 
   r.get("/:teamId/events", teamRole(repo, "viewer"), (req, res) => {
     const docId = typeof req.query.doc === "string" && /^[\w-]{1,40}$/.test(req.query.doc) ? req.query.doc : undefined;
-    if (docId && repo.docTeam(docId) !== req.teamId) throw new HttpError(404, "문서를 찾을 수 없습니다.");
+    if (docId && repo.docTeam(docId) !== req.teamId) throw new HttpError(404, "문서를 찾을 수 없어요.");
     const token = req.sessionToken!;
     const teamId = req.teamId!;
     const userId = req.user!.id;
@@ -216,7 +216,7 @@ export function invitesRouter(repo: Repo): Router {
     enforceLimit(`invite-preview:${user.id}`, 60, 60 * 60_000);
     const token = String(req.query.token ?? "");
     const inv = token.length >= 10 && token.length <= 200 ? repo.inviteByToken(token) : undefined;
-    if (!inv) throw new HttpError(404, "초대를 찾을 수 없습니다.");
+    if (!inv) throw new HttpError(404, "초대를 찾을 수 없어요.");
     const team = repo.getTeam(inv.team_id);
     const inviter = inv.created_by ? repo.getUser(inv.created_by) : undefined;
     res.json({
@@ -235,15 +235,15 @@ export function invitesRouter(repo: Repo): Router {
     enforceLimit(`invite-accept:${user.id}`, 20, 60 * 60_000);
     const { token } = z.object({ token: z.string().min(10).max(200) }).parse(req.body);
     const inv = repo.inviteByToken(token);
-    if (!inv) throw new HttpError(404, "초대를 찾을 수 없습니다.");
+    if (!inv) throw new HttpError(404, "초대를 찾을 수 없어요.");
     if (repo.getRole(inv.team_id, user.id)) return res.json({ teamId: inv.team_id, already: true });
     const status = inviteStatus(inv);
-    if (status !== "active") throw new HttpError(410, status === "expired" ? "만료된 초대입니다. 다시 초대를 요청하세요." : "더 이상 사용할 수 없는 초대입니다.");
+    if (status !== "active") throw new HttpError(410, status === "expired" ? "만료된 초대예요. 다시 초대를 요청하세요." : "더 이상 사용할 수 없는 초대예요.");
     if (!user.email || user.email.toLowerCase() !== inv.email?.toLowerCase()) {
-      throw new HttpError(403, `이 초대는 ${inv.email} 계정으로만 수락할 수 있습니다.`, "email_mismatch");
+      throw new HttpError(403, `이 초대는 ${inv.email} 계정으로만 수락할 수 있어요.`, "email_mismatch");
     }
     if (!user.email_verified_at) throw new HttpError(403, "메일 인증을 먼저 완료하세요.", "unverified");
-    if (!repo.useInvite(inv.id)) throw new HttpError(410, "더 이상 사용할 수 없는 초대입니다.");
+    if (!repo.useInvite(inv.id)) throw new HttpError(410, "더 이상 사용할 수 없는 초대예요.");
     repo.addMember(inv.team_id, user.id, inv.role);
     repo.log(inv.team_id, user.id, "member.join", `${user.name} 님이 메일 초대로 참여 (${ROLE_LABEL[inv.role]})`);
     repo.security("invite_accepted", user.id, req.ip, inv.team_id);
@@ -253,25 +253,25 @@ export function invitesRouter(repo: Repo): Router {
 
   r.post("/join", async (req, res) => {
     const user = requireUser(req);
-    enforceLimit(`invite-join:${user.id}`, 10, 15 * 60_000, "시도가 너무 많습니다. 15분 후 다시 시도하세요.");
-    enforceLimit(`invite-join:${req.ip}`, 30, 15 * 60_000, "시도가 너무 많습니다. 15분 후 다시 시도하세요.");
+    enforceLimit(`invite-join:${user.id}`, 10, 15 * 60_000, "시도가 너무 많아요. 15분 후 다시 시도하세요.");
+    enforceLimit(`invite-join:${req.ip}`, 30, 15 * 60_000, "시도가 너무 많아요. 15분 후 다시 시도하세요.");
     const body = z.object({ code: z.string().trim().min(4).max(40), password: z.string().min(1).max(100) }).parse(req.body);
     const inv = repo.inviteByCode(body.code);
     // 코드가 없거나 비밀번호가 틀려도 같은 메시지 (코드 존재 여부 노출 방지)
-    const invalid = new HttpError(400, "초대 코드 또는 비밀번호가 올바르지 않습니다.", "invalid_invite");
+    const invalid = new HttpError(400, "초대 코드 또는 비밀번호가 올바르지 않아요.", "invalid_invite");
     const ok = await verifyPassword(body.password, inv?.password_hash);
     if (!inv) throw invalid;
     if (repo.getRole(inv.team_id, user.id) && ok) return res.json({ teamId: inv.team_id, already: true });
     const status = inviteStatus(inv);
-    if (status === "locked") throw new HttpError(423, "비밀번호 오류가 반복되어 이 초대 코드는 잠겼습니다. 관리자에게 새 코드를 요청하세요.");
+    if (status === "locked") throw new HttpError(423, "비밀번호 오류가 반복되어 이 초대 코드는 잠겼어요. 관리자에게 새 코드를 요청하세요.");
     if (!ok) {
       repo.inviteFailed(inv.id);
       repo.security("invite_join_failed", user.id, req.ip, inv.id);
       if (inv.failed_attempts + 1 >= INVITE_MAX_FAILURES) repo.log(inv.team_id, null, "invite.locked", "초대 코드가 비밀번호 오류 반복으로 잠김");
       throw invalid;
     }
-    if (status !== "active") throw new HttpError(410, status === "expired" ? "만료된 초대 코드입니다." : "더 이상 사용할 수 없는 초대 코드입니다.");
-    if (!repo.useInvite(inv.id)) throw new HttpError(410, "더 이상 사용할 수 없는 초대 코드입니다.");
+    if (status !== "active") throw new HttpError(410, status === "expired" ? "만료된 초대 코드예요." : "더 이상 사용할 수 없는 초대 코드예요.");
+    if (!repo.useInvite(inv.id)) throw new HttpError(410, "더 이상 사용할 수 없는 초대 코드예요.");
     repo.addMember(inv.team_id, user.id, inv.role);
     repo.log(inv.team_id, user.id, "member.join", `${user.name} 님이 초대 코드로 참여 (${ROLE_LABEL[inv.role]})`);
     repo.security("invite_joined", user.id, req.ip, inv.team_id);

@@ -3,7 +3,7 @@
 import PptxGenJS from "pptxgenjs";
 import type { DocSettings, DocumentData, ImageElement, Page } from "../../shared/types";
 import { proxied } from "../api";
-import { fillTitle, pageSize, resolveColor, resolveStyle } from "../components/PageView";
+import { fillTitle, fillTokens, pageSize, resolveColor, resolveStyle } from "../components/PageView";
 import { formatPageNumber } from "../lib/defaults";
 
 const inch = (pt: number) => pt / 72;
@@ -70,16 +70,28 @@ function renderBox(img: HTMLImageElement, el: ImageElement, boxW: number, boxH: 
   return canvas.toDataURL(opaque ? "image/jpeg" : "image/png", 0.9);
 }
 
+const WEIGHT_NAMES: Record<number, string> = { 100: "Thin", 200: "ExtraLight", 300: "Light", 500: "Medium", 600: "SemiBold", 800: "ExtraBold", 900: "Black" };
+
+/**
+ * PowerPoint 는 굵기를 '굵게' 하나로만 표현하므로, 정적 폰트 이름(예: "Poppins SemiBold")으로 굵기를 살린다.
+ * 400·700 은 기본 이름 + 굵게 여부로 처리.
+ */
+export function pptxFont(family: string, weight: number): { fontFace: string; bold: boolean } {
+  const w = Math.round(weight / 100) * 100;
+  if (w === 400 || w === 700) return { fontFace: family, bold: w === 700 };
+  const name = WEIGHT_NAMES[w];
+  return name ? { fontFace: `${family} ${name}`, bold: false } : { fontFace: family, bold: w >= 600 };
+}
+
 function addChrome(slide: PptxGenJS.Slide, page: Page, settings: DocSettings, index: number, total: number, title: string) {
   if (page.hideFooter) return;
   const { W, H } = pageSize(settings);
   const m = settings.margin;
   const st = resolveStyle(settings, "footer");
   const base = {
-    fontFace: st.fontFamily,
+    ...pptxFont(st.fontFamily, st.fontWeight),
     fontSize: st.fontSize,
     color: hex(st.color),
-    bold: st.fontWeight >= 600,
     charSpacing: (st.tracking / 1000) * st.fontSize,
     margin: 0,
     valign: "top" as const,
@@ -91,13 +103,23 @@ function addChrome(slide: PptxGenJS.Slide, page: Page, settings: DocSettings, in
   const f = settings.footer;
   if (f.show) {
     const num = f.pageNumber ? formatPageNumber(f.pageNumberFormat, index + settings.pageNumberStart, total + settings.pageNumberStart - 1) : "";
-    const text = (pos: "left" | "center" | "right", t: string) => up([t, f.pageNumber && f.pageNumberPos === pos ? num : ""].filter(Boolean).join("      "));
-    const y = inch(H - m.bottom + 2);
+    // 페이지 번호는 두 단계 굵게 (템플릿: Light 문구 + Medium 번호)
+    const numFont = pptxFont(st.fontFamily, Math.min(900, st.fontWeight + 200));
+    const runs = (pos: "left" | "center" | "right", t: string): PptxGenJS.TextProps[] => {
+      const out: PptxGenJS.TextProps[] = [];
+      if (t) out.push({ text: up(t) });
+      if (f.pageNumber && f.pageNumberPos === pos && num) {
+        if (out.length) out.push({ text: "     " });
+        out.push({ text: up(num), options: numFont });
+      }
+      return out.length ? out : [{ text: "" }];
+    };
+    const y = inch(H - 20);
     const w = inch((W - m.left - m.right) / 3);
     const h = inch(st.fontSize * 1.6);
-    slide.addText(text("left", f.left), { ...base, x: inch(m.left), y, w, h, align: "left" });
-    slide.addText(text("center", f.center), { ...base, x: inch(m.left) + w, y, w, h, align: "center" });
-    slide.addText(text("right", f.right), { ...base, x: inch(m.left) + w * 2, y, w, h, align: "right" });
+    slide.addText(runs("left", f.left), { ...base, x: inch(m.left), y, w, h, align: "left" });
+    slide.addText(runs("center", f.center), { ...base, x: inch(m.left) + w, y, w, h, align: "center" });
+    slide.addText(runs("right", f.right), { ...base, x: inch(m.left) + w * 2, y, w, h, align: "right" });
     if (f.divider) {
       slide.addShape("line", { x: inch(m.left), y: y - inch(4), w: inch(W - m.left - m.right), h: 0, line: { color: hex(st.color), width: 0.5, transparency: 60 } });
     }
@@ -137,11 +159,11 @@ export async function exportPptx(doc: DocumentData): Promise<void> {
       if (el.type === "text") {
         if (!el.text.trim()) continue;
         const st = resolveStyle(settings, el.role, el.style);
-        slide.addText(st.uppercase ? el.text.toUpperCase() : el.text, {
+        const text = fillTokens(el.text, settings, doc.title);
+        slide.addText(st.uppercase ? text.toUpperCase() : text, {
           ...box,
-          fontFace: st.fontFamily,
+          ...pptxFont(st.fontFamily, st.fontWeight),
           fontSize: st.fontSize,
-          bold: st.fontWeight >= 600,
           italic: st.italic,
           color: hex(st.color),
           transparency,

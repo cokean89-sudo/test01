@@ -5,6 +5,7 @@ import { Icon } from "../components/icons";
 import { SmartImage } from "../components/SmartImage";
 import { Button, Empty, Menu, MenuItem, Modal, Segmented, Select, TagInput } from "../components/ui";
 import { groupHits } from "../layout/autobuild";
+import { navigate } from "../lib/router";
 import { norm, parseQuery, searchRefs, tagCounts, type MatchMode, type SortKey } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { useCurrentTeam } from "../store/session";
@@ -22,7 +23,7 @@ const SORTS: { value: SortKey; label: string }[] = [
 ];
 
 export function LibraryView() {
-  const { refs, cases, loaded, bulk, renameTag, loadSample, updateRef } = useLibrary();
+  const { refs, cases, loaded, bulk, renameTag, updateRef } = useLibrary();
   const { openCollect, openBuild, focusRef, setFocusRef } = useUI();
   const team = useCurrentTeam();
   const canEdit = !!team && ROLE_RANK[team.role] >= ROLE_RANK.editor;
@@ -111,7 +112,7 @@ export function LibraryView() {
       <aside className="sidebar">
         <section>
           <h4>태그</h4>
-          {tags.length === 0 && <p className="muted small">아직 태그가 없습니다.</p>}
+          {tags.length === 0 && <p className="muted small">아직 태그가 없어요.</p>}
           <ul className="tag-list">
             {tags.map(({ tag, count }) => (
               <li key={tag} className={activeTerms.has(norm(tag)) ? "on" : ""}>
@@ -132,7 +133,7 @@ export function LibraryView() {
                       <MenuItem
                         onClick={async () => {
                           close();
-                          const to = prompt(`'${tag}' 태그의 새 이름 (기존 태그 이름을 입력하면 병합됩니다)`, tag);
+                          const to = prompt(`'${tag}' 태그의 새 이름 (기존 태그 이름을 입력하면 병합돼요)`, tag);
                           if (to && to !== tag) await renameTag(tag, to);
                         }}
                       >
@@ -275,7 +276,7 @@ export function LibraryView() {
               icon="trash"
               variant="danger"
               onClick={async () => {
-                if (!confirm(`${selected.size}개 레퍼런스를 삭제할까요? (문서에 이미 배치된 이미지는 유지됩니다)`)) return;
+                if (!confirm(`${selected.size}개 레퍼런스를 삭제할까요? (문서에 이미 배치된 이미지는 유지돼요)`)) return;
                 await bulk({ ids: selIds, delete: true });
                 setSelected(new Set());
               }}
@@ -294,24 +295,45 @@ export function LibraryView() {
 
         <div className="library-scroll">
           {loaded && refs.length === 0 ? (
-            <Empty title="레퍼런스 라이브러리가 비어 있습니다">
-              <p>핀터레스트 핀·보드, 웹페이지, 이미지 링크를 붙여넣어 키워드와 함께 저장하세요.</p>
-              {canEdit && <div className="row">
-                <Button variant="primary" icon="plus" onClick={() => openCollect()}>
-                  레퍼런스 추가
+            <div className="onboard">
+              <div className="onboard-head">
+                <h2>
+                  첫 레퍼런스를 모아볼까요?
+                  <br />
+                  링크만 붙여넣으면 돼요
+                </h2>
+                <p>핀터레스트·웹페이지·이미지 링크를 키워드와 함께 저장해 두면, 키워드 하나로 보고서 문서까지 바로 만들 수 있어요.</p>
+              </div>
+              <div className="onboard-steps">
+                <div className="onboard-step">
+                  <span className="step-no">1</span>
+                  <strong>링크 붙여넣기</strong>
+                  <span>핀터레스트 핀의 공유 → 링크 복사, 또는 이미지 우클릭 → 이미지 주소 복사</span>
+                </div>
+                <div className="onboard-step">
+                  <span className="step-no">2</span>
+                  <strong>키워드 달기</strong>
+                  <span>#스타디움 #야간조명 처럼 나중에 찾을 말을 달아 두세요</span>
+                </div>
+                <div className="onboard-step">
+                  <span className="step-no">3</span>
+                  <strong>문서로 만들기</strong>
+                  <span>키워드를 넣으면 태그별로 묶어 A4 보고서 페이지를 만들어요</span>
+                </div>
+              </div>
+              <div className="onboard-actions">
+                {canEdit && (
+                  <Button size="lg" variant="primary" icon="plus" onClick={() => openCollect()}>
+                    레퍼런스 추가하기
+                  </Button>
+                )}
+                <Button size="lg" icon="bulb" onClick={() => navigate("guide")}>
+                  사용 가이드 보기
                 </Button>
-                <Button
-                  onClick={async () => {
-                    const n = await loadSample();
-                    toast.success(`샘플 ${n}개를 불러왔습니다`);
-                  }}
-                >
-                  샘플 데이터로 체험하기
-                </Button>
-              </div>}
-            </Empty>
+              </div>
+            </div>
           ) : hits.length === 0 ? (
-            <Empty title="검색 결과가 없습니다">
+            <Empty emoji="🔍" title="검색 결과가 없어요">
               <p className="muted">다른 키워드를 입력하거나 &lsquo;하나라도&rsquo; 모드로 바꿔 보세요.</p>
             </Empty>
           ) : view === "grid" ? (
@@ -351,7 +373,7 @@ export function LibraryView() {
           onApply={async (list) => {
             await bulk(bulkTag === "add" ? { ids: selIds, addTags: list } : { ids: selIds, removeTags: list });
             setBulkTag(null);
-            toast.success(bulkTag === "add" ? "태그를 추가했습니다" : "태그를 제거했습니다");
+            toast.success(bulkTag === "add" ? "태그를 추가했어요" : "태그를 제거했어요");
           }}
         />
       )}

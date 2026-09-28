@@ -127,27 +127,36 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
       </div>
 
       <div className="tb-group edit-only">
-        <Button icon="sparkle" variant="accent" size="sm" onClick={onAiPage} disabled={!!aiBusy} title="현재 페이지 이미지를 분석해 타이틀·설명·캡션 제안">
-          {aiBusy === "page" ? <Spinner size={12} /> : null} AI 분석
-        </Button>
-        <Button size="sm" onClick={onAiAll} disabled={!!aiBusy} title="모든 페이지에 AI 타이틀·설명 자동 작성">
-          {aiBusy && aiBusy !== "page" ? (
-            <>
-              <Spinner size={12} /> {aiBusy}
-            </>
-          ) : (
-            "전체 AI 작성"
+        <Menu
+          align="right"
+          trigger={(o) => (
+            <Button icon="sparkle" variant="accent" size="sm" onClick={o} disabled={!!aiBusy} title="AI 가 이미지를 보고 타이틀·설명·캡션을 써 줘요">
+              {aiBusy ? (
+                <>
+                  <Spinner size={12} /> {aiBusy === "page" ? "분석 중" : aiBusy}
+                </>
+              ) : (
+                "AI 작성"
+              )}
+            </Button>
           )}
-        </Button>
+        >
+          {(close) => (
+            <>
+              <MenuItem icon="sparkle" hint="결과 확인 후 적용" onClick={() => (close(), onAiPage())}>
+                이 페이지 분석하기
+              </MenuItem>
+              <MenuItem icon="layers" hint="빈 칸만" onClick={() => (close(), onAiAll())}>
+                모든 페이지 채우기
+              </MenuItem>
+            </>
+          )}
+        </Menu>
       </div>
 
       <div className="tb-group">
-        <Button icon="eye" size="sm" onClick={() => open("view/" + doc.id)}>
-          웹 뷰어
-        </Button>
-        <Button icon="play" size="sm" onClick={() => open("view/" + doc.id + "?present")}>
-          발표
-        </Button>
+        <TB icon="eye" title="웹 뷰어로 보기" onClick={() => open("view/" + doc.id)} />
+        <TB icon="play" title="발표 모드 (전체 화면)" onClick={() => open("view/" + doc.id + "?present")} />
         <Menu
           align="right"
           trigger={(o) => (
@@ -166,11 +175,11 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
                 hint=".pptx"
                 onClick={async () => {
                   close();
-                  toast.info("PPTX 생성 중… 이미지를 받아오느라 시간이 걸릴 수 있습니다");
+                  toast.info("PPTX 생성 중… 이미지를 받아오느라 시간이 걸릴 수 있어요");
                   try {
                     const { exportPptx } = await import("../../export/pptx");
                     await exportPptx(doc);
-                    toast.success("PPTX 를 내려받았습니다");
+                    toast.success("PPTX 를 내려받았어요");
                   } catch (err) {
                     toast.error("PPTX 내보내기 실패: " + (err as Error).message);
                   }

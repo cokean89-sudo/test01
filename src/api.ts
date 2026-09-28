@@ -158,7 +158,6 @@ export const api = {
   suggestTags: (req: TagSuggestRequest) => request<TagSuggestResult>("POST", "/api/ai/tags", req),
   importBackup: (data: unknown) => request<{ references: number; cases: number; documents: number }>("POST", `${T()}/backup`, { data }),
   backupUrl: () => `${T()}/backup`,
-  loadSample: () => request<{ added: number }>("POST", `${T()}/sample`, {}),
 };
 
 /** 외부 이미지 → 서버 프록시 URL (핫링크 차단/CORS 회피용). 같은 출처 경로는 그대로. */

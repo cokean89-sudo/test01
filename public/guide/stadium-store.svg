@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <rect width="1000" height="1000" fill="#f3efe9"/>
+  <rect x="0" y="0" width="1000" height="120" fill="#c8102e"/>
+  <text x="500" y="82" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="52" letter-spacing="14" fill="#fff">TEAM STORE</text>
+  <g>
+    <g transform="translate(90 190)"><path d="M60 0 L120 0 L180 40 L160 90 L140 80 L140 260 L40 260 L40 80 L20 90 L0 40 Z" fill="#c8102e"/><rect x="72" y="120" width="36" height="56" rx="6" fill="#fff" opacity=".9"/></g>
+    <g transform="translate(410 190)"><path d="M60 0 L120 0 L180 40 L160 90 L140 80 L140 260 L40 260 L40 80 L20 90 L0 40 Z" fill="#fff" stroke="#d8d4cc" stroke-width="3"/><rect x="72" y="120" width="36" height="56" rx="6" fill="#c8102e"/></g>
+    <g transform="translate(730 190)"><path d="M60 0 L120 0 L180 40 L160 90 L140 80 L140 260 L40 260 L40 80 L20 90 L0 40 Z" fill="#1d3fa0"/><rect x="72" y="120" width="36" height="56" rx="6" fill="#fff" opacity=".9"/></g>
+  </g>
+  <rect x="60" y="520" width="880" height="14" rx="7" fill="#b9b2a6"/>
+  <g>
+    <rect x="110" y="534" width="70" height="300" fill="#c8102e"/><rect x="110" y="600" width="70" height="30" fill="#fff"/><rect x="110" y="700" width="70" height="30" fill="#fff"/>
+    <rect x="230" y="534" width="70" height="260" fill="#1f2330"/><rect x="230" y="600" width="70" height="30" fill="#c8102e"/>
+    <rect x="350" y="534" width="70" height="320" fill="#c8102e"/><rect x="350" y="640" width="70" height="30" fill="#fff"/>
+    <rect x="470" y="534" width="70" height="280" fill="#fff" stroke="#d8d4cc" stroke-width="3"/><rect x="470" y="620" width="70" height="30" fill="#c8102e"/>
+    <rect x="590" y="534" width="70" height="300" fill="#1d3fa0"/><rect x="590" y="610" width="70" height="30" fill="#fff"/>
+    <rect x="710" y="534" width="70" height="250" fill="#c8102e"/><rect x="710" y="590" width="70" height="30" fill="#1f2330"/>
+    <rect x="830" y="534" width="70" height="310" fill="#1f2330"/><rect x="830" y="650" width="70" height="30" fill="#fff"/>
+  </g>
+  <rect x="0" y="900" width="1000" height="100" fill="#d9d2c6"/>
+</svg>

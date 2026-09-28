@@ -45,20 +45,20 @@ export function HistoryDialog() {
       wide
       footer={
         <>
-          <span className="muted">같은 사람이 10분 안에 이어서 저장한 내용은 하나로 묶어 보여줍니다.</span>
+          <span className="muted">같은 사람이 10분 안에 이어서 저장한 내용은 하나로 묶어 보여줘요.</span>
           <Button onClick={close}>닫기</Button>
           {!readOnly && (
             <Button
               variant="primary"
               disabled={!selected || selected === current || busy}
               onClick={async () => {
-                if (!selected || !confirm(`v${selected} 버전으로 되돌릴까요? 현재 내용은 버전 기록에 남습니다.`)) return;
+                if (!selected || !confirm(`v${selected} 버전으로 되돌릴까요? 현재 내용은 버전 기록에 남아요.`)) return;
                 setBusy(true);
                 try {
                   await flushSave();
                   const restored = await api.restoreVersion(teamId, doc.id, selected);
                   useEditor.getState().open(restored);
-                  toast.success(`v${selected} 버전으로 복원했습니다`);
+                  toast.success(`v${selected} 버전으로 복원했어요`);
                 } catch (err) {
                   toast.error((err as Error).message);
                 } finally {

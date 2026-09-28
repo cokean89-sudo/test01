@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fc9f2"/><stop offset="1" stop-color="#e8f2fb"/></linearGradient></defs>
+  <rect width="800" height="1000" fill="url(#sky)"/>
+  <path d="M-40 380 C120 250 680 250 840 380 L840 1000 L-40 1000 Z" fill="#f4f4f5"/>
+  <g fill="none" stroke="#d6d7db" stroke-width="3"><path d="M-40 430 C120 310 680 310 840 430"/><path d="M-40 480 C120 370 680 370 840 480"/></g>
+  <rect x="170" y="470" width="460" height="530" fill="#2b2f3a"/>
+  <rect x="190" y="560" width="420" height="440" fill="#454b5c"/>
+  <g stroke="#2b2f3a" stroke-width="6"><path d="M260 560 V1000 M330 560 V1000 M400 560 V1000 M470 560 V1000 M540 560 V1000"/></g>
+  <rect x="220" y="490" width="360" height="54" rx="6" fill="#c8102e"/>
+  <text x="400" y="530" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="36" letter-spacing="8" fill="#fff">GATE 7</text>
+  <rect x="0" y="930" width="800" height="70" fill="#c9cbd1"/>
+  <g fill="#1f2330"><circle cx="120" cy="840" r="22"/><rect x="100" y="862" width="40" height="110" rx="14"/><circle cx="660" cy="850" r="20"/><rect x="642" y="870" width="36" height="100" rx="13"/><circle cx="720" cy="860" r="16"/><rect x="706" y="876" width="28" height="82" rx="11"/></g>
+  <g fill="#c8102e"><rect x="96" y="880" width="48" height="12" rx="4"/><rect x="638" y="886" width="44" height="12" rx="4"/></g>
+</svg>

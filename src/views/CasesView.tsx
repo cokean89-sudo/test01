@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CaseStudy } from "../../shared/types";
+import { ROLE_RANK, type CaseStudy } from "../../shared/types";
 import { api } from "../api";
 import { SmartImage } from "../components/SmartImage";
-import { Button, Empty, Field, Spinner, TagInput } from "../components/ui";
+import { Button, Empty, Field, Modal, Spinner, TagInput } from "../components/ui";
 import { tagVocabulary, useLibrary } from "../store/library";
+import { useCurrentTeam } from "../store/session";
 import { toast } from "../store/toast";
 import { useUI } from "../store/ui";
 
@@ -11,6 +12,9 @@ export function CasesView() {
   const { cases, refs, createCase } = useLibrary();
   const openBuild = useUI((s) => s.openBuild);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [naming, setNaming] = useState(false);
+  const team = useCurrentTeam();
+  const canEdit = !!team && ROLE_RANK[team.role] >= ROLE_RANK.editor;
   const active = cases.find((c) => c.id === activeId) ?? cases[0];
 
   return (
@@ -33,32 +37,41 @@ export function CasesView() {
               );
             })}
           </ul>
-          <Button
-            icon="plus"
-            onClick={async () => {
-              const name = prompt("새 케이스 이름 (예: Allianz Arena)");
-              if (!name?.trim()) return;
-              const c = await createCase({ name: name.trim(), tags: [] });
-              setActiveId(c.id);
-            }}
-          >
-            새 케이스
-          </Button>
+          {canEdit && (
+            <Button icon="plus" onClick={() => setNaming(true)}>
+              새 케이스
+            </Button>
+          )}
         </section>
       </aside>
       <section className="case-main">
         {active ? (
           <CaseEditor key={active.id} c={active} onBuild={(refIds) => openBuild({ refIds, groupBy: "case", query: "", title: active.name })} />
         ) : (
-          <Empty title="케이스가 없습니다">
-            <p className="muted">
-              케이스는 하나의 사례(경기장, 매장, 브랜드 등)에 대한 이미지·로고·설명을 묶는 단위입니다.
+          <Empty emoji="🏟️" title="케이스로 사례를 묶어 보세요">
+            <p>
+              케이스는 하나의 사례(경기장, 매장, 브랜드 등)의 이미지·로고·설명을 묶는 단위예요.
               <br />
-              레퍼런스를 추가할 때 케이스를 지정하거나 여기서 새로 만드세요.
+              케이스로 문서를 만들면 케이스 스터디 페이지가 한 번에 만들어져요.
             </p>
+            {canEdit && (
+              <Button size="lg" variant="primary" icon="plus" onClick={() => setNaming(true)}>
+                첫 케이스 만들기
+              </Button>
+            )}
           </Empty>
         )}
       </section>
+      {naming && (
+        <NewCaseDialog
+          onClose={() => setNaming(false)}
+          onCreate={async (name) => {
+            const c = await createCase({ name, tags: [] });
+            setActiveId(c.id);
+            setNaming(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -93,7 +106,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
       };
       setForm({ ...form, ...patch });
       await save(patch);
-      toast.success(out.engine === "ai" ? "AI 가 케이스 정보를 채웠습니다" : out.notice ?? "규칙 기반으로 채웠습니다");
+      toast.success(out.engine === "ai" ? "AI 가 케이스 정보를 채웠어요" : out.notice ?? "규칙 기반으로 채웠어요");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -106,7 +119,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
       <div className="case-form">
         <div className="row">
           <h2 style={{ flex: 1 }}>{form.name}</h2>
-          <Button icon="sparkle" variant="accent" onClick={aiFill} disabled={busy} title={status?.ai ? "" : "API 키가 없으면 규칙 기반으로 채웁니다"}>
+          <Button icon="sparkle" variant="accent" onClick={aiFill} disabled={busy} title={status?.ai ? "" : "API 키가 없으면 규칙 기반으로 채워요"}>
             {busy ? <Spinner size={12} /> : null} AI 로 설명 채우기
           </Button>
           <Button icon="file" variant="primary" disabled={!members.length} onClick={() => onBuild(members.map((r) => r.id))}>
@@ -127,7 +140,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
         <Field label="설명">
           <textarea rows={5} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} onBlur={() => save({ description: form.description })} />
         </Field>
-        <Field label="케이스 태그" hint="케이스 태그는 소속 레퍼런스 검색에도 적용됩니다">
+        <Field label="케이스 태그" hint="케이스 태그는 소속 레퍼런스 검색에도 적용돼요">
           <TagInput value={form.tags} suggestions={vocab} onChange={(tags) => { setForm({ ...form, tags }); void save({ tags }); }} />
         </Field>
         <div className="row">
@@ -137,7 +150,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
             icon="trash"
             size="sm"
             onClick={async () => {
-              if (confirm(`'${c.name}' 케이스를 삭제할까요? (레퍼런스는 유지되고 케이스 연결만 해제됩니다)`)) await deleteCase(c.id);
+              if (confirm(`'${c.name}' 케이스를 삭제할까요? (레퍼런스는 유지되고 케이스 연결만 해제돼요)`)) await deleteCase(c.id);
             }}
           >
             케이스 삭제
@@ -155,7 +168,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
               <span>{r.logoLabel || r.title}</span>
             </div>
           ))}
-          {!logos.length && <p className="muted small">레퍼런스 상세에서 유형을 &lsquo;로고&rsquo;로 지정하면 케이스 페이지 로고 패널에 배치됩니다.</p>}
+          {!logos.length && <p className="muted small">레퍼런스 상세에서 유형을 &lsquo;로고&rsquo;로 지정하면 케이스 페이지 로고 패널에 배치돼요.</p>}
         </div>
         <h4>
           이미지 <span className="count">{images.length}</span>
@@ -169,5 +182,45 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
         </div>
       </div>
     </div>
+  );
+}
+
+function NewCaseDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string) => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    try {
+      await onCreate(name.trim());
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      title="어떤 사례를 정리할까요?"
+      onClose={onClose}
+      width={460}
+      footer={
+        <>
+          <Button onClick={onClose}>취소</Button>
+          <Button variant="primary" onClick={submit} disabled={!name.trim() || busy}>
+            만들기
+          </Button>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <Field label="케이스 이름" hint="경기장·매장·브랜드처럼 하나의 사례 이름이에요. 문서의 페이지 제목이 돼요.">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예) Allianz Arena" autoFocus maxLength={80} />
+        </Field>
+      </form>
+    </Modal>
   );
 }

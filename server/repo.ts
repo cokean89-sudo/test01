@@ -776,7 +776,7 @@ export class Repo {
     this.db.setMeta("legacy_imported", String(now()));
     const legacy = parseJson<{ references?: Reference[]; cases?: CaseStudy[]; documents?: DocumentData[] }>(fs.readFileSync(file, "utf8"), {});
     this.importData(teamId, userId, legacy);
-    console.log(`  이전 데이터(data/db.json)를 첫 계정의 작업공간으로 가져왔습니다.`);
+    console.log(`  이전 데이터(data/db.json)를 첫 계정의 작업공간으로 가져왔어요.`);
   }
 
   /** 백업/이전 데이터 가져오기 — id 는 새로 발급하고 케이스 연결은 유지한다 */

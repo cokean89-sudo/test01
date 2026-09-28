@@ -24,7 +24,7 @@ function queryParam(name: string): string | null {
   return q ? new URLSearchParams(q).get(name) : null;
 }
 
-function AuthCard({ title, children, footer }: { title: ReactNode; children: ReactNode; footer?: ReactNode }) {
+function AuthCard({ title, sub, children, footer }: { title: ReactNode; sub?: ReactNode; children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
@@ -33,10 +33,13 @@ function AuthCard({ title, children, footer }: { title: ReactNode; children: Rea
           RefBoard
         </div>
         <h1>{title}</h1>
+        {sub && <p className="auth-sub">{sub}</p>}
         {children}
         {footer && <div className="auth-footer">{footer}</div>}
       </div>
-      <p className="auth-note">케이스 스터디 & 레퍼런스 정리 · 팀 공유</p>
+      <a className="auth-guide-link" href="#/guide">
+        💡 처음이세요? 사용 가이드 먼저 보기
+      </a>
     </div>
   );
 }
@@ -65,7 +68,7 @@ function PasswordHints({ password, email }: { password: string; email: string })
     <ul className="pw-hints">
       {passwordHints(password, email).map((h) => (
         <li key={h.label} className={h.ok ? "ok" : ""}>
-          {h.ok ? "✓" : "·"} {h.label}
+          {h.label}
         </li>
       ))}
     </ul>
@@ -128,14 +131,21 @@ export function LoginView() {
 
   return (
     <AuthCard
-      title="로그인"
+      title={
+        <>
+          다시 오셨네요!
+          <br />
+          로그인해 주세요
+        </>
+      }
+      sub="케이스 스터디와 레퍼런스를 한곳에서 모으고, 팀과 함께 보고서로 만들어요."
       footer={
         <>
           계정이 없나요? <a href="#/signup">메일로 가입</a>
         </>
       }
     >
-      {queryParam("verified") && <div className="notice">메일 인증이 완료되었습니다. 로그인하세요.</div>}
+      {queryParam("verified") && <div className="notice">메일 인증이 완료됐어요. 로그인하세요.</div>}
       <form onSubmit={submit} className="auth-form">
         <Field label="메일 주소">
           <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
@@ -169,7 +179,7 @@ function ResendVerification({ email }: { email: string }) {
           try {
             const r = await authApi.resend(email);
             setSent(r.devLink ?? "");
-            toast.success("인증 메일을 다시 보냈습니다");
+            toast.success("인증 메일을 다시 보냈어요");
           } catch (err) {
             toast.error((err as Error).message);
           }
@@ -185,7 +195,7 @@ function ResendVerification({ email }: { email: string }) {
 function DevLink({ href }: { href: string }) {
   return (
     <div className="dev-link">
-      <strong>개인 실행 모드</strong> — 메일 서버가 설정되지 않아 링크를 화면에 표시합니다.{" "}
+      <strong>개인 실행 모드</strong> — 메일 서버가 설정되지 않아 링크를 화면에 표시해요.{" "}
       <a href={href.slice(href.indexOf("#"))}>바로 열기</a>
     </div>
   );
@@ -203,7 +213,7 @@ export function SignupView() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (password !== confirm) return setError("비밀번호 확인이 일치하지 않습니다.");
+    if (password !== confirm) return setError("비밀번호 확인이 일치하지 않아요.");
     if (!passwordHints(password, email).every((h) => h.ok)) return setError("비밀번호 조건을 확인하세요.");
     setBusy(true);
     setError(null);
@@ -221,10 +231,10 @@ export function SignupView() {
     return (
       <AuthCard title="메일을 확인하세요" footer={<a href="#/login">로그인으로 돌아가기</a>}>
         <p className="auth-text">
-          <strong>{email}</strong> 로 인증 링크를 보냈습니다. 메일의 버튼을 눌러 가입을 완료하세요. (24시간 유효)
+          <strong>{email}</strong> 로 인증 링크를 보냈어요. 메일의 버튼을 눌러 가입을 완료하세요. (24시간 유효)
         </p>
         {!done.delivered && !done.devLink && (
-          <div className="notice">메일 서버가 아직 설정되지 않아, 인증 링크가 서버 실행 창(로그)에 출력되었습니다. 관리자에게 링크를 받아 여세요.</div>
+          <div className="notice">메일 서버가 아직 설정되지 않아, 인증 링크가 서버 실행 창(로그)에 출력됐어요. 관리자에게 링크를 받아 여세요.</div>
         )}
         {done.devLink && <DevLink href={done.devLink} />}
         <ResendVerification email={email} />
@@ -235,7 +245,7 @@ export function SignupView() {
   if (providers && !providers.signup) {
     return (
       <AuthCard title="가입" footer={<a href="#/login">로그인</a>}>
-        <p className="auth-text">메일 가입이 비활성화되어 있습니다. 관리자에게 초대를 요청하세요.</p>
+        <p className="auth-text">메일 가입이 비활성화되어 있어요. 관리자에게 초대를 요청하세요.</p>
         <SocialButtons />
       </AuthCard>
     );
@@ -243,7 +253,14 @@ export function SignupView() {
 
   return (
     <AuthCard
-      title="메일로 가입"
+      title={
+        <>
+          메일 주소로
+          <br />
+          간단하게 가입해요
+        </>
+      }
+      sub="가입하면 나만의 작업공간이 생기고, 팀을 만들어 동료를 초대할 수 있어요."
       footer={
         <>
           이미 계정이 있나요? <a href="#/login">로그인</a>
@@ -255,7 +272,7 @@ export function SignupView() {
         <Field label="이름">
           <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={40} autoFocus />
         </Field>
-        <Field label="메일 주소" hint="이 메일로 인증 링크와 팀 초대를 받습니다">
+        <Field label="메일 주소" hint="이 메일로 인증 링크와 팀 초대를 받아요">
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
         </Field>
         <Field label="비밀번호">
@@ -275,15 +292,20 @@ export function SignupView() {
   );
 }
 
+/** 인증 토큰은 1회용 — 화면이 다시 그려져도 한 번만 보낸다 */
+const verifying = new Set<string>();
+
 export function VerifyView({ token }: { token: string }) {
   const apply = useSession((s) => s.apply);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    if (verifying.has(token)) return;
+    verifying.add(token);
     authApi
       .verify(token)
       .then((info) => {
         apply(info);
-        toast.success("메일 인증이 완료되었습니다");
+        toast.success("메일 인증이 완료됐어요");
         goAfterLogin();
       })
       .catch((err) => setError(err.message));
@@ -303,7 +325,7 @@ export function ForgotView() {
     <AuthCard title="비밀번호 찾기" footer={<a href="#/login">로그인으로 돌아가기</a>}>
       {sent ? (
         <>
-          <p className="auth-text">가입된 메일이라면 비밀번호 재설정 링크를 보냈습니다. (1시간 유효)</p>
+          <p className="auth-text">가입된 메일이라면 비밀번호 재설정 링크를 보냈어요. (1시간 유효)</p>
           {sent.devLink && <DevLink href={sent.devLink} />}
         </>
       ) : (
@@ -342,10 +364,10 @@ export function ResetView({ token }: { token: string }) {
         className="auth-form"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (password !== confirm) return setError("비밀번호 확인이 일치하지 않습니다.");
+          if (password !== confirm) return setError("비밀번호 확인이 일치하지 않아요.");
           try {
             apply(await authApi.reset(token, password));
-            toast.success("비밀번호를 바꿨습니다. 다른 기기의 로그인은 모두 해제되었습니다.");
+            toast.success("비밀번호를 바꿨어요. 다른 기기의 로그인은 모두 해제됐어요.");
             goAfterLogin();
           } catch (err) {
             setError((err as Error).message);
@@ -401,18 +423,18 @@ export function InviteView({ token }: { token: string }) {
       {info && (
         <>
           <p className="auth-text">
-            <strong>{info.inviterName ?? "팀 관리자"}</strong> 님이 <strong>{info.teamName}</strong> 팀에 <strong>{ROLE_LABEL[info.role]}</strong>(으)로 초대했습니다.
+            <strong>{info.inviterName ?? "팀 관리자"}</strong> 님이 <strong>{info.teamName}</strong> 팀에 <strong>{ROLE_LABEL[info.role]}</strong>(으)로 초대했어요.
           </p>
           {info.alreadyMember ? (
             <Button variant="primary" onClick={() => navigate("library")}>
-              이미 팀 멤버입니다 — 열기
+              이미 팀 멤버예요 — 열기
             </Button>
           ) : info.status !== "active" ? (
-            <div className="error-box">{info.status === "expired" ? "만료된 초대입니다." : "더 이상 사용할 수 없는 초대입니다."} 관리자에게 다시 요청하세요.</div>
+            <div className="error-box">{info.status === "expired" ? "만료된 초대예요." : "더 이상 사용할 수 없는 초대예요."} 관리자에게 다시 요청하세요.</div>
           ) : !info.emailMatches ? (
             <>
               <div className="error-box">
-                이 초대는 <strong>{info.email}</strong> 계정용입니다. 지금은 {user?.email ?? "다른 계정"}(으)로 로그인되어 있습니다.
+                이 초대는 <strong>{info.email}</strong> 계정용이에요. 지금은 {user?.email ?? "다른 계정"}(으)로 로그인되어 있어요.
               </div>
               <Button
                 onClick={() => {
@@ -431,7 +453,7 @@ export function InviteView({ token }: { token: string }) {
                   const r = await teamApi.acceptInvite(token);
                   await refreshTeams(r.teamId);
                   switchTeam(r.teamId);
-                  toast.success(`${info.teamName} 팀에 참여했습니다`);
+                  toast.success(`${info.teamName} 팀에 참여했어요`);
                   navigate("library");
                 } catch (err) {
                   setError((err as Error).message);
@@ -458,7 +480,7 @@ export function AccountView() {
   return (
     <div className="account">
       <h2>내 계정</h2>
-      {linked && <div className="notice">{linked === "kakao" ? "카카오" : "네이버"} 계정을 연결했습니다.</div>}
+      {linked && <div className="notice">{linked === "kakao" ? "카카오" : "네이버"} 계정을 연결했어요.</div>}
       <section className="panel">
         <h4>프로필</h4>
         <Field label="이름">
@@ -469,7 +491,7 @@ export function AccountView() {
               onClick={async () => {
                 try {
                   apply(await authApi.profile(name));
-                  toast.success("이름을 바꿨습니다");
+                  toast.success("이름을 바꿨어요");
                 } catch (err) {
                   toast.error((err as Error).message);
                 }
@@ -495,7 +517,7 @@ export function AccountView() {
             setError(null);
             try {
               await authApi.changePassword(user.hasPassword ? current : undefined, next);
-              toast.success("비밀번호를 바꿨습니다. 다른 기기의 로그인은 해제되었습니다.");
+              toast.success("비밀번호를 바꿨어요. 다른 기기의 로그인은 해제됐어요.");
               setCurrent("");
               setNext("");
               apply(await authApi.me());
@@ -542,13 +564,13 @@ export function AccountView() {
       )}
       <section className="panel">
         <h4>로그인 관리</h4>
-        <p className="muted small">공용 PC 등 다른 곳에서 로그아웃을 잊었다면 이 기기를 뺀 모든 로그인을 끊을 수 있습니다.</p>
+        <p className="muted small">공용 PC 등 다른 곳에서 로그아웃을 잊었다면 이 기기를 뺀 모든 로그인을 끊을 수 있어요.</p>
         <div className="row wrap">
           <Button
             onClick={async () => {
               try {
                 const r = await authApi.logoutOthers();
-                toast.success(r.removed ? `다른 기기 ${r.removed}곳의 로그인을 해제했습니다` : "다른 기기의 로그인이 없습니다");
+                toast.success(r.removed ? `다른 기기 ${r.removed}곳의 로그인을 해제했어요` : "다른 기기의 로그인이 없어요");
               } catch (err) {
                 toast.error((err as Error).message);
               }

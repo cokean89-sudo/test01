@@ -20,7 +20,7 @@ const DocBody = z
   .passthrough();
 
 function parseDoc(body: unknown): Pick<DocumentData, "title" | "query" | "settings" | "pages"> {
-  if (JSON.stringify(body ?? {}).length > MAX_DOC_BYTES) throw new HttpError(413, "문서가 너무 큽니다.");
+  if (JSON.stringify(body ?? {}).length > MAX_DOC_BYTES) throw new HttpError(413, "문서가 너무 커요.");
   const d = DocBody.parse(body) as unknown as DocumentData;
   // 이미지 주소에 javascript: 등 위험한 스킴이 들어오지 않게 한다
   for (const p of d.pages) {
@@ -52,14 +52,14 @@ export function documentsRouter(repo: Repo): Router {
     enforceLimit(`doc-save:${user.id}`, 1200, 60 * 60_000);
     const baseVersion = z.number().int().min(1).parse(req.body?.baseVersion);
     const out = repo.saveDoc(req.teamId!, String(req.params.id), parseDoc(req.body?.doc), baseVersion, user.id);
-    if (!out) throw new HttpError(404, "문서를 찾을 수 없습니다.");
+    if (!out) throw new HttpError(404, "문서를 찾을 수 없어요.");
     publish(req.teamId!, "doc", { docId: req.params.id, version: out.version, by: user.id, byName: user.name }, user.id);
     res.json(out);
   });
 
   r.post("/documents/:id/duplicate", teamRole(repo, "editor"), (req, res) => {
     const src = repo.getDoc(req.teamId!, String(req.params.id));
-    if (!src) throw new HttpError(404, "문서를 찾을 수 없습니다.");
+    if (!src) throw new HttpError(404, "문서를 찾을 수 없어요.");
     const copy = repo.createDoc(req.teamId!, { ...src, title: src.title + " (사본)" }, req.user!.id);
     repo.log(req.teamId!, req.user!.id, "doc.duplicate", `문서 '${src.title}' 복제`, { type: "doc", id: copy.id });
     publish(req.teamId!, "docs", {}, req.user!.id);
@@ -68,7 +68,7 @@ export function documentsRouter(repo: Repo): Router {
 
   r.delete("/documents/:id", teamRole(repo, "editor"), (req, res) => {
     const doc = repo.getDoc(req.teamId!, String(req.params.id));
-    if (!doc) throw new HttpError(404, "문서를 찾을 수 없습니다.");
+    if (!doc) throw new HttpError(404, "문서를 찾을 수 없어요.");
     repo.deleteDoc(req.teamId!, doc.id);
     repo.log(req.teamId!, req.user!.id, "doc.delete", `문서 '${doc.title}' 삭제`);
     publish(req.teamId!, "docs", {}, req.user!.id);
@@ -76,13 +76,13 @@ export function documentsRouter(repo: Repo): Router {
   });
 
   r.get("/documents/:id/versions", teamRole(repo, "viewer"), (req, res) => {
-    if (repo.docTeam(String(req.params.id)) !== req.teamId) throw new HttpError(404, "문서를 찾을 수 없습니다.");
+    if (repo.docTeam(String(req.params.id)) !== req.teamId) throw new HttpError(404, "문서를 찾을 수 없어요.");
     res.json(repo.listVersions(String(req.params.id)));
   });
 
   r.get("/documents/:id/versions/:version", teamRole(repo, "viewer"), (req, res) => {
     const doc = repo.getVersion(req.teamId!, String(req.params.id), Number(req.params.version));
-    if (!doc) throw new HttpError(404, "버전을 찾을 수 없습니다.");
+    if (!doc) throw new HttpError(404, "버전을 찾을 수 없어요.");
     res.json(doc);
   });
 
@@ -90,7 +90,7 @@ export function documentsRouter(repo: Repo): Router {
     const id = String(req.params.id);
     const old = repo.getVersion(req.teamId!, id, Number(req.params.version));
     const cur = repo.getDoc(req.teamId!, id);
-    if (!old || !cur) throw new HttpError(404, "버전을 찾을 수 없습니다.");
+    if (!old || !cur) throw new HttpError(404, "버전을 찾을 수 없어요.");
     const out = repo.saveDoc(req.teamId!, id, old, cur.version!, req.user!.id)!;
     repo.log(req.teamId!, req.user!.id, "doc.restore", `문서 '${cur.title}'를 이전 버전(v${req.params.version})으로 복원`, { type: "doc", id });
     publish(req.teamId!, "doc", { docId: id, version: out.version, by: req.user!.id, byName: req.user!.name });
@@ -108,7 +108,7 @@ export function documentLookupRouter(repo: Repo): Router {
     const id = String(req.params.id);
     const teamId = repo.docTeam(id);
     const role = teamId ? repo.getRole(teamId, user.id) : undefined;
-    if (!teamId || !hasRole(role, "viewer")) throw new HttpError(404, "문서를 찾을 수 없습니다.");
+    if (!teamId || !hasRole(role, "viewer")) throw new HttpError(404, "문서를 찾을 수 없어요.");
     res.json({ ...repo.getDoc(teamId, id), role });
   });
   return r;

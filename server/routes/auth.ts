@@ -23,7 +23,7 @@ import {
 } from "../security";
 
 const HOUR = 60 * 60 * 1000;
-const email = z.string().trim().toLowerCase().email("올바른 메일 주소가 아닙니다.").max(254);
+const email = z.string().trim().toLowerCase().email("올바른 메일 주소가 아니에요.").max(254);
 const password = z.string().min(1).max(200);
 const name = z.string().trim().min(1, "이름을 입력하세요.").max(40);
 
@@ -72,7 +72,7 @@ export function authRouter(repo: Repo): Router {
 
   r.post("/signup", async (req, res) => {
     enforceLimit(`signup:${req.ip}`, 10, HOUR);
-    if (!auth.allowSignup) throw new HttpError(403, "메일 가입이 비활성화되어 있습니다. 관리자에게 문의하세요.");
+    if (!auth.allowSignup) throw new HttpError(403, "메일 가입이 비활성화되어 있어요. 관리자에게 문의하세요.");
     const body = z.object({ email, password, name }).parse(req.body);
     if (!domainAllowed(body.email)) throw new HttpError(403, `가입할 수 있는 메일 도메인: ${auth.signupDomains.join(", ")}`);
     const problem = passwordProblem(body.password, body.email);
@@ -104,7 +104,7 @@ export function authRouter(repo: Repo): Router {
     enforceLimit(`verify:${req.ip}`, 30, HOUR);
     const { token } = z.object({ token: z.string().min(10).max(200) }).parse(req.body);
     const userId = repo.consumeEmailToken(token, "verify");
-    if (!userId) throw new HttpError(400, "인증 링크가 만료되었거나 이미 사용되었습니다. 로그인 화면에서 인증 메일을 다시 받으세요.", "invalid_token");
+    if (!userId) throw new HttpError(400, "인증 링크가 만료되었거나 이미 사용됐어요. 로그인 화면에서 인증 메일을 다시 받으세요.", "invalid_token");
     repo.markVerified(userId);
     const user = repo.getUser(userId)!;
     repo.security("email_verified", userId, req.ip);
@@ -129,19 +129,19 @@ export function authRouter(repo: Repo): Router {
   r.post("/login", async (req, res) => {
     const body = z.object({ email, password }).parse(req.body);
     enforceLimit(`login:${req.ip}`, 30, 15 * 60_000);
-    enforceLimit(`login:${body.email}`, 10, 15 * 60_000, "로그인 시도가 너무 많습니다. 15분 후 다시 시도하세요.");
+    enforceLimit(`login:${body.email}`, 10, 15 * 60_000, "로그인 시도가 너무 많아요. 15분 후 다시 시도하세요.");
     const user = repo.findUserByEmail(body.email);
     if (user?.locked_until && user.locked_until > Date.now()) {
       const min = Math.ceil((user.locked_until - Date.now()) / 60_000);
-      throw new HttpError(429, `로그인 실패가 반복되어 잠시 잠겼습니다. ${min}분 후 다시 시도하세요.`, "locked");
+      throw new HttpError(429, `로그인 실패가 반복되어 잠시 잠겼어요. ${min}분 후 다시 시도하세요.`, "locked");
     }
     const ok = await verifyPassword(body.password, user?.password_hash);
     if (!user || !ok) {
       if (user) repo.recordLoginFailure(user.id);
       repo.security("login_failed", user?.id ?? null, req.ip, body.email);
-      throw new HttpError(401, "메일 주소 또는 비밀번호가 올바르지 않습니다.", "invalid_credentials");
+      throw new HttpError(401, "메일 주소 또는 비밀번호가 올바르지 않아요.", "invalid_credentials");
     }
-    if (!user.email_verified_at) throw new HttpError(403, "메일 인증을 완료해야 로그인할 수 있습니다.", "unverified");
+    if (!user.email_verified_at) throw new HttpError(403, "메일 인증을 완료해야 로그인할 수 있어요.", "unverified");
     startSession(repo, req, res, user);
     repo.security("login", user.id, req.ip);
     res.json(sessionInfo(repo, user));
@@ -181,7 +181,7 @@ export function authRouter(repo: Repo): Router {
     enforceLimit(`reset:${req.ip}`, 20, HOUR);
     const body = z.object({ token: z.string().min(10).max(200), password }).parse(req.body);
     const userId = repo.consumeEmailToken(body.token, "reset");
-    if (!userId) throw new HttpError(400, "재설정 링크가 만료되었거나 이미 사용되었습니다. 다시 요청하세요.", "invalid_token");
+    if (!userId) throw new HttpError(400, "재설정 링크가 만료되었거나 이미 사용됐어요. 다시 요청하세요.", "invalid_token");
     const user = repo.getUser(userId)!;
     const problem = passwordProblem(body.password, user.email ?? undefined);
     if (problem) throw new HttpError(400, problem, "weak_password");
@@ -198,7 +198,7 @@ export function authRouter(repo: Repo): Router {
     enforceLimit(`pwchange:${user.id}`, 10, HOUR);
     const body = z.object({ current: z.string().max(200).optional(), next: password }).parse(req.body);
     if (user.password_hash && !(await verifyPassword(body.current ?? "", user.password_hash))) {
-      throw new HttpError(400, "현재 비밀번호가 올바르지 않습니다.", "invalid_credentials");
+      throw new HttpError(400, "현재 비밀번호가 올바르지 않아요.", "invalid_credentials");
     }
     const problem = passwordProblem(body.next, user.email ?? undefined);
     if (problem) throw new HttpError(400, problem, "weak_password");
@@ -232,28 +232,28 @@ export function authRouter(repo: Repo): Router {
     try {
       provider = parseProvider(String(req.params.provider));
     } catch {
-      return fail("지원하지 않는 로그인 방식입니다.");
+      return fail("지원하지 않는 로그인 방식이에요.");
     }
     const [savedState, mode] = (parseCookies(req.headers.cookie)[OAUTH_COOKIE] ?? "").split(".");
     clearCookie(res, OAUTH_COOKIE);
     const state = String(req.query.state ?? "");
-    if (!savedState || !state || !safeEqual(savedState, state)) return fail("로그인 요청이 만료되었습니다. 다시 시도하세요.");
-    if (req.query.error) return fail("로그인이 취소되었습니다.");
+    if (!savedState || !state || !safeEqual(savedState, state)) return fail("로그인 요청이 만료됐어요. 다시 시도하세요.");
+    if (req.query.error) return fail("로그인이 취소됐어요.");
     const code = String(req.query.code ?? "");
-    if (!code || code.length > 2000) return fail("잘못된 로그인 응답입니다.");
+    if (!code || code.length > 2000) return fail("잘못된 로그인 응답이에요.");
 
     let profile: OAuthProfile;
     try {
       profile = await fetchProfile(provider, code, state);
     } catch (err) {
       console.error(`[oauth:${provider}]`, (err as Error).message);
-      return fail(`${PROVIDER_LABEL[provider]} 로그인에 실패했습니다.`);
+      return fail(`${PROVIDER_LABEL[provider]} 로그인에 실패했어요.`);
     }
 
     let user: UserRow | undefined;
     const linked = repo.findIdentity(provider, profile.id);
     if (mode === "link" && req.user) {
-      if (linked && linked.user_id !== req.user.id) return fail(`이 ${PROVIDER_LABEL[provider]} 계정은 이미 다른 사용자와 연결되어 있습니다.`);
+      if (linked && linked.user_id !== req.user.id) return fail(`이 ${PROVIDER_LABEL[provider]} 계정은 이미 다른 사용자와 연결되어 있어요.`);
       repo.linkIdentity(provider, profile.id, req.user.id, profile.email);
       repo.security("oauth_linked", req.user.id, req.ip, provider);
       return res.redirect(302, `${APP_URL}/#/account?linked=${provider}`);
@@ -295,7 +295,7 @@ export interface OAuthProfile {
 function parseProvider(p: string): Provider {
   if (p === "kakao" && oauth.kakao.clientId) return "kakao";
   if (p === "naver" && oauth.naver.clientId && oauth.naver.clientSecret) return "naver";
-  throw new HttpError(404, "지원하지 않는 로그인 방식입니다.");
+  throw new HttpError(404, "지원하지 않는 로그인 방식이에요.");
 }
 
 export const redirectUri = (p: Provider) => `${APP_URL}/api/auth/oauth/${p}/callback`;

@@ -13,12 +13,13 @@ import { CasesView } from "./views/CasesView";
 import { CollectDialog } from "./views/CollectDialog";
 import { DocsView } from "./views/DocsView";
 import { EditorView } from "./views/editor/EditorView";
+import { GuideView } from "./views/GuideView";
 import { LibraryView } from "./views/LibraryView";
 import { PrintView } from "./views/PrintView";
 import { TeamView } from "./views/team/TeamView";
 import { ViewerView } from "./views/ViewerView";
 
-const PUBLIC = new Set(["login", "signup", "forgot", "verify", "reset", "invite"]);
+const PUBLIC = new Set(["login", "signup", "forgot", "verify", "reset", "invite", "guide"]);
 
 export function App() {
   const route = useRoute();
@@ -30,7 +31,7 @@ export function App() {
   const [section = "library", id] = route;
 
   useEffect(() => {
-    init().catch((err) => toast.error("서버에 연결할 수 없습니다: " + (err as Error).message));
+    init().catch((err) => toast.error("서버에 연결할 수 없어요: " + (err as Error).message));
   }, [init]);
 
   // 팀이 바뀌면 라이브러리를 새로 불러오고, 팀 실시간 이벤트를 구독한다
@@ -54,7 +55,7 @@ export function App() {
       docs: () => s.bump("docs"),
       doc: () => s.bump("docs"),
       removed: () => {
-        toast.error("이 팀에서 내보내졌거나 팀이 삭제되었습니다");
+        toast.error("이 팀에서 내보내졌거나 팀이 삭제됐어요");
         void s.refreshTeams().then(() => navigate("library"));
       },
     });
@@ -70,6 +71,7 @@ export function App() {
 
   // 로그인 전: 공개 화면만
   if (status === "anonymous") {
+    if (section === "guide") return <Shell><PublicGuide section={id} /></Shell>;
     if (section === "signup") return <Shell><SignupView /></Shell>;
     if (section === "forgot") return <Shell><ForgotView /></Shell>;
     if (section === "verify" && id) return <Shell><VerifyView token={id} /></Shell>;
@@ -105,6 +107,8 @@ export function App() {
           <TeamView />
         ) : section === "account" ? (
           <AccountView />
+        ) : section === "guide" ? (
+          <GuideView section={id} />
         ) : (
           <LibraryView />
         )}
@@ -122,6 +126,28 @@ function Shell({ children }: { children: ReactNode }) {
       {children}
       <Toasts />
     </>
+  );
+}
+
+/** 로그인 전에도 볼 수 있는 가이드 — 간단한 상단 막대만 */
+function PublicGuide({ section }: { section?: string }) {
+  return (
+    <div className="app">
+      <header className="topbar">
+        <a className="brand" href="#/login">
+          <span className="brand-mark" />
+          RefBoard
+        </a>
+        <div className="topbar-right">
+          <Button variant="primary" onClick={() => navigate("login")}>
+            로그인하고 시작하기
+          </Button>
+        </div>
+      </header>
+      <main className="app-main">
+        <GuideView section={section} />
+      </main>
+    </div>
   );
 }
 
@@ -187,14 +213,18 @@ function TopBar({ section }: { section: string }) {
         ))}
       </nav>
       <div className="topbar-right">
+        <a className="tip-btn" href="#/guide" title="사용 가이드 — 핀터레스트 링크 복사부터 문서 만들기까지">
+          <Icon name="bulb" size={16} />
+          TIP
+        </a>
         <span className={"ai-status" + (status?.ai ? " on" : "")} title={status?.ai ? `Claude 연결됨 (${status.model})` : status?.aiReason}>
           <Icon name="sparkle" size={14} />
-          {status?.ai ? "AI 연결됨" : "AI 미설정"}
+          {status?.ai ? "AI 켜짐" : "AI 꺼짐"}
         </span>
         {canEdit && (
           <>
-            <Button icon="sparkle" onClick={() => openBuild()}>
-              키워드로 문서 만들기
+            <Button icon="sparkle" variant="accent" onClick={() => openBuild()}>
+              문서 만들기
             </Button>
             <Button icon="plus" variant="primary" onClick={() => openCollect()}>
               레퍼런스 추가

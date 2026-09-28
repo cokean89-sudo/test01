@@ -1,7 +1,7 @@
 // 자동 레이아웃 엔진 — 이미지 비율(가로/세로) 목록과 영역을 받아 각 이미지의 칸(Rect)을 계산한다.
 // 모든 함수는 순수 함수이며, 결과 칸은 항상 영역을 빈틈없이 채운다(비율 차이는 cover 크롭으로 흡수).
 
-import type { LayoutMode, Rect } from "../../shared/types";
+import type { AlignPos, LayoutMode, Rect } from "../../shared/types";
 
 export interface LayoutOptions {
   mode: LayoutMode;
@@ -9,6 +9,13 @@ export interface LayoutOptions {
   rows: number;
   gap: number;
   seed: number;
+  /** 안쪽 여백 (피그마 오토 레이아웃의 padding) */
+  padX?: number;
+  padY?: number;
+  /** fill: 영역을 빈틈없이 채움 · fit: 원본 비율 유지(크롭 없음) */
+  sizing?: "fill" | "fit";
+  alignX?: AlignPos;
+  alignY?: AlignPos;
 }
 
 const DEFAULT_ASPECT = 4 / 3;
@@ -17,9 +24,21 @@ export function safeAspect(a: number | undefined): number {
   return a && Number.isFinite(a) && a > 0 ? Math.min(Math.max(a, 0.15), 8) : DEFAULT_ASPECT;
 }
 
-export function computeLayout(aspects: number[], area: Rect, opts: LayoutOptions): Rect[] {
+export function computeLayout(aspects: number[], outer: Rect, opts: LayoutOptions): Rect[] {
   const list = aspects.map(safeAspect);
+  const area = inset(outer, opts.padX ?? 0, opts.padY ?? 0);
   if (list.length === 0 || area.w <= 0 || area.h <= 0) return [];
+  const fit = opts.sizing === "fit";
+  const ax = alignFactor(opts.alignX);
+  const ay = alignFactor(opts.alignY);
+  if (fit && opts.mode === "rows") return layoutRowsFit(list, area, opts.gap, opts.rows, ax, ay);
+  if (fit && opts.mode === "columns") return layoutColumnsFit(list, area, opts.gap, opts.columns, ax, ay);
+  const cells = cellsFor(list, area, opts);
+  // 비율 유지: 칸 안에 원본 비율로 넣고 정렬 위치에 둔다
+  return fit ? cells.map((c, i) => fitRect(c, list[i], ax, ay)) : cells;
+}
+
+function cellsFor(list: number[], area: Rect, opts: LayoutOptions): Rect[] {
   switch (opts.mode) {
     case "report":
       return layoutReport(list, area, opts.gap, opts.seed);
@@ -32,6 +51,24 @@ export function computeLayout(aspects: number[], area: Rect, opts: LayoutOptions
     case "mosaic":
       return layoutMosaic(list, area, opts.gap, opts.seed);
   }
+}
+
+export function inset(r: Rect, px: number, py: number): Rect {
+  const x = Math.min(Math.max(0, px), r.w / 2 - 1);
+  const y = Math.min(Math.max(0, py), r.h / 2 - 1);
+  return { x: r.x + x, y: r.y + y, w: r.w - 2 * x, h: r.h - 2 * y };
+}
+
+export function alignFactor(a: AlignPos | undefined): number {
+  return a === "start" ? 0 : a === "end" ? 1 : 0.5;
+}
+
+/** 칸 안에 비율 aspect 인 사각형을 가장 크게 넣고 정렬 위치에 둔다 */
+export function fitRect(cell: Rect, aspect: number, ax = 0.5, ay = 0.5): Rect {
+  const cellAspect = cell.w / Math.max(cell.h, 0.001);
+  const w = cellAspect > aspect ? cell.h * aspect : cell.w;
+  const h = cellAspect > aspect ? cell.h : cell.w / aspect;
+  return { x: cell.x + (cell.w - w) * ax, y: cell.y + (cell.h - h) * ay, w, h };
 }
 
 // ─── Grid ───────────────────────────────────────────────────
@@ -103,10 +140,10 @@ interface Strip {
 }
 
 /**
- * 한 축(main)을 꽉 채우는 줄(strip)들로 배치한다.
+ * 한 축(main)을 꽉 채우는 줄(strip)들로 나눈다 — 교차축 길이는 원래 비율 그대로(스케일 전).
  * weights[i] = 교차축 1 단위당 main 축 길이 (rows 모드: 가로/세로 비율).
  */
-function justify(weights: number[], main: number, cross: number, gap: number, fixedCount: number): Strip[] {
+function naturalStrips(weights: number[], main: number, cross: number, gap: number, fixedCount: number): Strip[] {
   const n = weights.length;
   const evaluate = (k: number): { strips: Strip[]; score: number } => {
     const strips = partition(weights, k).map((items) => {
@@ -127,11 +164,64 @@ function justify(weights: number[], main: number, cross: number, gap: number, fi
       if (cand.score < best.score) best = cand;
     }
   }
-  // 교차축 합이 영역과 정확히 같도록 스케일 (차이는 크롭으로 흡수)
-  const natural = best.strips.reduce((acc, s) => acc + s.cross, 0);
-  const avail = cross - gap * (best.strips.length - 1);
+  return best.strips;
+}
+
+/** 교차축 합이 영역과 정확히 같도록 스케일한 줄 (차이는 크롭으로 흡수) */
+function justify(weights: number[], main: number, cross: number, gap: number, fixedCount: number): Strip[] {
+  const strips = naturalStrips(weights, main, cross, gap, fixedCount);
+  const natural = strips.reduce((acc, s) => acc + s.cross, 0);
+  const avail = cross - gap * (strips.length - 1);
   const scale = avail / natural;
-  return best.strips.map((s) => ({ ...s, cross: s.cross * scale }));
+  return strips.map((s) => ({ ...s, cross: s.cross * scale }));
+}
+
+/**
+ * 가로 줄 · 비율 유지: 각 줄은 원래 비율 그대로 두고, 영역보다 크면 전체를 같은 비율로 줄인다.
+ * 남는 공간은 정렬(ax, ay)에 따라 배분 — 피그마의 'Hug contents' 와 같은 동작.
+ */
+export function layoutRowsFit(aspects: number[], area: Rect, gap: number, rows: number, ax: number, ay: number): Rect[] {
+  const strips = naturalStrips(aspects, area.w, area.h, gap, rows);
+  const total = strips.reduce((acc, s) => acc + s.cross, 0);
+  const scale = Math.min(1, (area.h - gap * (strips.length - 1)) / total);
+  const blockH = total * scale + gap * (strips.length - 1);
+  const out: Rect[] = new Array(aspects.length);
+  let y = area.y + (area.h - blockH) * ay;
+  for (const strip of strips) {
+    const h = strip.cross * scale;
+    const rowW = strip.items.reduce((acc, i) => acc + aspects[i] * h, 0) + gap * (strip.items.length - 1);
+    let x = area.x + (area.w - rowW) * ax;
+    for (const i of strip.items) {
+      const w = aspects[i] * h;
+      out[i] = { x, y, w, h };
+      x += w + gap;
+    }
+    y += h + gap;
+  }
+  return out;
+}
+
+/** 세로 열 · 비율 유지 */
+export function layoutColumnsFit(aspects: number[], area: Rect, gap: number, columns: number, ax: number, ay: number): Rect[] {
+  const inv = aspects.map((a) => 1 / a);
+  const strips = naturalStrips(inv, area.h, area.w, gap, columns);
+  const total = strips.reduce((acc, s) => acc + s.cross, 0);
+  const scale = Math.min(1, (area.w - gap * (strips.length - 1)) / total);
+  const blockW = total * scale + gap * (strips.length - 1);
+  const out: Rect[] = new Array(aspects.length);
+  let x = area.x + (area.w - blockW) * ax;
+  for (const strip of strips) {
+    const w = strip.cross * scale;
+    const colH = strip.items.reduce((acc, i) => acc + inv[i] * w, 0) + gap * (strip.items.length - 1);
+    let y = area.y + (area.h - colH) * ay;
+    for (const i of strip.items) {
+      const h = inv[i] * w;
+      out[i] = { x, y, w, h };
+      y += h + gap;
+    }
+    x += w + gap;
+  }
+  return out;
 }
 
 /** 자유 · 가로 정렬: 같은 줄의 이미지는 높이가 같고, 각 줄은 영역 가로폭을 꽉 채운다. */

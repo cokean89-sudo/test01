@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { ROLE_RANK, type DocumentSummary } from "../../shared/types";
 import { api } from "../api";
 import { SmartImage } from "../components/SmartImage";
+import { Icon } from "../components/icons";
 import { Button, Empty, Menu, MenuItem } from "../components/ui";
-import { createReferencePage } from "../layout/templates";
+import { createCoverPage, createReferencePage } from "../layout/templates";
 import { navigate } from "../lib/router";
 import { useCurrentTeam, useSession } from "../store/session";
 import { loadTeamDefaults } from "../store/teamDefaults";
@@ -26,7 +27,8 @@ export function DocsView() {
     try {
       // 팀 기본 설정(부서명·양식)으로 시작하고, 첫 페이지는 더미 텍스트·회색 박스 템플릿
       const settings = await loadTeamDefaults(teamId);
-      const doc = await api.createDocument({ title: "Untitled", settings, pages: [createReferencePage(settings, { title: "", images: [], placeholders: 6 })] });
+      const pages = [createCoverPage(settings), createReferencePage(settings, { title: "", images: [], placeholders: 5 })];
+      const doc = await api.createDocument({ title: "Untitled", settings, pages });
       navigate("edit/" + doc.id);
     } catch (err) {
       toast.error((err as Error).message);
@@ -41,24 +43,37 @@ export function DocsView() {
         <span className="spacer" />
         {canEdit && (
           <>
-            <Button onClick={createBlank} icon="plus">
-              새 문서
-            </Button>
             <Button variant="primary" icon="sparkle" onClick={() => openBuild()}>
-              키워드로 자동 생성
+              키워드로 문서 만들기
             </Button>
           </>
         )}
       </div>
       {docs && docs.length === 0 && (
-        <Empty title="아직 문서가 없습니다">
-          <p className="muted">키워드를 넣으면 태그·케이스별로 그룹핑해 페이지와 레이아웃을 자동으로 만들어 줍니다.</p>
-          <Button variant="primary" icon="sparkle" onClick={() => openBuild()}>
-            키워드로 자동 생성
-          </Button>
+        <Empty emoji="📄" title="아직 만든 문서가 없어요">
+          <p>키워드만 넣으면 태그·케이스별로 묶어서 보고서 페이지를 자동으로 만들어 줘요.</p>
+          {canEdit && (
+            <div className="row">
+              <Button size="lg" variant="primary" icon="sparkle" onClick={() => openBuild()}>
+                키워드로 문서 만들기
+              </Button>
+              <Button size="lg" icon="plus" onClick={createBlank}>
+                빈 문서로 시작
+              </Button>
+            </div>
+          )}
         </Empty>
       )}
       <div className="doc-grid">
+        {canEdit && !!docs?.length && (
+          <button className="doc-new" onClick={createBlank}>
+            <span className="plus">
+              <Icon name="plus" size={22} />
+            </span>
+            새 문서
+            <span className="muted small">표지 + 템플릿 페이지로 시작해요</span>
+          </button>
+        )}
         {docs?.map((d) => (
           <article key={d.id} className="doc-card">
             <button className="doc-cover" onClick={() => navigate("edit/" + d.id)}>

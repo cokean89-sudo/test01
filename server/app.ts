@@ -53,7 +53,7 @@ export function createApp(db: Database) {
 function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof z.ZodError) {
     const first = err.issues[0];
-    res.status(400).json({ error: first?.message && !/^(Invalid|Expected|Required)/.test(first.message) ? first.message : "입력값이 올바르지 않습니다.", code: "invalid_input" });
+    res.status(400).json({ error: first?.message && !/^(Invalid|Expected|Required)/.test(first.message) ? first.message : "입력값이 올바르지 않아요.", code: "invalid_input" });
     return;
   }
   if (err instanceof HttpError) {
@@ -67,14 +67,14 @@ function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFun
   }
   const e = err as { type?: string; status?: number };
   if (e?.type === "entity.too.large") {
-    res.status(413).json({ error: "요청이 너무 큽니다." });
+    res.status(413).json({ error: "요청이 너무 커요." });
     return;
   }
   if (e?.type === "entity.parse.failed") {
-    res.status(400).json({ error: "잘못된 JSON 입니다." });
+    res.status(400).json({ error: "잘못된 JSON 이에요." });
     return;
   }
   console.error(err);
   // 내부 오류 내용은 노출하지 않는다
-  res.status(500).json({ error: "서버 오류가 발생했습니다." });
+  res.status(500).json({ error: "서버 오류가 발생했어요." });
 }

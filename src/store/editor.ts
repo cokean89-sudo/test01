@@ -295,7 +295,7 @@ async function doSave(): Promise<void> {
     useEditor.setState({ saveState: "error" });
     if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
       useEditor.setState({ readOnly: true });
-      toast.error("이 문서를 편집할 권한이 없습니다: " + err.message);
+      toast.error("이 문서를 편집할 권한이 없어요: " + err.message);
     } else {
       // 네트워크 오류 등 — 잠시 후 다시 시도
       scheduleSave(5000);
@@ -330,7 +330,7 @@ export async function pullRemote(version: number, byName?: string) {
   serverDoc = fresh;
   useEditor.setState({ version: fresh.version ?? cur.version });
   if (useEditor.getState().doc !== fresh) scheduleSave(300);
-  if (byName) toast.info(`${byName} 님의 변경 사항을 반영했습니다`);
+  if (byName) toast.info(`${byName} 님의 변경 사항을 반영했어요`);
 }
 
 useEditor.subscribe((state, prev) => {

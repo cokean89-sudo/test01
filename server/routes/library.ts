@@ -6,7 +6,6 @@ import type { DuplicateInfo, Reference } from "../../shared/types";
 import { teamRole } from "../context";
 import { publish } from "../events";
 import type { Repo } from "../repo";
-import { sampleData } from "../sample";
 import { enforceLimit, HttpError } from "../security";
 
 const tagList = z.array(z.string().trim().min(1).max(60)).max(50);
@@ -38,7 +37,7 @@ const CaseInput = z.object({
 /** 이미지 주소가 http(s) 또는 앱 내부 경로(/samples/…)인지 — javascript: 등 차단 */
 function safeImageUrl(url: string) {
   if (/^https?:\/\//i.test(url) || /^\/samples\/[\w.-]+$/.test(url)) return url;
-  throw new HttpError(400, "이미지 주소는 http(s) 링크여야 합니다.");
+  throw new HttpError(400, "이미지 주소는 http(s) 링크여야 해요.");
 }
 
 function mergeTags(a: string[], b: string[]) {
@@ -93,7 +92,7 @@ export function libraryRouter(repo: Repo): Router {
     const patch = RefPatch.parse(req.body);
     if (patch.imageUrl) safeImageUrl(patch.imageUrl);
     const ref = repo.updateRef(req.teamId!, String(req.params.id), patch, req.user!.id);
-    if (!ref) throw new HttpError(404, "레퍼런스를 찾을 수 없습니다.");
+    if (!ref) throw new HttpError(404, "레퍼런스를 찾을 수 없어요.");
     changed(req.teamId!, req.user!.id, "refs");
     res.json(ref);
   });
@@ -149,26 +148,18 @@ export function libraryRouter(repo: Repo): Router {
 
   r.patch("/cases/:id", teamRole(repo, "editor"), (req, res) => {
     const c = repo.updateCase(req.teamId!, String(req.params.id), CaseInput.partial().parse(req.body), req.user!.id);
-    if (!c) throw new HttpError(404, "케이스를 찾을 수 없습니다.");
+    if (!c) throw new HttpError(404, "케이스를 찾을 수 없어요.");
     changed(req.teamId!, req.user!.id, "cases");
     res.json(c);
   });
 
   r.delete("/cases/:id", teamRole(repo, "editor"), (req, res) => {
     const c = repo.getCase(req.teamId!, String(req.params.id));
-    if (!c) throw new HttpError(404, "케이스를 찾을 수 없습니다.");
+    if (!c) throw new HttpError(404, "케이스를 찾을 수 없어요.");
     repo.deleteCase(req.teamId!, c.id);
     repo.log(req.teamId!, req.user!.id, "case.delete", `케이스 '${c.name}' 삭제`);
     changed(req.teamId!, req.user!.id, "cases");
     res.json({ ok: true });
-  });
-
-  r.post("/sample", teamRole(repo, "editor"), (req, res) => {
-    const teamId = req.teamId!;
-    const sample = sampleData();
-    const counts = repo.importData(teamId, req.user!.id, sample);
-    changed(teamId, req.user!.id, "refs");
-    res.json({ added: counts.references });
   });
 
   r.get("/backup", teamRole(repo, "admin"), (req, res) => {

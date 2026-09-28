@@ -14,11 +14,11 @@ export function Button({
   children?: ReactNode;
   icon?: IconName;
   variant?: "default" | "primary" | "ghost" | "danger" | "accent";
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button type="button" className={`btn btn-${variant} btn-${size} ${children ? "" : "btn-icon"} ${className ?? ""}`} {...rest}>
-      {icon && <Icon name={icon} size={size === "sm" ? 14 : 16} />}
+      {icon && <Icon name={icon} size={size === "sm" ? 14 : size === "lg" ? 19 : 16} />}
       {children}
     </button>
   );
@@ -311,9 +311,10 @@ export function Spinner({ size = 16 }: { size?: number }) {
   return <span className="spinner" style={{ width: size, height: size }} />;
 }
 
-export function Empty({ title, children }: { title: ReactNode; children?: ReactNode }) {
+export function Empty({ title, children, emoji }: { title: ReactNode; children?: ReactNode; emoji?: string }) {
   return (
     <div className="empty">
+      {emoji && <span className="empty-emoji">{emoji}</span>}
       <h3>{title}</h3>
       {children}
     </div>

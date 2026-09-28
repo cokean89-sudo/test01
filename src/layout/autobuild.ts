@@ -187,23 +187,13 @@ export function buildDocument(
   const caseMap = new Map(cases.map((c) => [c.id, c]));
   const pages: Page[] = [];
   if (opts.cover) {
-    const keywords = parseQuery(opts.query)
-      .filter((t) => !t.exclude)
-      .map((t) => t.text);
-    const today = new Date().toISOString().slice(0, 10).replaceAll("-", ".");
-    pages.push(
-      createCoverPage(settings, {
-        title: opts.title,
-        subtitle: keywords.length ? keywords.map((k) => "#" + k).join("  ") : "Case Study & Reference",
-        meta: today,
-        image: groups[0]?.refs[0],
-      }),
-    );
+    // 표지 제목은 문서 제목과 연결({title}), 설명은 부서명({dept})
+    pages.push(createCoverPage(settings));
   }
 
   groups.forEach((group, gi) => {
     if (opts.sections && groups.length > 1) {
-      pages.push(createSectionPage(settings, { title: group.label, subtitle: `${group.refs.length} references`, index: gi + 1 }));
+      pages.push(createSectionPage(settings, { title: group.label, subtitle: `${String(gi + 1).padStart(2, "0")} · ${group.refs.length} References` }));
     }
     const chunks = paginate(group.refs, opts.maxPerPage);
     chunks.forEach((chunk, ci) => {
@@ -225,9 +215,8 @@ export function buildDocument(
       } else {
         pages.push(
           createReferencePage(settings, {
-            title: group.label,
+            title: group.label + suffix,
             group: group.label,
-            sectionLabel: "Reference" + suffix,
             images: chunk,
             layout: opts.layoutAuto ? { gap: opts.layout.gap } : opts.layout,
           }),

@@ -63,13 +63,13 @@ export function toolsRouter(): Router {
 
   r.post("/ai/analyze", async (req, res) => {
     const user = requireUser(req);
-    enforceLimit(`ai:${user.id}`, 60, 60 * MIN, "AI 사용 한도(시간당 60회)를 넘었습니다.");
+    enforceLimit(`ai:${user.id}`, 60, 60 * MIN, "AI 사용 한도(시간당 60회)를 넘었어요.");
     res.json(await analyzePage(AnalyzeInput.parse(req.body)));
   });
 
   r.post("/ai/tags", async (req, res) => {
     const user = requireUser(req);
-    enforceLimit(`ai:${user.id}`, 60, 60 * MIN, "AI 사용 한도(시간당 60회)를 넘었습니다.");
+    enforceLimit(`ai:${user.id}`, 60, 60 * MIN, "AI 사용 한도(시간당 60회)를 넘었어요.");
     const body = z
       .object({
         imageUrl: z.string().min(1).max(4000),

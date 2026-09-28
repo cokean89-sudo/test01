@@ -88,3 +88,30 @@ describe("layout engine", () => {
     assertTiles(rects, AREA);
   });
 });
+
+describe("오토 레이아웃: 여백 · 비율 유지 · 정렬", () => {
+  const area = { x: 0, y: 0, w: 600, h: 400 };
+  it("안쪽 여백만큼 영역을 줄인다", () => {
+    const rects = computeLayout([1, 1], area, { mode: "grid", columns: 2, rows: 0, gap: 0, seed: 0, padX: 20, padY: 10 });
+    expect(rects[0].x).toBe(20);
+    expect(rects[0].y).toBe(10);
+    expect(rects[1].x + rects[1].w).toBe(580);
+  });
+
+  it("가로 줄 · 비율 유지: 원본 비율 그대로, 남는 공간은 정렬로", () => {
+    const aspects = [1.5, 1];
+    const top = computeLayout(aspects, area, { mode: "rows", columns: 0, rows: 1, gap: 10, seed: 0, sizing: "fit", alignX: "start", alignY: "start" });
+    const bottom = computeLayout(aspects, area, { mode: "rows", columns: 0, rows: 1, gap: 10, seed: 0, sizing: "fit", alignX: "end", alignY: "end" });
+    top.forEach((r, i) => expect(r.w / r.h).toBeCloseTo(aspects[i], 5));
+    expect(top[0].y).toBe(0);
+    expect(bottom[0].y + bottom[0].h).toBeCloseTo(400, 5);
+    // 한 줄이 폭을 다 쓰면 가로 정렬은 의미가 없다
+    expect(top[1].x + top[1].w).toBeCloseTo(600, 5);
+  });
+
+  it("격자 · 비율 유지: 칸 안에서 가운데 정렬", () => {
+    const [r] = computeLayout([2], area, { mode: "grid", columns: 1, rows: 0, gap: 0, seed: 0, sizing: "fit" });
+    expect(r.w / r.h).toBeCloseTo(2, 5);
+    expect(r.y).toBeCloseTo((400 - 300) / 2, 5);
+  });
+});

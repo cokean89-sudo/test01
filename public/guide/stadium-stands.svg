@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="810" viewBox="0 0 1440 810">
+  <defs><linearGradient id="roof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1f2b"/><stop offset="1" stop-color="#383d52"/></linearGradient></defs>
+  <rect width="1440" height="810" fill="url(#roof)"/>
+  <g fill="#fff" opacity=".85"><rect x="80" y="40" width="120" height="16" rx="8"/><rect x="380" y="40" width="120" height="16" rx="8"/><rect x="680" y="40" width="120" height="16" rx="8"/><rect x="980" y="40" width="120" height="16" rx="8"/><rect x="1260" y="40" width="120" height="16" rx="8"/></g>
+  <g>
+    <path d="M0 120 L1440 120 L1440 250 L0 330 Z" fill="#c8102e"/>
+    <path d="M0 330 L1440 250 L1440 380 L0 480 Z" fill="#e8e8ea"/>
+    <path d="M0 480 L1440 380 L1440 520 L0 640 Z" fill="#c8102e"/>
+  </g>
+  <g fill="#fff" opacity=".9" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="84" letter-spacing="24"><text x="150" y="420" transform="rotate(-3.2 700 420)" fill="#c8102e" opacity=".9">FORZA · FORZA</text></g>
+  <g opacity=".55">
+    <g fill="#ffd166"><circle cx="90" cy="220" r="7"/><circle cx="260" cy="200" r="7"/><circle cx="430" cy="185" r="7"/><circle cx="610" cy="175" r="7"/><circle cx="820" cy="165" r="7"/><circle cx="1010" cy="160" r="7"/><circle cx="1210" cy="150" r="7"/></g>
+    <g fill="#fff"><circle cx="160" cy="580" r="7"/><circle cx="350" cy="560" r="7"/><circle cx="540" cy="540" r="7"/><circle cx="760" cy="515" r="7"/><circle cx="980" cy="495" r="7"/><circle cx="1190" cy="470" r="7"/></g>
+  </g>
+  <path d="M0 640 L1440 520 L1440 810 L0 810 Z" fill="#3d9a4a"/>
+  <path d="M0 700 L1440 590" stroke="#fff" stroke-width="6" opacity=".85"/>
+  <g fill="#1d3fa0"><rect x="300" y="620" width="120" height="44" rx="4" transform="rotate(-4.8 360 642)"/><rect x="900" y="572" width="120" height="44" rx="4" transform="rotate(-4.8 960 594)"/></g>
+</svg>

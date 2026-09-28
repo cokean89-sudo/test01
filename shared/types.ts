@@ -153,23 +153,49 @@ export type PageElement = TextElement | ImageElement | ShapeElement;
 export type LayoutMode = "report" | "grid" | "rows" | "columns" | "mosaic";
 
 export const LAYOUT_MODES: { key: LayoutMode; label: string; hint: string }[] = [
-  { key: "report", label: "보고서형", hint: "왼쪽 1/3 열에 로고·이미지를 쌓고 나머지는 모자이크 (케이스 스터디 템플릿)" },
-  { key: "grid", label: "그리드 (N단)", hint: "지정한 열 수로 균등 분할" },
-  { key: "rows", label: "자유 · 가로 정렬", hint: "이미지 비율 유지, 줄 단위 배치" },
-  { key: "columns", label: "자유 · 세로 정렬", hint: "이미지 비율 유지, 열 단위(메이슨리) 배치" },
-  { key: "mosaic", label: "자유 · 모자이크", hint: "비율에 맞춰 크고 작은 칸으로 분할" },
+  { key: "rows", label: "가로 줄", hint: "왼쪽→오른쪽으로 흐르고, 같은 줄은 높이를 맞춰요 (기본)" },
+  { key: "columns", label: "세로 열", hint: "위→아래로 흐르고, 같은 열은 폭을 맞춰요 (메이슨리)" },
+  { key: "grid", label: "격자", hint: "같은 크기 칸으로 N단 균등 분할" },
+  { key: "mosaic", label: "모자이크", hint: "비율에 맞춰 크고 작은 칸으로 나눠요" },
+  { key: "report", label: "보고서형", hint: "왼쪽 1단에 쌓고 나머지는 모자이크" },
 ];
 
+/** 정렬 위치 (피그마 오토 레이아웃의 정렬과 같은 개념) */
+export type AlignPos = "start" | "center" | "end";
+
+/** 이미지 영역의 오토 레이아웃 설정 */
 export interface PageLayout {
   mode: LayoutMode;
   /** grid / columns 모드의 열 수 (columns 는 0 = 자동) */
   columns: number;
   /** rows 모드의 줄 수 (0 = 자동) */
   rows: number;
-  /** pt */
+  /** 항목 사이 간격 pt */
   gap: number;
   /** mosaic 배열 변형 */
   seed: number;
+  /** 안쪽 여백 pt (가로 · 세로) */
+  padX?: number;
+  padY?: number;
+  /** fill: 영역을 꽉 채움(필요하면 크롭) · fit: 원본 비율 유지(크롭 없음, 남는 공간은 정렬로) */
+  sizing?: "fill" | "fit";
+  alignX?: AlignPos;
+  alignY?: AlignPos;
+}
+
+/** 글 배치 — 짧은 글은 헤더(3~5단), 긴 글은 왼쪽 1단. auto 는 글 길이로 고른다. fixed 는 직접 옮긴 상태 */
+export type TextFlowMode = "auto" | "header" | "side" | "fixed";
+
+export interface PageFlow {
+  mode: TextFlowMode;
+  /** 짧은 글 자리 */
+  header: Rect;
+  /** 긴 글 자리 (왼쪽 단) */
+  side: Rect;
+  /** 긴 글 단과 이미지 영역 사이 간격 */
+  gutter: number;
+  /** 마지막으로 적용된 배치 */
+  resolved?: "header" | "side";
 }
 
 export type PageKind = "case" | "reference" | "cover" | "section" | "blank";
@@ -188,8 +214,10 @@ export interface Page {
   group?: string;
   caseId?: string;
   layout: PageLayout;
-  /** 자동 레이아웃이 이미지를 채우는 영역 */
+  /** 자동 레이아웃이 이미지를 채우는 영역 (글이 왼쪽 단에 있으면 그만큼 좁아진다) */
   area: Rect;
+  /** 본문 글 배치 (케이스·레퍼런스 페이지) */
+  flow?: PageFlow;
   elements: PageElement[];
   hideFooter?: boolean;
   background?: string;

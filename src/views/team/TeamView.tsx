@@ -13,7 +13,7 @@ import {
 import { teamApi } from "../../api";
 import { PageView } from "../../components/PageView";
 import { Button, ColorInput, Empty, Field, Modal, NumberInput, Segmented, Select, Spinner, Toggle } from "../../components/ui";
-import { createCasePage, createReferencePage } from "../../layout/templates";
+import { createCasePage, createCoverPage, createReferencePage } from "../../layout/templates";
 import { FOOTER_PRESETS, REPORT_TYPOGRAPHY, TYPOGRAPHY_PRESETS } from "../../lib/defaults";
 import { navigate } from "../../lib/router";
 import { useSession } from "../../store/session";
@@ -130,7 +130,7 @@ function MembersTab({ team, meId, onChange, reload }: { team: TeamDetail; meId: 
                       onChange={async (e) => {
                         try {
                           onChange(await teamApi.setRole(team.id, m.userId, e.target.value as Role));
-                          toast.success("권한을 바꿨습니다");
+                          toast.success("권한을 바꿨어요");
                         } catch (err) {
                           toast.error((err as Error).message);
                         }
@@ -201,10 +201,10 @@ function MembersTab({ team, meId, onChange, reload }: { team: TeamDetail; meId: 
 
 // ─── invites ────────────────────────────────────────────────
 
-function copy(text: string, label = "복사했습니다") {
+function copy(text: string, label = "복사했어요") {
   navigator.clipboard.writeText(text).then(
     () => toast.success(label),
-    () => toast.error("복사하지 못했습니다. 직접 선택해 복사하세요."),
+    () => toast.error("복사하지 못했어요. 직접 선택해 복사하세요."),
   );
 }
 
@@ -232,7 +232,7 @@ function InvitesTab({ team }: { team: TeamDetail }) {
     <div className="invite-grid">
       <section className="panel">
         <h4>메일로 초대</h4>
-        <p className="muted small">초대 링크는 입력한 메일 주소의 계정으로만 수락할 수 있습니다 (7일 유효, 1회용).</p>
+        <p className="muted small">초대 링크는 입력한 메일 주소의 계정으로만 수락할 수 있어요 (7일 유효, 1회용).</p>
         <form
           className="row"
           onSubmit={async (e) => {
@@ -242,7 +242,7 @@ function InvitesTab({ team }: { team: TeamDetail }) {
               setInvites(r.invites);
               setEmailResult({ link: r.link, mailDelivered: r.mailDelivered, email });
               setEmail("");
-              toast.success(r.mailDelivered ? "초대 메일을 보냈습니다" : "초대를 만들었습니다 — 링크를 직접 전달하세요");
+              toast.success(r.mailDelivered ? "초대 메일을 보냈어요" : "초대를 만들었어요 — 링크를 직접 전달하세요");
             } catch (err) {
               toast.error((err as Error).message);
             }
@@ -256,7 +256,7 @@ function InvitesTab({ team }: { team: TeamDetail }) {
         </form>
         {emailResult && (
           <div className="notice">
-            {emailResult.mailDelivered ? `${emailResult.email} 로 초대 메일을 보냈습니다.` : "메일 서버가 설정되지 않았습니다. 아래 링크를 메신저 등으로 직접 전달하세요."}
+            {emailResult.mailDelivered ? `${emailResult.email} 로 초대 메일을 보냈어요.` : "메일 서버가 설정되지 않았어요. 아래 링크를 메신저 등으로 직접 전달하세요."}
             <div className="copy-row">
               <input readOnly value={emailResult.link} onFocus={(e) => e.target.select()} />
               <Button size="sm" onClick={() => copy(emailResult.link)}>
@@ -269,7 +269,7 @@ function InvitesTab({ team }: { team: TeamDetail }) {
 
       <section className="panel">
         <h4>초대 코드 + 비밀번호</h4>
-        <p className="muted small">코드와 비밀번호를 모두 알아야 참여할 수 있는 비공개 방식입니다. 비밀번호가 10번 틀리면 코드가 잠깁니다.</p>
+        <p className="muted small">코드와 비밀번호를 모두 알아야 참여할 수 있는 비공개 방식이에요. 비밀번호가 10번 틀리면 코드가 잠겨요.</p>
         <div className="grid-2">
           <Field label="권한">
             <Select value={codeRole} onChange={setCodeRole} options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
@@ -309,8 +309,8 @@ function InvitesTab({ team }: { team: TeamDetail }) {
               <span className="muted small">비밀번호</span>
               <strong className="mono">{codeResult.password}</strong>
             </div>
-            <p className="muted small">비밀번호는 지금만 보입니다. 서버에는 암호화된 값만 저장됩니다.</p>
-            <Button size="sm" onClick={() => copy(codeText, "초대 안내문을 복사했습니다")}>
+            <p className="muted small">비밀번호는 지금만 보여요. 서버에는 암호화된 값만 저장돼요.</p>
+            <Button size="sm" onClick={() => copy(codeText, "초대 안내문을 복사했어요")}>
               초대 안내문 복사
             </Button>
           </div>
@@ -322,7 +322,7 @@ function InvitesTab({ team }: { team: TeamDetail }) {
         {!invites ? (
           <Spinner />
         ) : invites.length === 0 ? (
-          <p className="muted small">아직 만든 초대가 없습니다.</p>
+          <p className="muted small">아직 만든 초대가 없어요.</p>
         ) : (
           <table className="table">
             <thead>
@@ -394,8 +394,9 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
   };
   const previews = useMemo(
     () => [
-      createCasePage(s, { title: "", images: [], logos: [], placeholders: { images: 6, logos: 2 } }),
-      createReferencePage(s, { title: "", images: [], placeholders: 7 }),
+      createCoverPage(s),
+      createReferencePage(s, { title: "", images: [], placeholders: 5 }),
+      createCasePage(s, { title: "", images: [], logos: [], placeholders: { images: 4, logos: 2 } }),
     ],
     [s],
   );
@@ -405,11 +406,11 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
       <section className="panel">
         <h4>새 문서에 적용되는 기본 양식</h4>
         <p className="muted small">
-          이 팀에서 새로 만드는 문서(자동 생성·빈 문서)는 이 설정으로 시작합니다. 이미 만든 문서는 각 문서의 &lsquo;문서 양식&rsquo; 탭에서 바꿉니다.
-          {!editable && " (관리자만 수정할 수 있습니다)"}
+          이 팀에서 새로 만드는 문서(자동 생성·빈 문서)는 이 설정으로 시작해요. 이미 만든 문서는 각 문서의 &lsquo;문서 양식&rsquo; 탭에서 바꿔요.
+          {!editable && " (관리자만 수정할 수 있어요)"}
         </p>
         <fieldset disabled={!editable} className="defaults-form">
-          <Field label="부서명 / 조직명 (하단 왼쪽)" hint="예: SHINSEGAE BRAND OFFICE, EMART BRAND STRATEGY">
+          <Field label="부서명 (하단 왼쪽 · 표지의 PRESENTED BY)" hint="예: BRAND STRATEGY TEAM, EMART BRAND DIVISION">
             <input value={s.footer.left} onChange={(e) => set((d) => void (d.footer.left = e.target.value))} maxLength={80} />
           </Field>
           <div className="grid-2">
@@ -510,7 +511,7 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
               onClick={async () => {
                 try {
                   onSaved(await teamApi.saveDefaults(team.id, s));
-                  toast.success("팀 문서 기본 설정을 저장했습니다");
+                  toast.success("팀 문서 기본 설정을 저장했어요");
                 } catch (err) {
                   toast.error((err as Error).message);
                 }
@@ -530,7 +531,7 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
         <h4>미리보기</h4>
         {previews.map((p, i) => (
           <div key={p.id} className="page-preview">
-            <PageView page={p} settings={s} index={i} total={2} docTitle="Untitled" />
+            <PageView page={p} settings={s} index={i} total={previews.length} docTitle="Untitled" />
           </div>
         ))}
       </section>
@@ -551,7 +552,7 @@ function ActivityTab({ teamId }: { teamId: string }) {
     });
   }, [teamId, ticks.team, ticks.docs]);
   if (!items) return <Spinner />;
-  if (!items.length) return <Empty title="아직 기록이 없습니다" />;
+  if (!items.length) return <Empty title="아직 기록이 없어요" />;
   return (
     <div className="panel">
       <ul className="activity">
@@ -620,7 +621,7 @@ function SettingsTab({ team, onChange }: { team: TeamDetail; onChange: (t: TeamD
       {team.role === "owner" && !team.personal && (
         <div className="danger-zone">
           <h4>팀 삭제</h4>
-          <p className="muted small">팀의 레퍼런스·케이스·문서가 모두 삭제되며 되돌릴 수 없습니다. 먼저 백업하세요.</p>
+          <p className="muted small">팀의 레퍼런스·케이스·문서가 모두 삭제되며 되돌릴 수 없어요. 먼저 백업하세요.</p>
           <Button
             variant="danger"
             onClick={async () => {
@@ -629,7 +630,7 @@ function SettingsTab({ team, onChange }: { team: TeamDetail; onChange: (t: TeamD
               try {
                 await teamApi.remove(team.id, typed);
                 await refreshTeams();
-                toast.success("팀을 삭제했습니다");
+                toast.success("팀을 삭제했어요");
                 navigate("library");
               } catch (err) {
                 toast.error((err as Error).message);
@@ -666,7 +667,7 @@ export function CreateTeamButton() {
                 await refreshTeams(t.id);
                 switchTeam(t.id);
                 setOpen(false);
-                toast.success(`'${t.name}' 팀을 만들었습니다. 문서 기본 설정과 초대를 진행하세요.`);
+                toast.success(`'${t.name}' 팀을 만들었어요. 문서 기본 설정과 초대를 진행하세요.`);
                 location.hash = "#/team?tab=defaults";
               } catch (err) {
                 toast.error((err as Error).message);
@@ -707,7 +708,7 @@ export function JoinByCodeButton() {
                 await refreshTeams(r.teamId);
                 switchTeam(r.teamId);
                 setOpen(false);
-                toast.success(r.already ? "이미 참여한 팀입니다" : "팀에 참여했습니다");
+                toast.success(r.already ? "이미 참여한 팀이에요" : "팀에 참여했어요");
                 navigate("library");
               } catch (err) {
                 setError((err as Error).message);

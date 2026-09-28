@@ -58,11 +58,11 @@ export const isCommonPassword = (pw: string) => COMMON.has(pw.toLowerCase());
 
 /** 비밀번호 정책 — 통과하면 null */
 export function passwordProblem(password: string, email?: string): string | null {
-  if (password.length < 10) return "비밀번호는 10자 이상이어야 합니다.";
-  if (password.length > 200) return "비밀번호가 너무 깁니다.";
+  if (password.length < 10) return "비밀번호는 10자 이상이어야 해요.";
+  if (password.length > 200) return "비밀번호가 너무 길어요.";
   const kinds = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(password)).length;
   if (kinds < 2) return "영문 대/소문자, 숫자, 특수문자 중 두 종류 이상을 섞어 주세요.";
-  if (COMMON.has(password.toLowerCase())) return "너무 흔한 비밀번호입니다.";
+  if (COMMON.has(password.toLowerCase())) return "너무 흔한 비밀번호예요.";
   if (email && password.toLowerCase().includes(email.split("@")[0].toLowerCase()) && email.split("@")[0].length >= 4) {
     return "비밀번호에 메일 아이디를 넣지 마세요.";
   }
@@ -136,7 +136,7 @@ export class HttpError extends Error {
 }
 
 /** 키 하나에 대해 요청 제한 — 초과하면 429 */
-export function enforceLimit(key: string, limit: number, windowMs: number, message = "요청이 너무 많습니다. 잠시 후 다시 시도하세요.") {
+export function enforceLimit(key: string, limit: number, windowMs: number, message = "요청이 너무 많아요. 잠시 후 다시 시도하세요.") {
   const r = limiter.hit(key, limit, windowMs);
   if (!r.ok) throw new HttpError(429, message, "rate_limited", { "retry-after": String(r.retryAfter) });
 }
@@ -193,13 +193,13 @@ export function clearCookie(res: Response, name: string) {
  */
 export function csrfGuard(req: Request, _res: Response, next: NextFunction) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
-  if (req.get("x-refboard") !== "1") throw new HttpError(403, "잘못된 요청입니다 (CSRF 헤더 없음).", "csrf");
+  if (req.get("x-refboard") !== "1") throw new HttpError(403, "잘못된 요청이에요 (CSRF 헤더 없음).", "csrf");
   const origin = req.get("origin");
   if (origin && origin !== APP_ORIGIN && origin !== `${req.protocol}://${req.get("host")}`) {
-    throw new HttpError(403, "허용되지 않은 출처의 요청입니다.", "origin");
+    throw new HttpError(403, "허용되지 않은 출처의 요청이에요.", "origin");
   }
   const site = req.get("sec-fetch-site");
-  if (site && site !== "same-origin" && site !== "none") throw new HttpError(403, "허용되지 않은 출처의 요청입니다.", "origin");
+  if (site && site !== "same-origin" && site !== "none") throw new HttpError(403, "허용되지 않은 출처의 요청이에요.", "origin");
   next();
 }
 

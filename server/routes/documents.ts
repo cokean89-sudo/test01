@@ -16,10 +16,29 @@ const DocBody = z
     query: z.string().max(1000).optional(),
     settings: z.record(z.string(), z.unknown()),
     pages: z.array(z.record(z.string(), z.unknown())).max(500),
+    tray: z
+      .array(
+        z.object({
+          id: z.string().max(40),
+          src: z.string().max(4000),
+          refId: z.string().max(40).optional(),
+          natW: z.number().optional(),
+          natH: z.number().optional(),
+          caption: z.string().max(500).optional(),
+          sourceUrl: z.string().max(4000).optional(),
+          fit: z.enum(["cover", "contain"]).optional(),
+          focusX: z.number().optional(),
+          focusY: z.number().optional(),
+          from: z.string().max(80).optional(),
+          addedAt: z.number(),
+        }),
+      )
+      .max(200)
+      .optional(),
   })
   .passthrough();
 
-function parseDoc(body: unknown): Pick<DocumentData, "title" | "query" | "settings" | "pages"> {
+function parseDoc(body: unknown): Pick<DocumentData, "title" | "query" | "settings" | "pages" | "tray"> {
   if (JSON.stringify(body ?? {}).length > MAX_DOC_BYTES) throw new HttpError(413, "문서가 너무 커요.");
   const d = DocBody.parse(body) as unknown as DocumentData;
   // 이미지 주소에 javascript: 등 위험한 스킴이 들어오지 않게 한다
@@ -29,7 +48,9 @@ function parseDoc(body: unknown): Pick<DocumentData, "title" | "query" | "settin
       if (e.type === "image" && e.sourceUrl && !/^https?:\/\//i.test(e.sourceUrl)) e.sourceUrl = undefined;
     }
   }
-  return { title: d.title, query: d.query, settings: d.settings, pages: d.pages };
+  // 보관함 이미지도 같은 기준 — http(s) 만
+  const tray = d.tray?.filter((t) => /^https?:\/\//i.test(t.src)).map((t) => (t.sourceUrl && !/^https?:\/\//i.test(t.sourceUrl) ? { ...t, sourceUrl: undefined } : t));
+  return { title: d.title, query: d.query, settings: d.settings, pages: d.pages, tray };
 }
 
 export function documentsRouter(repo: Repo): Router {

@@ -291,6 +291,21 @@ export const AI_TONES: { key: AiTone; label: string; hint: string }[] = [
 /** AI 로 쓰는 텍스트 항목 */
 export type AiTextField = "title" | "subtitle" | "highlight" | "description" | "sectionLabel" | "captions";
 
+/** 임시 보관함 항목 — 이미지 내용만 (위치 · 크기 없음) */
+export interface TrayItem {
+  id: string;
+  src: string;
+  refId?: string;
+  natW?: number;
+  natH?: number;
+  caption?: string;
+  sourceUrl?: string;
+  fit?: "cover" | "contain";
+  /** 어느 페이지에서 왔는지 (보관함에 표시) */
+  from?: string;
+  addedAt: number;
+}
+
 export interface DocumentData {
   id: string;
   title: string;
@@ -299,6 +314,8 @@ export interface DocumentData {
   updatedAt: number;
   settings: DocSettings;
   pages: Page[];
+  /** 임시 보관함 — 페이지에서 빼거나 교체된 이미지 (다시 끌어다 쓸 수 있다) */
+  tray?: TrayItem[];
   /** 서버 저장 버전 (동시 편집 병합 기준) */
   version?: number;
   teamId?: string;

@@ -646,7 +646,7 @@ export class Repo {
       id,
     );
     if (!r) return undefined;
-    const data = parseJson<Pick<DocumentData, "settings" | "pages">>(r.data_json, { settings: defaultSettings(), pages: [] });
+    const data = parseJson<Pick<DocumentData, "settings" | "pages" | "tray">>(r.data_json, { settings: defaultSettings(), pages: [] });
     return {
       id: r.id,
       teamId: r.team_id,
@@ -654,6 +654,7 @@ export class Repo {
       query: r.query ?? undefined,
       settings: data.settings,
       pages: data.pages,
+      tray: data.tray ?? [],
       version: Number(r.version),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
@@ -665,7 +666,7 @@ export class Repo {
   createDoc(teamId: string, doc: DocumentData, userId: string): DocumentData {
     const id = newId("d");
     const t = now();
-    const data = JSON.stringify({ settings: doc.settings, pages: doc.pages });
+    const data = JSON.stringify({ settings: doc.settings, pages: doc.pages, tray: doc.tray ?? [] });
     this.db.tx(() => {
       this.db.run(
         "INSERT INTO documents (id, team_id, title, query, data_json, version, cover, page_count, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)",
@@ -693,14 +694,21 @@ export class Repo {
   saveDoc(
     teamId: string,
     id: string,
-    input: Pick<DocumentData, "title" | "query" | "settings" | "pages">,
+    input: Pick<DocumentData, "title" | "query" | "settings" | "pages" | "tray">,
     baseVersion: number,
     userId: string,
   ): { version: number; merged: boolean; doc?: DocumentData; conflicts: string[] } | undefined {
     return this.db.tx(() => {
       const current = this.getDoc(teamId, id);
       if (!current) return undefined;
-      let next: Pick<DocumentData, "title" | "query" | "settings" | "pages"> = { title: input.title, query: input.query, settings: input.settings, pages: input.pages };
+      let next: Pick<DocumentData, "title" | "query" | "settings" | "pages" | "tray"> = {
+        title: input.title,
+        query: input.query,
+        settings: input.settings,
+        pages: input.pages,
+        // 보관함을 모르는 예전 클라이언트가 저장해도 지금 보관함을 지우지 않는다
+        tray: input.tray ?? current.tray,
+      };
       let merged = false;
       let conflicts: string[] = [];
       if (baseVersion !== current.version) {
@@ -711,7 +719,7 @@ export class Repo {
             { ...current, ...next } as DocumentData,
             current,
           );
-          next = { title: r.value.title, query: r.value.query, settings: r.value.settings, pages: r.value.pages };
+          next = { title: r.value.title, query: r.value.query, settings: r.value.settings, pages: r.value.pages, tray: r.value.tray };
           conflicts = r.conflicts;
           merged = true;
         } else {
@@ -720,7 +728,7 @@ export class Repo {
       }
       const version = (current.version ?? 1) + 1;
       const t = now();
-      const data = JSON.stringify({ settings: next.settings, pages: next.pages });
+      const data = JSON.stringify({ settings: next.settings, pages: next.pages, tray: next.tray ?? [] });
       this.db.run(
         "UPDATE documents SET title = ?, query = ?, data_json = ?, version = ?, cover = ?, page_count = ?, updated_by = ?, updated_at = ? WHERE id = ? AND team_id = ?",
         next.title,
@@ -740,11 +748,11 @@ export class Repo {
     });
   }
 
-  private getVersionData(docId: string, version: number): Pick<DocumentData, "title" | "settings" | "pages"> | undefined {
+  private getVersionData(docId: string, version: number): Pick<DocumentData, "title" | "settings" | "pages" | "tray"> | undefined {
     const r = this.db.get<{ title: string; data_json: string }>("SELECT title, data_json FROM document_versions WHERE doc_id = ? AND version = ?", docId, version);
     if (!r) return undefined;
-    const data = parseJson<Pick<DocumentData, "settings" | "pages">>(r.data_json, { settings: defaultSettings(), pages: [] });
-    return { title: r.title, ...data };
+    const data = parseJson<Pick<DocumentData, "settings" | "pages" | "tray">>(r.data_json, { settings: defaultSettings(), pages: [] });
+    return { title: r.title, ...data, tray: data.tray ?? [] };
   }
 
   getVersion(teamId: string, docId: string, version: number): DocumentData | undefined {

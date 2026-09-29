@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { mergeDocuments } from "../../shared/merge";
 import type { DocumentData, Page, PageElement, PresenceUser } from "../../shared/types";
+import type { ClipboardData } from "../layout/imageMoves";
 import { api, ApiError } from "../api";
 import { toast } from "./toast";
 
@@ -24,7 +25,8 @@ interface EditorState {
   zoom: number | "fit";
   /** '맞춤' 배율 (캔버스가 계산) */
   fitScale: number;
-  clipboard: PageElement[];
+  /** ⌘C · ⌘X 로 담은 요소 — 문서 · 페이지를 넘나들며 붙여넣을 수 있다 */
+  clipboard: ClipboardData | null;
   txBase: DocumentData | null;
   lastKey: { key: string; at: number } | null;
   modal: EditorModal;
@@ -42,6 +44,8 @@ interface EditorState {
   /** 드래그처럼 연속 변경의 시작/끝 — 끝날 때 한 번만 기록 */
   begin: () => void;
   end: () => void;
+  /** 연속 변경 취소 — 시작 전 상태로 되돌리고 기록을 남기지 않는다 */
+  cancelTx: () => void;
   patchTransient: (pageId: string, patches: Record<string, Partial<PageElement>>) => void;
   undo: () => void;
   redo: () => void;
@@ -51,7 +55,7 @@ interface EditorState {
   setEditing: (id: string | null) => void;
   setZoom: (zoom: number | "fit") => void;
   setFitScale: (scale: number) => void;
-  setClipboard: (els: PageElement[]) => void;
+  setClipboard: (clip: ClipboardData | null) => void;
   setModal: (modal: EditorModal) => void;
 }
 
@@ -68,7 +72,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   saveState: "saved",
   zoom: "fit",
   fitScale: 1,
-  clipboard: [],
+  clipboard: null,
   txBase: null,
   lastKey: null,
   modal: null,
@@ -135,6 +139,11 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ txBase: null, ...(doc !== txBase ? { past: [...past, txBase].slice(-HISTORY), future: [], lastKey: null } : {}) });
   },
 
+  cancelTx() {
+    const { txBase } = get();
+    if (txBase) set({ doc: txBase, txBase: null });
+  },
+
   patchTransient(pageId, patches) {
     const { doc, readOnly } = get();
     if (!doc || readOnly) return;
@@ -184,8 +193,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   setFitScale(fitScale) {
     if (fitScale !== get().fitScale) set({ fitScale });
   },
-  setClipboard(els) {
-    set({ clipboard: els });
+  setClipboard(clipboard) {
+    set({ clipboard });
   },
   setModal(modal) {
     set({ modal });

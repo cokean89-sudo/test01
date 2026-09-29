@@ -364,6 +364,27 @@ describe("라이브러리 · 문서", () => {
     expect(r.status).toBe(400);
   });
 
+  it("임시 보관함이 저장되고, 동시에 넣은 항목은 모두 남으며, 위험한 주소는 걸러진다", async () => {
+    const a = await signup("보관함");
+    const T = `/api/teams/${a.personalTeam.id}`;
+    const { defaultSettings } = await import("../src/lib/defaults");
+    const created = await a.c.post(`${T}/documents`, { title: "보관함 문서", settings: defaultSettings(), pages: [{ id: "p1", kind: "blank", layout: { mode: "grid", columns: 3, rows: 0, gap: 6, seed: 0 }, area: { x: 0, y: 0, w: 100, h: 100 }, elements: [] }] });
+    const doc = created.json;
+    const item = (id: string, src: string) => ({ id, src, addedAt: 1 });
+    const s1 = await a.c.put(`${T}/documents/${doc.id}`, { doc: { ...doc, tray: [item("t1", "https://img.example.com/1.jpg"), item("bad", "javascript:alert(1)")] }, baseVersion: 1 });
+    expect(s1.status).toBe(200);
+    // 같은 버전(1)을 기준으로 다른 사람이 다른 항목을 넣음 → 병합
+    const s2 = await a.c.put(`${T}/documents/${doc.id}`, { doc: { ...doc, tray: [item("t2", "https://img.example.com/2.jpg")] }, baseVersion: 1 });
+    expect(s2.json.merged).toBe(true);
+    const got = await a.c.get(`/api/documents/${doc.id}`);
+    expect(got.json.tray.map((t: { id: string }) => t.id).sort()).toEqual(["t1", "t2"]);
+    // 보관함을 모르는 예전 클라이언트가 저장해도 보관함은 유지
+    const { tray: _omit, ...legacy } = got.json;
+    await a.c.put(`${T}/documents/${doc.id}`, { doc: legacy, baseVersion: got.json.version });
+    const again = await a.c.get(`/api/documents/${doc.id}`);
+    expect(again.json.tray).toHaveLength(2);
+  });
+
   it("동시 편집: 서로 다른 페이지·요소 변경이 모두 반영된다", async () => {
     const a = await signup("편집1");
     const teamId = a.personalTeam.id;

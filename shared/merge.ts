@@ -95,11 +95,15 @@ function mergePage(b: Page | undefined, m: Page, t: Page, conflicts: string[]): 
 
 export function mergeDocuments(base: DocumentData, mine: DocumentData, theirs: DocumentData): MergeResult<DocumentData> {
   const conflicts: string[] = [];
-  const { pages: bp, settings: bs, ...bRest } = base;
-  const { pages: mp, settings: ms, ...mRest } = mine;
-  const { pages: tp, settings: ts, ...tRest } = theirs;
+  const { pages: bp, settings: bs, tray: bt, ...bRest } = base;
+  const { pages: mp, settings: ms, tray: mt, ...mRest } = mine;
+  const { pages: tp, settings: ts, tray: tt, ...tRest } = theirs;
   const top = mergeKeys(bRest as Obj, mRest as Obj, tRest as Obj, "doc", conflicts);
   const settings = mergeKeys(bs as unknown as Obj, ms as unknown as Obj, ts as unknown as Obj, "settings", conflicts);
   const pages = mergeList(bp, mp, tp, mergePage, "pages", conflicts);
-  return { value: { ...(top as unknown as DocumentData), settings: settings as unknown as DocumentData["settings"], pages }, conflicts };
+  // 임시 보관함도 항목(id) 단위로 합친다 — 두 사람이 동시에 넣고 빼도 서로의 항목이 사라지지 않는다
+  const tray = mergeList(bt ?? [], mt ?? [], tt ?? [], (_b, m) => m, "tray", conflicts);
+  const value = { ...(top as unknown as DocumentData), settings: settings as unknown as DocumentData["settings"], pages };
+  if (tray.length || mt || tt) value.tray = tray;
+  return { value, conflicts };
 }

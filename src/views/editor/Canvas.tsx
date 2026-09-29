@@ -4,7 +4,8 @@ import { PageView, pageSize } from "../../components/PageView";
 import { uid } from "../../lib/id";
 import { useCurrentPage, useEditor, withPage } from "../../store/editor";
 import { effectiveArea } from "../../layout/templates";
-import { addElement, bbox, isFlowText, newText, patchElements, swapManaged } from "./actions";
+import { addElement, bbox, isFlowText, newText, patchElements } from "./actions";
+import { createImageDrag, registerCanvasProbe, useImageDrag, type DragHover, type DropZone } from "./imageDrag";
 import { snapLines, snapMove, snapValue } from "./snap";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
@@ -25,8 +26,7 @@ export function Canvas() {
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [draft, setDraft] = useState<Rect | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [ghost, setGhost] = useState<{ src: string; rect: Rect } | null>(null);
+  const drag = useImageDrag((s) => s.hover);
 
   useLayoutEffect(() => {
     const el = wrapRef.current;
@@ -39,6 +39,22 @@ export function Canvas() {
   const fit = Math.max(0.1, Math.min((box.w - 80) / W, (box.h - 80) / H));
   const scale = zoom === "fit" ? fit : zoom;
   useEffect(() => useEditor.getState().setFitScale(fit), [fit]);
+
+  // 끌어놓기 컨트롤러가 캔버스 좌표를 알 수 있게 등록 (페이지가 바뀌어도 같은 캔버스)
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    registerCanvasProbe({
+      wrap,
+      toPt: (cx, cy) => {
+        const r = pageRef.current?.getBoundingClientRect();
+        return r ? { x: (cx - r.left) / scaleRef.current, y: (cy - r.top) / scaleRef.current } : { x: -1, y: -1 };
+      },
+    });
+    return () => registerCanvasProbe(null);
+  }, []);
 
   if (!page) return <div className="canvas-wrap" ref={wrapRef} />;
   const pageIndex = doc.pages.findIndex((p) => p.id === page.id);
@@ -54,16 +70,25 @@ export function Canvas() {
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
       onUp(ev);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", up);
+    // 브라우저가 끌기를 가로채면(pointercancel) 그 자리에서 끝낸다
+    window.addEventListener("pointercancel", up);
   };
 
   // ─── element drag ─────────────────────────────────────────
   function onElementDown(e: React.PointerEvent, el: PageElement) {
     if (tool !== "select" || e.button !== 0 || !page) return;
     e.stopPropagation();
+    // 글자 선택 · 브라우저 기본 끌기(선택 영역 드래그)가 끼어들지 않게
+    e.preventDefault();
+    window.getSelection()?.removeAllRanges();
+    // 기본 동작을 막았으니 입력 칸 · 편집 중인 글에서 포커스를 직접 빼 준다 (저장 · 단축키가 캔버스로)
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body) active.blur();
     const state = useEditor.getState();
     if (e.shiftKey || e.metaKey || e.ctrlKey) {
       state.select(state.selection.includes(el.id) ? state.selection.filter((i) => i !== el.id) : [...state.selection, el.id]);
@@ -80,58 +105,69 @@ export function Canvas() {
     const orig = new Map(movers.map((m) => [m.id, { x: m.x, y: m.y }]));
     const moverBox = bbox(movers);
     const lines = snapLines(page, doc.settings, new Set(sel));
-    const swapSource = movers.length === 1 && movers[0].type === "image" && movers[0].managed && !movers[0].logo ? movers[0] : null;
-    const swapTargets = swapSource ? page.elements.filter((x): x is ImageElement => x.type === "image" && !!x.managed && !x.logo && x.id !== swapSource.id) : [];
     let moved = false;
-    let target: string | null = null;
+
+    // 같은 페이지 안에서 자유롭게 옮기기 (기존 동작)
+    const freeMove = (ev: PointerEvent) => {
+      const p = toPt(ev);
+      let dx = p.x - start.x;
+      let dy = p.y - start.y;
+      if (ev.shiftKey) {
+        if (Math.abs(dx) > Math.abs(dy)) dy = 0;
+        else dx = 0;
+      }
+      const s = ev.altKey ? { dx, dy, gx: [], gy: [] } : snapMove(moverBox, dx, dy, lines, 6 / scale);
+      setGuides({ x: s.gx, y: s.gy });
+      const patches: Record<string, Partial<PageElement>> = {};
+      for (const m of movers) patches[m.id] = { x: orig.get(m.id)!.x + s.dx, y: orig.get(m.id)!.y + s.dy };
+      useEditor.getState().patchTransient(page.id, patches);
+    };
+    const revertMove = () => {
+      setGuides({ x: [], y: [] });
+      const patches: Record<string, Partial<PageElement>> = {};
+      for (const m of movers) patches[m.id] = orig.get(m.id)!;
+      useEditor.getState().patchTransient(page.id, patches);
+    };
+    const commitMove = () => {
+      setGuides({ x: [], y: [] });
+      // 직접 옮긴 이미지는 자동 레이아웃에서, 본문 글은 글 배치에서 분리
+      useEditor.getState().update((d) =>
+        withPage(d, page.id, (pg) => {
+          for (const el of pg.elements) {
+            if (!orig.has(el.id)) continue;
+            if (el.type === "image" && (el.managed || el.logo)) {
+              el.managed = false;
+              el.logo = undefined;
+            }
+            if (pg.flow && isFlowText(el)) pg.flow.mode = "fixed";
+          }
+        }),
+      );
+    };
+
+    // 이미지만 골랐으면 다른 페이지 · 보관함으로도 옮길 수 있다
+    const images = movers.filter((m): m is ImageElement => m.type === "image" && !!m.src);
+    const imageDrag =
+      images.length === movers.length
+        ? createImageDrag({ kind: "page", pageId: page.id, ids: images.map((m) => m.id) }, { src: images[0].src, count: images.length }, { move: freeMove, revert: revertMove, commit: commitMove })
+        : null;
 
     listen(
       (ev) => {
         const p = toPt(ev);
-        let dx = p.x - start.x;
-        let dy = p.y - start.y;
-        if (!moved && Math.hypot(dx, dy) * scale < 3) return;
+        if (!moved && Math.hypot(p.x - start.x, p.y - start.y) * scale < 3) return;
         if (!moved) useEditor.getState().begin();
         moved = true;
-        if (ev.shiftKey) {
-          if (Math.abs(dx) > Math.abs(dy)) dy = 0;
-          else dx = 0;
-        }
-        const s = ev.altKey ? { dx, dy, gx: [], gy: [] } : snapMove(moverBox, dx, dy, lines, 6 / scale);
-        setGuides({ x: s.gx, y: s.gy });
-        const patches: Record<string, Partial<PageElement>> = {};
-        for (const m of movers) patches[m.id] = { x: orig.get(m.id)!.x + s.dx, y: orig.get(m.id)!.y + s.dy };
-        useEditor.getState().patchTransient(page.id, patches);
-        if (swapSource) {
-          target = swapTargets.find((t) => p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h)?.id ?? null;
-          setDropTarget(target);
-          setGhost({ src: swapSource.src, rect: { ...swapSource, x: orig.get(swapSource.id)!.x + s.dx, y: orig.get(swapSource.id)!.y + s.dy } });
-        }
+        if (imageDrag) imageDrag.move(ev);
+        else freeMove(ev);
       },
-      () => {
-        setGuides({ x: [], y: [] });
-        setDropTarget(null);
-        setGhost(null);
-        if (!moved) return;
+      (ev) => {
         const ed = useEditor.getState();
-        if (swapSource && target) {
-          ed.patchTransient(page.id, { [swapSource.id]: orig.get(swapSource.id)! });
-          swapManaged(page.id, swapSource.id, target);
-        } else {
-          // 직접 옮긴 이미지는 자동 레이아웃에서, 본문 글은 글 배치에서 분리
-          ed.update((d) =>
-            withPage(d, page.id, (pg) => {
-              for (const el of pg.elements) {
-                if (!orig.has(el.id)) continue;
-                if (el.type === "image" && (el.managed || el.logo)) {
-                  el.managed = false;
-                  el.logo = undefined;
-                }
-                if (pg.flow && isFlowText(el)) pg.flow.mode = "fixed";
-              }
-            }),
-          );
-        }
+        if (!moved) return;
+        if (imageDrag) {
+          if (ev.type === "pointercancel") imageDrag.cancel();
+          else imageDrag.drop(ev);
+        } else commitMove();
         ed.end();
       },
     );
@@ -274,7 +310,7 @@ export function Canvas() {
   const managedCount = page.elements.filter((e) => e.type === "image" && (e.managed || e.logo)).length;
 
   return (
-    <div className={"canvas-wrap tool-" + tool} ref={wrapRef} onPointerDown={onBackgroundDown}>
+    <div className={"canvas-wrap tool-" + tool} ref={wrapRef} onPointerDown={onBackgroundDown} onDragStart={(e) => e.preventDefault()}>
       <div className="canvas-stage" style={{ width: px(W), height: px(H) }}>
         <div ref={pageRef} className="canvas-page" style={{ width: px(W) }}>
           <PageView
@@ -308,7 +344,7 @@ export function Canvas() {
               className={
                 "hit" +
                 (selection.includes(el.id) ? " selected" : "") +
-                (dropTarget === el.id ? " drop-target" : "") +
+                (drag?.kind === "image" && drag.elId === el.id && drag.pageId === page.id ? " drop-target" : "") +
                 (el.locked ? " locked" : "") +
                 (el.type === "image" && el.managed ? " managed" : "")
               }
@@ -339,16 +375,37 @@ export function Canvas() {
           {guides.y.map((y, i) => (
             <div key={"gy" + i} className="guide guide-h" style={{ top: px(y) }} />
           ))}
-          {ghost && (
-            <div className="drag-ghost" style={rectPx(ghost.rect)}>
-              <img src={ghost.src} alt="" referrerPolicy="no-referrer" />
-              {dropTarget && <span>놓으면 자리 바꾸기</span>}
-            </div>
+          {drag?.kind === "image" && drag.pageId === page.id && <DropZones hover={drag} el={page.elements.find((x) => x.id === drag.elId)} rectPx={rectPx} />}
+          {drag?.kind === "empty" && drag.pageId === page.id && (
+            <>
+              <div className="area-outline drop-area" style={rectPx(effectiveArea(page))} />
+              <div className="drop-point" style={{ left: px(drag.point.x), top: px(drag.point.y) }}>
+                여기에 추가
+              </div>
+            </>
           )}
           {marquee && <div className="marquee" style={rectPx(marquee)} />}
           {draft && <div className="marquee draft" style={rectPx(draft)} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+const ZONE_LABEL: Record<DropZone, string> = { replace: "교체", swap: "서로 바꾸기" };
+
+/** 이미지 위에 놓을 때 — 두 영역(교체 / 서로 바꾸기)으로 나눠 보여준다 */
+function DropZones({ hover, el, rectPx }: { hover: Extract<DragHover, { kind: "image" }>; el?: PageElement; rectPx: (r: Rect) => CSSProperties }) {
+  if (!el) return null;
+  const empty = el.type === "image" && !el.src;
+  return (
+    <div className={"drop-zones split-" + hover.split} style={rectPx(el)}>
+      {hover.zones.map((z) => (
+        <div key={z} className={"drop-zone" + (hover.zone === z ? " on" : "")}>
+          <span>{empty ? "여기에 넣기" : ZONE_LABEL[z]}</span>
+          <small>{z === "replace" ? (empty ? "빈 자리를 채워요" : "원래 이미지는 보관함으로") : "두 이미지 자리 교환"}</small>
+        </div>
+      ))}
     </div>
   );
 }

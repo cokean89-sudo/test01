@@ -34,6 +34,7 @@ import {
   tocEntries,
 } from "../../layout/templates";
 import { setThemeAccent, themeOf } from "../../layout/themes";
+import { moveImagesToPage, pasteElements, removeFromTray, replaceImage as replaceImageDoc, sendToTray, swapImages, type ImageSource } from "../../layout/imageMoves";
 import { dummyText, isDummyText } from "../../lib/dummy";
 import { uid } from "../../lib/id";
 import { parseQuery } from "../../lib/search";
@@ -124,14 +125,19 @@ export function newText(rect: Rect, role: TextRole = "free", text = dummyText(ro
   return { id: uid("t"), type: "text", role, text, ...rect };
 }
 
+/** 선택 삭제 — 이미지는 버리지 않고 임시 보관함으로, 자동 레이아웃은 다시 맞춘다 */
 export function deleteSelection() {
-  const { pageId, selection } = st();
-  if (!pageId || !selection.length) return;
-  st().update((d) =>
-    withPage(d, pageId, (page) => {
-      page.elements = page.elements.filter((e) => !selection.includes(e.id) && !(e.type === "text" && e.labelFor && selection.includes(e.labelFor)));
-    }),
-  );
+  const { pageId, selection, doc } = st();
+  if (!pageId || !selection.length || !doc) return;
+  st().update((d) => {
+    const page = getPage(d, pageId);
+    if (!page) return;
+    const imgs = page.elements.filter((e): e is ImageElement => selection.includes(e.id) && e.type === "image");
+    sendToTray(d, pageId, imgs.map((e) => e.id), d.settings);
+    withPage(d, pageId, (pg) => {
+      pg.elements = pg.elements.filter((e) => !selection.includes(e.id) && !(e.type === "text" && e.labelFor && selection.includes(e.labelFor)));
+    });
+  });
   st().select([]);
 }
 
@@ -159,17 +165,88 @@ export function duplicateSelection() {
   st().select(copies.map((c) => c.id));
 }
 
-export function copySelection() {
-  const els = selectedElements();
-  if (els.length) st().setClipboard(structuredClone(els));
+/** 선택 요소 + 로고 라벨 (라벨은 로고와 함께 다닌다) */
+function selectionWithLabels(): PageElement[] {
+  const { doc, pageId, selection } = st();
+  const page = getPage(doc, pageId);
+  if (!page) return [];
+  return page.elements.filter((e) => selection.includes(e.id) || (e.type === "text" && !!e.labelFor && selection.includes(e.labelFor)));
 }
 
-export function paste() {
+export function copySelection(): boolean {
+  const { pageId } = st();
+  const els = selectionWithLabels().filter((e) => !e.deco);
+  if (!els.length || !pageId) return false;
+  st().setClipboard({ pageId, cut: false, elements: structuredClone(els) });
+  return true;
+}
+
+/** 잘라내기 — 클립보드에 담고 페이지에서 뺀다 (보관함에는 넣지 않는다) */
+export function cutSelection(): boolean {
+  const { pageId, selection } = st();
+  const els = selectionWithLabels().filter((e) => !e.deco && !e.locked);
+  if (!els.length || !pageId) return false;
+  st().setClipboard({ pageId, cut: true, elements: structuredClone(els) });
+  const ids = new Set(els.map((e) => e.id));
+  st().update((d) =>
+    withPage(d, pageId, (page) => {
+      const hadLayout = page.elements.some((e) => ids.has(e.id) && e.type === "image" && (e.managed || e.logo));
+      page.elements = page.elements.filter((e) => !ids.has(e.id));
+      return hadLayout ? relayoutPage(page) : page;
+    }),
+  );
+  st().select(selection.filter((id) => !ids.has(id)));
+  return true;
+}
+
+/** 붙여넣기 — 페이지 · 문서를 넘나든다. 잘라낸 것은 한 번 붙이면 이후엔 복사본처럼 동작 */
+export function paste(): boolean {
   const { clipboard, pageId } = st();
-  if (!clipboard.length || !pageId) return;
-  const copies = cloneForPaste(clipboard, 10);
-  st().update((d) => withPage(d, pageId, (page) => void page.elements.push(...copies)));
-  st().select(copies.map((c) => c.id));
+  if (!clipboard?.elements.length || !pageId) return false;
+  let placed: string[] = [];
+  st().update((d) => {
+    placed = pasteElements(d, clipboard, pageId, d.settings);
+  });
+  if (clipboard.cut) st().setClipboard({ ...clipboard, cut: false, pageId });
+  st().select(placed);
+  return true;
+}
+
+// ─── 페이지 간 이동 · 임시 보관함 ──────────────────────────────────
+
+/** 다른 페이지(또는 보관함)의 이미지를 이 페이지 자동 레이아웃으로 */
+export function moveImages(src: ImageSource, toPageId: string, point?: { x: number; y: number }) {
+  let placed: string[] = [];
+  st().update((d) => {
+    placed = moveImagesToPage(d, src, toPageId, d.settings, point);
+  });
+  if (st().pageId === toPageId) st().select(placed);
+}
+
+export function replaceWith(src: ImageSource, target: { pageId: string; elId: string }) {
+  let id: string | null = null;
+  st().update((d) => {
+    id = replaceImageDoc(d, src, target, d.settings);
+  });
+  if (id && st().pageId === target.pageId) st().select([id]);
+}
+
+export function swapWith(a: { pageId: string; elId: string }, b: { pageId: string; elId: string }) {
+  st().update((d) => void swapImages(d, a, b, d.settings));
+  if (st().pageId === b.pageId) st().select([b.elId]);
+}
+
+export function moveToTray(pageId: string, ids: string[]) {
+  st().update((d) => sendToTray(d, pageId, ids, d.settings));
+  st().select([]);
+}
+
+export function trayRemove(ids: string[]) {
+  st().update((d) => void removeFromTray(d, ids));
+}
+
+export function trayClear() {
+  st().update((d) => void (d.tray = []));
 }
 
 export function nudge(dx: number, dy: number) {

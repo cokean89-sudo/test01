@@ -8,7 +8,7 @@ import { useSession } from "../../store/session";
 import { toast } from "../../store/toast";
 import { PENDING_AI_KEY } from "../BuildDialog";
 import { isDummyText } from "../../lib/dummy";
-import { AI_FIELDS, analyzeRequestFor, applyAnalysis, contentImages, copySelection, deleteSelection, duplicateSelection, nudge, paste, reorder, type AiField } from "./actions";
+import { AI_FIELDS, analyzeRequestFor, applyAnalysis, contentImages, copySelection, cutSelection, deleteSelection, duplicateSelection, nudge, paste, reorder, type AiField } from "./actions";
 import { AiDialog } from "./AiDialog";
 import { HistoryDialog } from "./HistoryDialog";
 import { Canvas } from "./Canvas";
@@ -16,6 +16,7 @@ import { ImagePicker } from "./ImagePicker";
 import { Inspector } from "./Inspector";
 import { PageList } from "./PageList";
 import { Toolbar } from "./Toolbar";
+import { DragLayer, TrayShelf } from "./TrayShelf";
 
 export function EditorView({ id }: { id: string }) {
   const doc = useEditor((s) => s.doc);
@@ -152,12 +153,11 @@ export function EditorView({ id }: { id: string }) {
         e.preventDefault();
         duplicateSelection();
       } else if (mod && k === "c") {
-        copySelection();
+        if (copySelection()) e.preventDefault();
+      } else if (mod && k === "x") {
+        if (cutSelection()) e.preventDefault();
       } else if (mod && k === "v") {
-        if (ed.clipboard.length) {
-          e.preventDefault();
-          paste();
-        }
+        if (paste()) e.preventDefault();
       } else if (mod && k === "a") {
         e.preventDefault();
         const page = ed.doc?.pages.find((p) => p.id === ed.pageId);
@@ -214,9 +214,13 @@ export function EditorView({ id }: { id: string }) {
       <Toolbar onAiPage={aiPage} onAiAll={runAiAll} aiBusy={aiBusy} />
       <div className="editor-body">
         <PageList />
-        <Canvas />
+        <div className="editor-center">
+          <Canvas />
+          <TrayShelf />
+        </div>
         <Inspector onAiPage={aiPage} />
       </div>
+      <DragLayer />
       {modal?.type === "picker" && <ImagePicker mode={modal.mode} targetId={modal.targetId} />}
       {modal?.type === "ai" && <AiDialog pageId={modal.pageIds[0]} />}
       {modal?.type === "history" && <HistoryDialog />}

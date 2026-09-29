@@ -4,6 +4,7 @@ import { PageView } from "../../components/PageView";
 import { Button, Menu, MenuItem } from "../../components/ui";
 import { useEditor } from "../../store/editor";
 import { addPage, deletePage, duplicatePage, movePage } from "./actions";
+import { HOVER_SWITCH_MS, useImageDrag } from "./imageDrag";
 
 const Thumb = memo(function Thumb({ page, settings, index, total, title }: { page: Page; settings: DocSettings; index: number; total: number; title: string }) {
   return <PageView page={page} settings={settings} index={index} total={total} mode="thumb" docTitle={title} />;
@@ -26,6 +27,8 @@ export function PageList() {
   const setPage = useEditor((s) => s.setPage);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  // 캔버스 · 보관함에서 이미지를 끌어 썸네일 위에 올렸을 때
+  const imgHover = useImageDrag((s) => (s.hover?.kind === "thumb" ? s.hover : null));
 
   return (
     <aside className="page-list">
@@ -69,7 +72,13 @@ export function PageList() {
         {doc.pages.map((p, i) => (
           <div
             key={p.id}
-            className={"page-item" + (p.id === pageId ? " on" : "") + (overIdx === i && dragId && dragId !== p.id ? " drop" : "")}
+            className={
+              "page-item" +
+              (p.id === pageId ? " on" : "") +
+              (overIdx === i && dragId && dragId !== p.id ? " drop" : "") +
+              (imgHover?.pageId === p.id ? " img-drop" + (imgHover.switching ? " switching" : "") : "")
+            }
+            data-page-drop={p.id}
             draggable
             onDragStart={(e) => {
               setDragId(p.id);
@@ -95,6 +104,12 @@ export function PageList() {
             <span className="page-num">{i + 1}</span>
             <div className="page-thumb">
               <Thumb page={p} settings={doc.settings} index={i} total={doc.pages.length} title={doc.title} />
+              {imgHover?.pageId === p.id && (
+                <span className="thumb-drop-hint">
+                  놓으면 이 페이지로
+                  {imgHover.switching && <i className="switch-progress" style={{ animationDuration: `${HOVER_SWITCH_MS}ms` }} />}
+                </span>
+              )}
             </div>
             <div className="page-item-meta">
               <span className="ellipsis">{p.group || KIND_LABEL[p.kind]}</span>

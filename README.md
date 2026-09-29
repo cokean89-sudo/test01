@@ -374,11 +374,16 @@ src/
   layout/autobuild.ts    키워드 → 검색 → 그룹핑 → 페이지 생성
   lib/search.ts          검색 문법·점수·정렬
   lib/changelog.ts       CHANGELOG.md 읽기 · 앱 버전 · 안 본 소식 계산 (업데이트 소식)
+  tokens.css             디자인 토큰 (CSS 변수) — 색 · 글꼴 · 크기 · 간격 · 모서리 · 그림자. 위쪽은 tokens.json 에서 생성
+  styles.css             화면 스타일 (값 대신 토큰만)
   store/                 세션·라이브러리·편집기(자동 저장·병합) 상태
   components/PageView    공용 페이지 렌더러 (편집기·썸네일·뷰어·인쇄·HTML)
   views/                 로그인·팀·라이브러리·케이스·문서·편집기·뷰어·인쇄·가이드(TIP) 화면
   export/                PPTX / HTML 내보내기
 scripts/backup.ts        데이터베이스 백업
+scripts/tokens.ts        tokens.json → src/tokens.css 생성 (npm run tokens)
+tokens.json              디자인 토큰 원본 (Figma Variables 로 가져오는 형식) — docs/design-tokens.md
+CHANGELOG.md, CLAUDE.md  업데이트 기록 · 작업 규칙
 public/guide/            사용 가이드 샘플 사례 일러스트 (SVG — 브랜드·경쟁사·상품·공간)
 tests/                   단위·서버 통합 테스트 (vitest)
 render.yaml, DEPLOY.md, .node-version       Render 배포 (Blueprint)

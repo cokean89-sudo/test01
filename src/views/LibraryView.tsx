@@ -406,7 +406,7 @@ function RefCard({
     <figure className={"ref-card" + (selected ? " selected" : "")}>
       <div
         className="ref-thumb"
-        style={{ aspectRatio: ratio ? `${1} / ${ratio}` : undefined, background: ref.kind === "logo" ? "#fff" : undefined }}
+        style={{ aspectRatio: ratio ? `${1} / ${ratio}` : undefined, background: ref.kind === "logo" ? "var(--color-white)" : undefined }}
         onClick={(e) => (e.metaKey || e.ctrlKey || e.shiftKey ? onToggle(e.shiftKey) : onOpen())}
       >
         <SmartImage src={ref.imageUrl} fit={ref.kind === "logo" ? "contain" : "cover"} onNatural={onNatural} />

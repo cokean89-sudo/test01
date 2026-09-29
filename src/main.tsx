@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { PAGE_CSS } from "./components/PageView";
+import "./tokens.css";
 import "./styles.css";
 
 const style = document.createElement("style");

@@ -53,7 +53,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
         <Button icon="x" variant="ghost" onClick={onClose} aria-label="닫기" />
       </div>
       <div className="drawer-body">
-        <div className="drawer-preview" style={{ background: ref.kind === "logo" ? "#fff" : undefined }}>
+        <div className="drawer-preview" style={{ background: ref.kind === "logo" ? "var(--color-white)" : undefined }}>
           <SmartImage src={ref.imageUrl} fit="contain" loading="eager" />
         </div>
         <div className="row small muted">

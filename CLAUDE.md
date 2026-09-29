@@ -28,4 +28,5 @@ React 19 + Vite (`src/`) · Express + node:sqlite (`server/`) · 공용 타입�
 - 비밀 값(ANTHROPIC_API_KEY, SMTP_PASS 등)은 코드나 render.yaml에 적지 않는다 (`sync: false`).
 - 비밀번호는 브라우저에 저장하지 않는다. '아이디 기억하기'는 메일 주소만 저장한다.
 - 변경 요청은 CSRF 헤더(`x-refboard`)를 거치고, 이미지 주소는 http(s)만 받는다.
-- 화면 문구는 쉬운 해요체, 색 · 크기 · 간격은 디자인 토큰(CSS 변수)으로 쓴다.
+- 화면 문구는 쉬운 해요체.
+- 색 · 글꼴 · 크기 · 간격 · 모서리 · 그림자는 `src/styles.css`에 값을 직접 쓰지 않고 `src/tokens.css`의 토큰(`var(--…)`)만 쓴다. 새 토큰은 `tokens.json`(원본)에 추가하고 `npm run tokens`로 CSS를 다시 만든다 — 그림자 · z-index는 tokens.css 아래쪽에 직접. 자세한 규칙은 docs/design-tokens.md.

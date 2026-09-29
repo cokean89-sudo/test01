@@ -1,5 +1,7 @@
 import { useState, type ReactElement, type ReactNode } from "react";
 import {
+  AI_PERSPECTIVES,
+  AI_TONES,
   LAYOUT_MODES,
   PAGE_SIZES,
   ROLE_RANK,
@@ -8,6 +10,8 @@ import {
   type DocSettings,
   type ImageElement,
   type PageElement,
+  type AiPerspective,
+  type AiTone,
   type AlignPos,
   type Page,
   type PageLayout,
@@ -340,7 +344,7 @@ function PagePanel({ onAiPage }: { onAiPage: () => void }) {
         </Field>
         <Toggle checked={!page.hideFooter} onChange={(v) => updatePage(page.id, (p) => void (p.hideFooter = !v))} label="하단 태그라인·페이지 번호 표시" />
         <Button icon="sparkle" variant="accent" onClick={onAiPage}>
-          AI 로 이 페이지 분석 · 타이틀 작성
+          AI 글쓰기 — 타이틀·설명·캡션
         </Button>
       </Section>
 
@@ -728,7 +732,17 @@ function DocPanel() {
         )}
       </Section>
 
-      <Section title="AI">
+      <Section title="AI 글쓰기">
+        <Field label="관점" hint={AI_PERSPECTIVES.find((p) => p.key === (s.aiPerspective ?? "design"))?.hint}>
+          <Segmented<AiPerspective>
+            value={s.aiPerspective ?? "design"}
+            onChange={(v) => set((x) => void (x.aiPerspective = v))}
+            options={AI_PERSPECTIVES.map((p) => ({ value: p.key, label: p.label.replace(" 관점", ""), title: p.hint }))}
+          />
+        </Field>
+        <Field label="문체" hint={AI_TONES.find((t) => t.key === (s.aiTone ?? "report"))?.hint}>
+          <Segmented<AiTone> value={s.aiTone ?? "report"} onChange={(v) => set((x) => void (x.aiTone = v))} options={AI_TONES.map((t) => ({ value: t.key, label: t.label }))} />
+        </Field>
         <Field label="작성 언어">
           <Segmented
             value={s.aiLanguage}

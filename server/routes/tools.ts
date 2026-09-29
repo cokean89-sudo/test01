@@ -44,6 +44,9 @@ export function toolsRouter(): Router {
   const AnalyzeInput = z.object({
     kind: z.enum(["case", "reference", "cover", "section", "blank"]),
     language: z.enum(["ko", "en"]).default("ko"),
+    perspective: z.enum(["design", "planning", "fact"]).default("design"),
+    tone: z.enum(["report", "sentence"]).default("report"),
+    fields: z.array(z.enum(["title", "subtitle", "highlight", "description", "sectionLabel", "captions"])).max(6).optional(),
     group: z.string().max(300).optional(),
     keywords: z.array(z.string().max(100)).max(30).optional(),
     caseInfo: z.record(z.string(), z.string().max(5000).optional()).optional(),

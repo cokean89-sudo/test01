@@ -144,6 +144,8 @@ export function defaultSettings(): DocSettings {
     pageNumberStart: 1,
     typography: structuredClone(REPORT_TYPOGRAPHY),
     aiLanguage: "ko",
+    aiPerspective: "design",
+    aiTone: "report",
   };
 }
 

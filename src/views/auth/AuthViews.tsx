@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ROLE_LABEL } from "../../../shared/types";
 import { ApiError, authApi, teamApi } from "../../api";
+import { Icon } from "../../components/icons";
 import { Button, Field, Spinner } from "../../components/ui";
 import { navigate } from "../../lib/router";
 import { useSession } from "../../store/session";
@@ -75,9 +76,33 @@ function PasswordHints({ password, email }: { password: string; email: string })
   );
 }
 
-function SocialButtons() {
+/** 카카오 말풍선 심볼 — 카카오 로그인 디자인 가이드의 형태·색(#000000) */
+function KakaoSymbol() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="#000000"
+        d="M12 3.2C6.48 3.2 2 6.72 2 11.06c0 2.8 1.87 5.26 4.68 6.65-.15.53-.99 3.4-1.02 3.63 0 0-.02.17.09.24.11.06.24.01.24.01.31-.04 3.64-2.38 4.21-2.78.58.08 1.18.13 1.8.13 5.52 0 10-3.52 10-7.88S17.52 3.2 12 3.2z"
+      />
+    </svg>
+  );
+}
+
+/** 네이버 N 로고 — 네이버 로그인 BI 가이드의 흰색 N */
+function NaverSymbol() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+      <path fill="#ffffff" d="M16.27 12.84 7.44 0H0v24h7.73V11.16L16.56 24H24V0h-7.73z" />
+    </svg>
+  );
+}
+
+/** 공식 버튼 디자인 가이드 기준의 카카오·네이버 로그인 버튼. remember: 로그인 상태 유지 선택을 함께 넘긴다 */
+function SocialButtons({ remember = false }: { remember?: boolean }) {
   const providers = useSession((s) => s.providers);
   if (!providers?.kakao && !providers?.naver) return null;
+  const q = remember ? "?remember=1" : "";
+  const brand = providers.brand ?? {};
   return (
     <>
       <div className="auth-divider">
@@ -85,19 +110,15 @@ function SocialButtons() {
       </div>
       <div className="social">
         {providers.kakao && (
-          <a className="social-btn kakao" href="/api/auth/oauth/kakao/start">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.6c-.1.3.3.6.6.4l4.2-2.8c.5.1 1 .1 1.5.1 5.5 0 10-3.6 10-8S17.5 3 12 3z" />
-            </svg>
-            카카오로 로그인
+          <a className="social-btn kakao" href={"/api/auth/oauth/kakao/start" + q}>
+            <span className="social-symbol">{brand.kakao ? <img src={brand.kakao} alt="" /> : <KakaoSymbol />}</span>
+            <span className="social-label">카카오 로그인</span>
           </a>
         )}
         {providers.naver && (
-          <a className="social-btn naver" href="/api/auth/oauth/naver/start">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-              <path fill="currentColor" d="M16.3 12.7 7.4 0H0v24h7.7V11.3L16.6 24H24V0h-7.7z" />
-            </svg>
-            네이버로 로그인
+          <a className="social-btn naver" href={"/api/auth/oauth/naver/start" + q}>
+            <span className="social-symbol">{brand.naver ? <img src={brand.naver} alt="" /> : <NaverSymbol />}</span>
+            <span className="social-label">네이버 로그인</span>
           </a>
         )}
       </div>
@@ -105,10 +126,70 @@ function SocialButtons() {
   );
 }
 
+/** 비밀번호 입력 — 보기/숨기기 토글, Caps Lock 경고 */
+function PasswordInput({ value, onChange, autoComplete, autoFocus }: { value: string; onChange: (v: string) => void; autoComplete: string; autoFocus?: boolean }) {
+  const [show, setShow] = useState(false);
+  const [caps, setCaps] = useState(false);
+  const detect = (e: React.KeyboardEvent<HTMLInputElement>) => setCaps(e.getModifierState?.("CapsLock") ?? false);
+  return (
+    <>
+      <span className="pw-field">
+        <input
+          type={show ? "text" : "password"}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={detect}
+          onKeyUp={detect}
+          onBlur={() => setCaps(false)}
+          required
+          autoFocus={autoFocus}
+          spellCheck={false}
+        />
+        <button type="button" className="pw-toggle" onClick={() => setShow((v) => !v)} aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"} title={show ? "숨기기" : "보기"}>
+          <Icon name={show ? "eyeOff" : "eye"} size={18} />
+        </button>
+      </span>
+      {caps && <span className="caps-warn">Caps Lock 이 켜져 있어요</span>}
+    </>
+  );
+}
+
+const SAVED_EMAIL = "rb.savedEmail";
+
+function readSavedEmail(): string {
+  try {
+    return localStorage.getItem(SAVED_EMAIL) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** 로그인 오류를 이해하기 쉬운 말로 */
+export function loginErrorMessage(err: unknown): string {
+  if (!(err instanceof ApiError)) return "서버에 연결할 수 없어요. 인터넷 연결을 확인하고 다시 시도해 주세요.";
+  switch (err.code) {
+    case "invalid_credentials":
+      return "메일 주소 또는 비밀번호가 맞지 않아요. 다시 확인해 주세요.";
+    case "unverified":
+      return "메일 인증을 아직 마치지 않았어요. 가입할 때 받은 메일의 버튼을 눌러 주세요.";
+    case "invalid_input":
+      return "메일 주소 형식을 확인해 주세요.";
+    case "locked":
+    case "rate_limited":
+      return err.message;
+  }
+  if (err.status >= 500) return "잠시 문제가 생겼어요. 조금 뒤 다시 시도해 주세요.";
+  return err.message;
+}
+
 export function LoginView() {
   const apply = useSession((s) => s.apply);
-  const [email, setEmail] = useState("");
+  const saved = readSavedEmail();
+  const [email, setEmail] = useState(saved);
   const [password, setPassword] = useState("");
+  const [rememberEmail, setRememberEmail] = useState(!!saved);
+  const [keep, setKeep] = useState(false);
   const [error, setError] = useState<string | null>(queryParam("error"));
   const [busy, setBusy] = useState(false);
   const [unverified, setUnverified] = useState(false);
@@ -119,10 +200,18 @@ export function LoginView() {
     setError(null);
     setUnverified(false);
     try {
-      apply(await authApi.login(email, password));
+      const info = await authApi.login(email, password, keep);
+      // 아이디 기억하기: 메일 주소만 저장 (비밀번호는 저장하지 않음)
+      try {
+        if (rememberEmail) localStorage.setItem(SAVED_EMAIL, email.trim());
+        else localStorage.removeItem(SAVED_EMAIL);
+      } catch {
+        /* 저장소를 쓸 수 없는 브라우저 */
+      }
+      apply(info);
       goAfterLogin();
     } catch (err) {
-      setError((err as Error).message);
+      setError(loginErrorMessage(err));
       setUnverified(err instanceof ApiError && err.code === "unverified");
     } finally {
       setBusy(false);
@@ -148,11 +237,36 @@ export function LoginView() {
       {queryParam("verified") && <div className="notice">메일 인증이 완료됐어요. 로그인하세요.</div>}
       <form onSubmit={submit} className="auth-form">
         <Field label="메일 주소">
-          <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+          <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus={!saved} />
         </Field>
         <Field label="비밀번호">
-          <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <PasswordInput value={password} onChange={setPassword} autoComplete="current-password" autoFocus={!!saved} />
         </Field>
+        <div className="login-options">
+          <label className="check">
+            <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
+            <span>로그인 상태 유지</span>
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={rememberEmail}
+              onChange={(e) => {
+                setRememberEmail(e.target.checked);
+                // 해제하면 저장된 메일 주소를 바로 지운다
+                if (!e.target.checked) {
+                  try {
+                    localStorage.removeItem(SAVED_EMAIL);
+                  } catch {
+                    /* 무시 */
+                  }
+                }
+              }}
+            />
+            <span>아이디 기억하기</span>
+          </label>
+        </div>
+        <p className={"public-pc" + (keep ? " warn" : "")}>공용 PC에서는 &lsquo;로그인 상태 유지&rsquo;를 꺼 주세요.</p>
         <ErrorBox error={error} />
         {unverified && <ResendVerification email={email} />}
         <Button type="submit" variant="primary" disabled={busy}>
@@ -162,7 +276,7 @@ export function LoginView() {
           비밀번호를 잊으셨나요?
         </a>
       </form>
-      <SocialButtons />
+      <SocialButtons remember={keep} />
     </AuthCard>
   );
 }
@@ -276,11 +390,11 @@ export function SignupView() {
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
         </Field>
         <Field label="비밀번호">
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required />
+          <PasswordInput value={password} onChange={setPassword} autoComplete="new-password" />
         </Field>
         <PasswordHints password={password} email={email} />
         <Field label="비밀번호 확인">
-          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
+          <PasswordInput value={confirm} onChange={setConfirm} autoComplete="new-password" />
         </Field>
         <ErrorBox error={error} />
         <Button type="submit" variant="primary" disabled={busy}>
@@ -375,11 +489,11 @@ export function ResetView({ token }: { token: string }) {
         }}
       >
         <Field label="새 비밀번호">
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required autoFocus />
+          <PasswordInput value={password} onChange={setPassword} autoComplete="new-password" autoFocus />
         </Field>
         <PasswordHints password={password} email="" />
         <Field label="새 비밀번호 확인">
-          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
+          <PasswordInput value={confirm} onChange={setConfirm} autoComplete="new-password" />
         </Field>
         <ErrorBox error={error} />
         <Button type="submit" variant="primary">
@@ -528,11 +642,11 @@ export function AccountView() {
         >
           {user.hasPassword && (
             <Field label="현재 비밀번호">
-              <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required />
+              <PasswordInput value={current} onChange={setCurrent} autoComplete="current-password" />
             </Field>
           )}
           <Field label="새 비밀번호">
-            <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" required />
+            <PasswordInput value={next} onChange={setNext} autoComplete="new-password" />
           </Field>
           <PasswordHints password={next} email={user.email ?? ""} />
           <ErrorBox error={error} />
@@ -548,6 +662,9 @@ export function AccountView() {
                 <span className="badge badge-ok">카카오 연결됨</span>
               ) : (
                 <a className="social-btn kakao small" href="/api/auth/oauth/kakao/start?mode=link">
+                  <span className="social-symbol">
+                    <KakaoSymbol />
+                  </span>
                   카카오 연결
                 </a>
               ))}
@@ -556,6 +673,9 @@ export function AccountView() {
                 <span className="badge badge-ok">네이버 연결됨</span>
               ) : (
                 <a className="social-btn naver small" href="/api/auth/oauth/naver/start?mode=link">
+                  <span className="social-symbol">
+                    <NaverSymbol />
+                  </span>
                   네이버 연결
                 </a>
               ))}

@@ -66,6 +66,8 @@ const paths: Record<string, string> = {
   sidebar: "M4 4h16v16H4zM9 4v16",
   heading: "M4 4h16v6H4zM4 14h16M4 18h10",
   pin: "M12 21s-6-5.3-6-11a6 6 0 0 1 12 0c0 5.7-6 11-6 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  eyeOff: "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2",
+  message: "M4 5h16v11H9l-5 4z",
 };
 
 export type IconName = keyof typeof paths;

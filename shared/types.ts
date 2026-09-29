@@ -253,7 +253,28 @@ export interface DocSettings {
   pageNumberStart: number;
   typography: Record<TextRole, TextStyle>;
   aiLanguage: "ko" | "en";
+  /** AI 글쓰기 관점 — 문서마다 저장되어 다음에도 기본값으로 쓰인다 */
+  aiPerspective?: AiPerspective;
+  /** AI 문체 — report: 보고체(명사형 종결, 기본) · sentence: 서술체 */
+  aiTone?: AiTone;
 }
+
+export type AiPerspective = "design" | "planning" | "fact";
+export type AiTone = "report" | "sentence";
+
+export const AI_PERSPECTIVES: { key: AiPerspective; label: string; hint: string }[] = [
+  { key: "design", label: "디자인 관점", hint: "형태·컬러·소재·타이포·공간 연출과 시각적 의도 중심" },
+  { key: "planning", label: "기획 관점", hint: "목적·타깃·전략·경험 설계·기대 효과 중심" },
+  { key: "fact", label: "팩트 나열", hint: "확인 가능한 정보만, 해석·평가 없이" },
+];
+
+export const AI_TONES: { key: AiTone; label: string; hint: string }[] = [
+  { key: "report", label: "보고체", hint: "명사형 종결 — ~구성. ~강조. ~전달." },
+  { key: "sentence", label: "서술체", hint: "평서문 — ~한다. ~이다." },
+];
+
+/** AI 로 쓰는 텍스트 항목 */
+export type AiTextField = "title" | "subtitle" | "highlight" | "description" | "sectionLabel" | "captions";
 
 export interface DocumentData {
   id: string;
@@ -310,6 +331,10 @@ export interface AnalyzeImage {
 export interface AnalyzeRequest {
   kind: PageKind;
   language: "ko" | "en";
+  perspective?: AiPerspective;
+  tone?: AiTone;
+  /** 지정하면 이 항목만 다시 쓴다 (항목별 다시 생성) */
+  fields?: AiTextField[];
   group?: string;
   keywords?: string[];
   caseInfo?: { name?: string; subtitle?: string; highlight?: string; description?: string };
@@ -326,6 +351,8 @@ export interface AnalyzeResult {
   sectionLabel: string;
   captions: string[];
   tags: string[];
+  /** 항목별 다시 쓰기였다면 새로 쓴 항목 */
+  fields?: AiTextField[];
   /** ai: Claude 응답, heuristic: API 키가 없을 때의 규칙 기반 결과 */
   engine: "ai" | "heuristic";
   model?: string;
@@ -343,15 +370,23 @@ export interface TagSuggestRequest {
 }
 
 export interface TagSuggestResult {
+  /** 축별 제안 (분야·대상·요소·소재·기법·컬러·무드) — 바로 저장하지 않고 사용자가 채택한다 */
+  axes: Record<"field" | "subject" | "element" | "material" | "color" | "mood", string[]>;
+  /** 축별 제안을 한 줄로 */
   tags: string[];
   title?: string;
-  engine: "ai" | "heuristic";
+  /** off: AI 가 연결되지 않아 제안하지 않음 */
+  engine: "ai" | "off";
+  model?: string;
   notice?: string;
 }
 
 export interface AppStatus {
   ai: boolean;
+  /** 글쓰기 모델 */
   model: string;
+  /** 태그 제안 모델 */
+  tagModel?: string;
   aiReason?: string;
 }
 
@@ -375,6 +410,8 @@ export interface UserInfo {
   emailVerified: boolean;
   hasPassword: boolean;
   providers: string[];
+  /** 의견(피드백) 목록을 볼 수 있는 관리자 */
+  isAdmin?: boolean;
 }
 
 export interface TeamSummary {
@@ -434,6 +471,8 @@ export interface SessionInfo {
 }
 
 export interface AuthProviders {
+  /** public/brand/ 에 넣은 공식 로그인 심볼 파일 (없으면 기본 심볼) */
+  brand?: { kakao?: string; naver?: string };
   email: boolean;
   signup: boolean;
   kakao: boolean;

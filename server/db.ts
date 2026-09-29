@@ -169,6 +169,38 @@ const MIGRATIONS: string[] = [
   );
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
   `,
+  // v2: 로그인 상태 유지 여부 — 0 이면 브라우저 세션(짧게 만료)
+  `
+  ALTER TABLE sessions ADD COLUMN persistent INTEGER NOT NULL DEFAULT 1;
+  `,
+  // v3: 의견 보내기 — 메일이 실패해도 남도록 DB 에 먼저 저장
+  `
+  CREATE TABLE feedback (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    user_email TEXT,
+    user_name TEXT,
+    kind TEXT NOT NULL,
+    message TEXT NOT NULL,
+    page_url TEXT,
+    browser TEXT,
+    user_agent TEXT,
+    created_at INTEGER NOT NULL,
+    mail_status TEXT NOT NULL DEFAULT 'pending',
+    mail_error TEXT,
+    status TEXT NOT NULL DEFAULT 'open'
+  );
+  CREATE INDEX feedback_created ON feedback(created_at);
+  CREATE TABLE feedback_files (
+    id TEXT PRIMARY KEY,
+    feedback_id TEXT NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL
+  );
+  CREATE INDEX feedback_files_fb ON feedback_files(feedback_id);
+  `,
 ];
 
 export class Database {

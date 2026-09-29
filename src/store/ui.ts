@@ -11,6 +11,9 @@ interface UIState {
   closeCollect: () => void;
   openBuild: (preset?: Partial<BuildOptions>) => void;
   closeBuild: () => void;
+  /** 의견 보내기 창 */
+  feedback: boolean;
+  setFeedback: (open: boolean) => void;
 }
 
 export const useUI = create<UIState>((set) => ({
@@ -22,4 +25,6 @@ export const useUI = create<UIState>((set) => ({
   closeCollect: () => set({ collect: { open: false } }),
   openBuild: (preset) => set({ build: { open: true, preset } }),
   closeBuild: () => set({ build: { open: false } }),
+  feedback: false,
+  setFeedback: (open) => set({ feedback: open }),
 }));

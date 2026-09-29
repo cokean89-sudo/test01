@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { DuplicateInfo, Reference, RefSource, ScrapeResult } from "../../shared/types";
+import type { DuplicateInfo, Reference, RefSource, ScrapeResult, TagSuggestResult } from "../../shared/types";
 import { api, type RefInput } from "../api";
 import { SmartImage } from "../components/SmartImage";
 import { Icon } from "../components/icons";
-import { Button, Field, Modal, Segmented, Spinner, TagInput, Toggle } from "../components/ui";
+import { TagSuggestions } from "../components/TagSuggestions";
+import { Button, Field, Modal, Segmented, Spinner, TagInput } from "../components/ui";
 import { normalizeTags } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { toast } from "../store/toast";
@@ -51,18 +52,19 @@ export function extractUrls(text: string): string[] {
 
 export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
   const close = useUI((s) => s.closeCollect);
-  const { refs, cases, addRefs, createCase, updateRef, status } = useLibrary();
+  const { refs, cases, addRefs, createCase, status } = useLibrary();
   const vocab = useMemo(() => tagVocabulary(refs), [refs]);
 
   const [input, setInput] = useState(initialUrls ?? "");
   const [blocks, setBlocks] = useState<SourceBlock[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [suggest, setSuggest] = useState<TagSuggestResult | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
   const [caseId, setCaseId] = useState<string>("");
   const [newCaseName, setNewCaseName] = useState("");
   const [kind, setKind] = useState<"image" | "logo">("image");
   const [logoLabel, setLogoLabel] = useState("");
   const [note, setNote] = useState("");
-  const [aiTag, setAiTag] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ created: number; duplicates: DuplicateInfo[] } | null>(null);
   const setFocusRef = useUI((s) => s.setFocusRef);
@@ -147,7 +149,6 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
       }));
       const { created, duplicates } = await addRefs(inputs);
       toast.success(`${created.length}개 저장${duplicates.length ? ` · 중복 ${duplicates.length}개는 기존 항목에 태그만 추가` : ""}`);
-      if (aiTag && created.length) void autoTag(created.map((r) => r.id));
       if (duplicates.length) setResult({ created: created.length, duplicates });
       else close();
     } catch (err) {
@@ -157,29 +158,19 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
     }
   }
 
-  async function autoTag(ids: string[]) {
-    toast.info(`AI 태깅 시작 (${ids.length}개)…`);
-    let done = 0;
-    for (const id of ids) {
-      const ref = useLibrary.getState().refs.find((r) => r.id === id);
-      if (!ref) continue;
-      try {
-        const out = await api.suggestTags({
-          imageUrl: ref.imageUrl,
-          title: ref.title,
-          note: ref.note,
-          existingTags: ref.tags,
-          vocabulary: tagVocabulary(useLibrary.getState().refs),
-          language: "ko",
-        });
-        await updateRef(id, { tags: normalizeTags([...ref.tags, ...out.tags]), title: ref.title || out.title });
-        done++;
-      } catch (err) {
-        toast.error(`AI 태깅 실패: ${(err as Error).message}`);
-        break;
-      }
+  /** 고른 이미지 중 첫 장을 보고 축별 태그를 제안 — 채택한 것만 태그에 들어간다 */
+  async function aiSuggest() {
+    const first = selected[0];
+    if (!first) return;
+    setSuggesting(true);
+    setSuggest(null);
+    try {
+      setSuggest(await api.suggestTags({ imageUrl: first.imageUrl, title: first.title, existingTags: tags, vocabulary: vocab, language: "ko" }));
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSuggesting(false);
     }
-    if (done) toast.success(`AI 태깅 완료 (${done}개)`);
   }
 
   if (result) {
@@ -339,6 +330,21 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
             <Field label="키워드 태그" hint="검색·자동 그룹핑의 기준이 돼요">
               <TagInput value={tags} onChange={setTags} suggestions={vocab} />
             </Field>
+            {status?.ai ? (
+              <Button icon="sparkle" variant="accent" size="sm" onClick={aiSuggest} disabled={suggesting || !selected.length} title="고른 이미지 중 첫 장을 보고 제안해요">
+                AI 태그 제안 받기
+              </Button>
+            ) : (
+              <div className="note-box">AI 태그 제안은 AI 연결 후 사용할 수 있어요.</div>
+            )}
+            {(suggesting || suggest) && (
+              <TagSuggestions
+                result={suggest}
+                loading={suggesting}
+                current={tags}
+                onAdopt={(t) => setTags(normalizeTags([...tags, ...t]))}
+              />
+            )}
             {vocab.length > 0 && (
               <div className="tag-suggest">
                 {vocab
@@ -385,16 +391,6 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
             <Field label="메모">
               <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="출처, 인사이트, 적용 아이디어 등" />
             </Field>
-            <Toggle
-              checked={aiTag}
-              onChange={setAiTag}
-              label={
-                <>
-                  저장 후 AI 로 태그·제목 자동 보강
-                  {!status?.ai && <small className="muted"> (API 키 없으면 규칙 기반)</small>}
-                </>
-              }
-            />
           </aside>
         </div>
       </div>

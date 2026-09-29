@@ -1,6 +1,7 @@
 // 편집기 동작 — 도구 모음/단축키/인스펙터가 공통으로 호출한다.
 
 import type {
+  AiTextField,
   AnalyzeRequest,
   AnalyzeResult,
   CaptionPos,
@@ -428,7 +429,7 @@ export function contentImages(page: Page): ImageElement[] {
   return page.elements.filter((e): e is ImageElement => e.type === "image" && !e.logo && !!e.src);
 }
 
-export function analyzeRequestFor(page: Page, doc: DocumentData, instruction?: string): AnalyzeRequest {
+export function analyzeRequestFor(page: Page, doc: DocumentData, instruction?: string, fields?: AiField[]): AnalyzeRequest {
   const lib = useLibrary.getState();
   const refMap = new Map(lib.refs.map((r) => [r.id, r]));
   const images = contentImages(page).map((img) => {
@@ -444,6 +445,9 @@ export function analyzeRequestFor(page: Page, doc: DocumentData, instruction?: s
   return {
     kind: page.kind,
     language: doc.settings.aiLanguage,
+    perspective: doc.settings.aiPerspective ?? "design",
+    tone: doc.settings.aiTone ?? "report",
+    fields,
     group: page.group,
     keywords: parseQuery(doc.query ?? "")
       .filter((t) => !t.exclude)
@@ -455,7 +459,7 @@ export function analyzeRequestFor(page: Page, doc: DocumentData, instruction?: s
   };
 }
 
-export type AiField = "title" | "subtitle" | "highlight" | "description" | "sectionLabel" | "captions";
+export type AiField = AiTextField;
 
 export const AI_FIELDS: { key: AiField; label: string; role?: TextRole }[] = [
   { key: "title", label: "타이틀", role: "title" },

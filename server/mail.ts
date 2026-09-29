@@ -1,7 +1,7 @@
 // 메일 발송 — SMTP 가 설정되지 않았으면 서버 로그(실행 창)에 내용을 출력한다.
 
 import nodemailer, { type Transporter } from "nodemailer";
-import { APP_URL, mailConfigured, smtp } from "./config";
+import { APP_URL, FEEDBACK_EMAIL, mailConfigured, smtp } from "./config";
 
 let transport: Transporter | null = null;
 
@@ -70,4 +70,53 @@ export function sendInviteMail(to: string, teamName: string, inviterName: string
     url: `${APP_URL}/#/invite/${token}`,
     label: "초대 수락하기",
   });
+}
+
+export interface FeedbackMail {
+  id: string;
+  kind: string;
+  message: string;
+  userEmail: string | null;
+  userName: string;
+  pageUrl: string;
+  browser: string;
+  userAgent: string;
+  createdAt: number;
+  files: { name: string; mime: string; data: Buffer }[];
+}
+
+const KIND_LABEL: Record<string, string> = { bug: "오류 신고", idea: "개선 요청", other: "기타" };
+
+/** 의견 보내기 — 텍스트 메일 + 스크린샷 첨부. 메일이 설정되지 않았으면 로그로만 남긴다 */
+export async function sendFeedbackMail(fb: FeedbackMail): Promise<MailResult> {
+  const kind = KIND_LABEL[fb.kind] ?? fb.kind;
+  const when = new Date(fb.createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+  const subject = `[RefBoard 의견] ${kind} — ${fb.message.replace(/\s+/g, " ").slice(0, 40)}`;
+  const text = [
+    `유형: ${kind}`,
+    `보낸 사람: ${fb.userName} <${fb.userEmail ?? "메일 없음(소셜 로그인)"}>`,
+    `보낸 시각: ${when} (KST)`,
+    `페이지: ${fb.pageUrl || "-"}`,
+    `브라우저·OS: ${fb.browser || "-"}`,
+    `User-Agent: ${fb.userAgent || "-"}`,
+    `스크린샷: ${fb.files.length}장`,
+    `관리 화면: ${APP_URL}/#/admin/feedback/${fb.id}`,
+    "",
+    "── 내용 ──",
+    fb.message,
+  ].join("\n");
+  const t = getTransport();
+  if (!t) {
+    console.log(`\n  ✉  [메일 미설정 — 의견이 DB 에만 저장됐어요]\n  받는 사람: ${FEEDBACK_EMAIL}\n  제목: ${subject}\n  ${text.replace(/\n/g, "\n  ")}\n`);
+    return { delivered: false };
+  }
+  await t.sendMail({
+    from: smtp.from,
+    to: FEEDBACK_EMAIL,
+    replyTo: fb.userEmail ?? undefined,
+    subject,
+    text,
+    attachments: fb.files.map((f) => ({ filename: f.name, content: f.data, contentType: f.mime })),
+  });
+  return { delivered: true };
 }

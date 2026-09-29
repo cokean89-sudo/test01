@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import type { FeedbackItem, FeedbackKind } from "../shared/feedback";
 import { mergeDocuments } from "../shared/merge";
 import type {
   ActivityItem,
@@ -20,7 +21,7 @@ import type {
 } from "../shared/types";
 import { urlKey } from "../shared/urlKey";
 import { defaultSettings } from "../src/lib/defaults";
-import { auth, DATA_DIR } from "./config";
+import { ADMIN_EMAILS, auth, DATA_DIR } from "./config";
 import { type Database, newId, now, parseJson } from "./db";
 import { randomToken, sha256 } from "./security";
 
@@ -37,6 +38,15 @@ export interface UserRow {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** 관리자: ADMIN_EMAILS 에 있는 메일이면서 메일 인증을 마친 계정 */
+export function isAdminUser(u: Pick<UserRow, "email" | "email_verified_at">): boolean {
+  return !!u.email && !!u.email_verified_at && ADMIN_EMAILS.includes(u.email.toLowerCase());
+}
+
+/** 로그인 상태 유지를 끈 세션: 무활동 12시간 / 최대 1일 */
+export const BROWSER_SESSION_IDLE = 12 * 60 * 60 * 1000;
+export const BROWSER_SESSION_MAX = 24 * 60 * 60 * 1000;
 
 export class Repo {
   constructor(readonly db: Database) {}
@@ -72,7 +82,7 @@ export class Repo {
 
   userInfo(u: UserRow): UserInfo {
     const providers = this.db.all<{ provider: string }>("SELECT provider FROM identities WHERE user_id = ?", u.id).map((r) => r.provider);
-    return { id: u.id, email: u.email, name: u.name, emailVerified: !!u.email_verified_at, hasPassword: !!u.password_hash, providers };
+    return { id: u.id, email: u.email, name: u.name, emailVerified: !!u.email_verified_at, hasPassword: !!u.password_hash, providers, isAdmin: isAdminUser(u) };
   }
 
   markVerified(userId: string) {
@@ -117,18 +127,23 @@ export class Repo {
 
   // ─── sessions ─────────────────────────────────────────────
 
-  createSession(userId: string, ip?: string, userAgent?: string): string {
+  /**
+   * persistent=false (로그인 상태 유지 안 함): 브라우저를 닫으면 사라지는 쿠키와 함께 쓰고,
+   * 서버에서도 무활동 BROWSER_SESSION_IDLE, 최대 BROWSER_SESSION_MAX 뒤 만료한다.
+   */
+  createSession(userId: string, ip?: string, userAgent?: string, persistent = true): string {
     const token = randomToken(32);
     const t = now();
     this.db.run(
-      "INSERT INTO sessions (id_hash, user_id, created_at, expires_at, last_seen_at, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO sessions (id_hash, user_id, created_at, expires_at, last_seen_at, ip, user_agent, persistent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       sha256(token),
       userId,
       t,
-      t + auth.sessionDays * DAY,
+      t + (persistent ? auth.sessionDays * DAY : BROWSER_SESSION_IDLE),
       t,
       ip ?? null,
       userAgent?.slice(0, 300) ?? null,
+      persistent ? 1 : 0,
     );
     return token;
   }
@@ -136,18 +151,22 @@ export class Repo {
   /** 유효한 세션이면 사용자를 돌려주고, 사용 중이면 만료를 연장한다 */
   resolveSession(token: string): UserRow | undefined {
     const hash = sha256(token);
-    const s = this.db.get<{ user_id: string; created_at: number; expires_at: number; last_seen_at: number }>(
-      "SELECT user_id, created_at, expires_at, last_seen_at FROM sessions WHERE id_hash = ?",
+    const s = this.db.get<{ user_id: string; created_at: number; expires_at: number; last_seen_at: number; persistent: number }>(
+      "SELECT user_id, created_at, expires_at, last_seen_at, persistent FROM sessions WHERE id_hash = ?",
       hash,
     );
     const t = now();
     if (!s) return undefined;
-    if (s.expires_at < t || s.created_at + auth.sessionMaxDays * DAY < t) {
+    const maxAge = s.persistent ? auth.sessionMaxDays * DAY : BROWSER_SESSION_MAX;
+    if (s.expires_at < t || s.created_at + maxAge < t) {
       this.db.run("DELETE FROM sessions WHERE id_hash = ?", hash);
       return undefined;
     }
-    if (t - s.last_seen_at > 60 * 60 * 1000) {
-      this.db.run("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id_hash = ?", t, t + auth.sessionDays * DAY, hash);
+    // 활동이 있으면 만료를 뒤로 민다 (브라우저 세션은 10분, 유지 세션은 1시간 단위로 갱신)
+    const refreshEvery = s.persistent ? 60 * 60 * 1000 : 10 * 60 * 1000;
+    if (t - s.last_seen_at > refreshEvery) {
+      const idle = s.persistent ? auth.sessionDays * DAY : BROWSER_SESSION_IDLE;
+      this.db.run("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id_hash = ?", t, t + idle, hash);
     }
     return this.getUser(s.user_id);
   }
@@ -564,11 +583,20 @@ export class Repo {
 
   /** 태그 이름 변경/병합/삭제 (to 가 빈 문자열이면 삭제) */
   renameTag(teamId: string, from: string, to: string, userId: string) {
-    const lower = from.toLowerCase();
+    this.mergeTags(teamId, [from], to, userId);
+  }
+
+  /**
+   * 여러 태그를 하나로 합친다 (동의어 병합). to 가 빈 문자열이면 모두 삭제.
+   * 레퍼런스·케이스 전체를 한 트랜잭션에서 바꾼다.
+   */
+  mergeTags(teamId: string, from: string[], to: string, userId: string) {
+    const lowers = new Set(from.map((f) => f.toLowerCase()));
+    const target = to.trim();
     const apply = (tags: string[]) => {
-      if (!tags.some((t) => t.toLowerCase() === lower)) return null;
-      const rest = tags.filter((t) => t.toLowerCase() !== lower);
-      return to && !rest.some((t) => t.toLowerCase() === to.toLowerCase()) ? [...rest, to] : rest;
+      if (!tags.some((t) => lowers.has(t.toLowerCase()))) return null;
+      const rest = tags.filter((t) => !lowers.has(t.toLowerCase()));
+      return target && !rest.some((t) => t.toLowerCase() === target.toLowerCase()) ? [...rest, target] : rest;
     };
     this.db.tx(() => {
       const t = now();
@@ -767,6 +795,80 @@ export class Repo {
     return this.db.run("DELETE FROM documents WHERE id = ? AND team_id = ?", id, teamId).changes > 0;
   }
 
+  // ─── feedback (의견 보내기) ───────────────────────────────────
+
+  insertFeedback(
+    input: { userId: string; userEmail: string | null; userName: string; kind: FeedbackKind; message: string; pageUrl: string; browser: string; userAgent: string },
+    files: { name: string; mime: string; data: Buffer }[],
+  ): string {
+    return this.db.tx(() => {
+      const id = newId("fb");
+      this.db.run(
+        "INSERT INTO feedback (id, user_id, user_email, user_name, kind, message, page_url, browser, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        id,
+        input.userId,
+        input.userEmail,
+        input.userName,
+        input.kind,
+        input.message,
+        input.pageUrl,
+        input.browser,
+        input.userAgent,
+        now(),
+      );
+      for (const f of files) {
+        this.db.run("INSERT INTO feedback_files (id, feedback_id, name, mime, size, data) VALUES (?, ?, ?, ?, ?, ?)", newId("ff"), id, f.name, f.mime, f.data.length, f.data);
+      }
+      return id;
+    });
+  }
+
+  /** 최근 since(ms) 동안 이 사용자가 보낸 의견 수 — 스팸 방지 */
+  countFeedback(userId: string, sinceMs: number): number {
+    return this.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM feedback WHERE user_id = ? AND created_at > ?", userId, now() - sinceMs)?.n ?? 0;
+  }
+
+  setFeedbackMail(id: string, status: FeedbackItem["mailStatus"], error?: string) {
+    this.db.run("UPDATE feedback SET mail_status = ?, mail_error = ? WHERE id = ?", status, error ? error.slice(0, 500) : null, id);
+  }
+
+  setFeedbackStatus(id: string, status: FeedbackItem["status"]): boolean {
+    return this.db.run("UPDATE feedback SET status = ? WHERE id = ?", status, id).changes > 0;
+  }
+
+  listFeedback(filter: { status?: FeedbackItem["status"]; limit?: number } = {}): FeedbackItem[] {
+    const rows = filter.status
+      ? this.db.all<FeedbackRow>("SELECT * FROM feedback WHERE status = ? ORDER BY created_at DESC LIMIT ?", filter.status, filter.limit ?? 300)
+      : this.db.all<FeedbackRow>("SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?", filter.limit ?? 300);
+    if (!rows.length) return [];
+    const files = new Map<string, FeedbackItem["files"]>();
+    const marks = rows.map(() => "?").join(",");
+    for (const f of this.db.all<{ id: string; feedback_id: string; name: string; mime: string; size: number }>(
+      `SELECT id, feedback_id, name, mime, size FROM feedback_files WHERE feedback_id IN (${marks}) ORDER BY rowid`,
+      ...rows.map((r) => r.id),
+    )) {
+      const list = files.get(f.feedback_id) ?? [];
+      list.push({ id: f.id, name: f.name, mime: f.mime, size: f.size });
+      files.set(f.feedback_id, list);
+    }
+    return rows.map((r) => rowToFeedback(r, files.get(r.id) ?? []));
+  }
+
+  getFeedback(id: string): FeedbackItem | undefined {
+    const r = this.db.get<FeedbackRow>("SELECT * FROM feedback WHERE id = ?", id);
+    if (!r) return undefined;
+    const files = this.db.all<{ id: string; name: string; mime: string; size: number }>("SELECT id, name, mime, size FROM feedback_files WHERE feedback_id = ? ORDER BY rowid", id);
+    return rowToFeedback(r, files);
+  }
+
+  getFeedbackFile(feedbackId: string, fileId: string) {
+    return this.db.get<{ name: string; mime: string; data: Uint8Array }>("SELECT name, mime, data FROM feedback_files WHERE id = ? AND feedback_id = ?", fileId, feedbackId);
+  }
+
+  countOpenFeedback(): number {
+    return this.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM feedback WHERE status = 'open'")?.n ?? 0;
+  }
+
   // ─── 이전(로컬) 버전 데이터 가져오기 ──────────────────────────
 
   /** 예전 단일 사용자 버전의 data/db.json 이 있으면 첫 가입자의 개인 작업공간으로 옮긴다 */
@@ -899,6 +1001,41 @@ function rowToRef(r: RefRow): Reference {
     createdByName: r.created_by_name ?? undefined,
     updatedAt: r.updated_at,
     updatedByName: r.updated_by_name ?? undefined,
+  };
+}
+
+interface FeedbackRow {
+  id: string;
+  user_id: string | null;
+  user_email: string | null;
+  user_name: string | null;
+  kind: FeedbackKind;
+  message: string;
+  page_url: string | null;
+  browser: string | null;
+  user_agent: string | null;
+  created_at: number;
+  mail_status: FeedbackItem["mailStatus"];
+  mail_error: string | null;
+  status: FeedbackItem["status"];
+}
+
+function rowToFeedback(r: FeedbackRow, files: FeedbackItem["files"]): FeedbackItem {
+  return {
+    id: r.id,
+    kind: r.kind,
+    message: r.message,
+    userId: r.user_id,
+    userEmail: r.user_email,
+    userName: r.user_name ?? "",
+    pageUrl: r.page_url ?? "",
+    browser: r.browser ?? "",
+    userAgent: r.user_agent ?? "",
+    createdAt: r.created_at,
+    mailStatus: r.mail_status,
+    mailError: r.mail_error ?? undefined,
+    status: r.status,
+    files,
   };
 }
 

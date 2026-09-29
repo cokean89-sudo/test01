@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Reference } from "../../shared/types";
+import type { Reference, TagSuggestResult } from "../../shared/types";
 import { api } from "../api";
 import { SmartImage } from "../components/SmartImage";
-import { Button, Field, Segmented, Spinner, TagInput } from "../components/ui";
+import { TagSuggestions } from "../components/TagSuggestions";
+import { Button, Field, Segmented, TagInput } from "../components/ui";
 import { normalizeTags } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { toast } from "../store/toast";
@@ -15,12 +16,15 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
   const [logoLabel, setLogoLabel] = useState(ref.logoLabel ?? "");
   const [imageUrl, setImageUrl] = useState(ref.imageUrl);
   const [busy, setBusy] = useState(false);
+  const [suggest, setSuggest] = useState<TagSuggestResult | null>(null);
+  const aiOn = !!useLibrary((st) => st.status?.ai);
 
   useEffect(() => {
     setTitle(ref.title ?? "");
     setNote(ref.note ?? "");
     setLogoLabel(ref.logoLabel ?? "");
     setImageUrl(ref.imageUrl);
+    setSuggest(null);
   }, [ref.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -29,13 +33,12 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  /** AI 태그 제안 — 바로 저장하지 않고 축별 칩으로 보여준다 */
   async function aiSuggest() {
     setBusy(true);
+    setSuggest(null);
     try {
-      const out = await api.suggestTags({ imageUrl: ref.imageUrl, title: ref.title, note: ref.note, existingTags: ref.tags, vocabulary: vocab, language: "ko" });
-      await updateRef(ref.id, { tags: normalizeTags([...ref.tags, ...out.tags]), ...(ref.title ? {} : { title: out.title }) });
-      if (!ref.title && out.title) setTitle(out.title);
-      toast.success(out.engine === "ai" ? "AI 태그를 추가했어요" : out.notice ?? "규칙 기반 태그를 추가했어요");
+      setSuggest(await api.suggestTags({ imageUrl: ref.imageUrl, title: ref.title, note: ref.note, existingTags: ref.tags, vocabulary: vocab, language: "ko" }));
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -85,9 +88,25 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
         <Field label="키워드 태그">
           <TagInput value={ref.tags} onChange={(tags) => updateRef(ref.id, { tags })} suggestions={vocab} />
         </Field>
-        <Button icon="sparkle" variant="accent" size="sm" onClick={aiSuggest} disabled={busy}>
-          {busy ? <Spinner size={12} /> : null} AI 태그·제목 추천
-        </Button>
+        {aiOn ? (
+          <Button icon="sparkle" variant="accent" size="sm" onClick={aiSuggest} disabled={busy}>
+            AI 태그 제안 받기
+          </Button>
+        ) : (
+          <div className="note-box">AI 태그 제안은 AI 연결 후 사용할 수 있어요.</div>
+        )}
+        {(busy || suggest) && (
+          <TagSuggestions
+            result={suggest}
+            loading={busy}
+            current={ref.tags}
+            onAdopt={(tags) => void updateRef(ref.id, { tags: normalizeTags([...ref.tags, ...tags]) })}
+            onTitle={(t) => {
+              setTitle(t);
+              void updateRef(ref.id, { title: t });
+            }}
+          />
+        )}
         <Field label="케이스">
           <select value={ref.caseId ?? ""} onChange={(e) => updateRef(ref.id, { caseId: e.target.value || null })}>
             <option value="">(없음)</option>

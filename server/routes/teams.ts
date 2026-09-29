@@ -26,6 +26,8 @@ const defaultsSchema = z
     pageNumberStart: z.number(),
     typography: z.record(z.string(), z.record(z.string(), z.unknown())),
     aiLanguage: z.enum(["ko", "en"]),
+    aiPerspective: z.enum(["design", "planning", "fact"]).optional(),
+    aiTone: z.enum(["report", "sentence"]).optional(),
   })
   .passthrough();
 

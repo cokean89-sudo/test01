@@ -9,6 +9,7 @@ import { FetchError } from "./net";
 import { Repo } from "./repo";
 import { authRouter } from "./routes/auth";
 import { documentLookupRouter, documentsRouter } from "./routes/documents";
+import { adminRouter, feedbackRouter } from "./routes/feedback";
 import { libraryRouter } from "./routes/library";
 import { invitesRouter, teamsRouter } from "./routes/teams";
 import { toolsRouter } from "./routes/tools";
@@ -30,7 +31,9 @@ export function createApp(db: Database) {
     res.json({ ok: true });
   });
   api.use(rateLimit("api", 3000, 5 * 60_000)); // IP 당 전체 API 상한 (과도한 자동화 차단)
-  api.use(express.json({ limit: "10mb" }));
+  // 의견 보내기(스크린샷 첨부)는 로그인·횟수 확인 뒤 자체 한도로 읽는다
+  const json = express.json({ limit: "10mb" });
+  api.use((req, res, next) => (/^\/feedback\/?$/.test(req.path) ? next() : json(req, res, next)));
   api.use(csrfGuard);
   api.use(sessionMiddleware(repo));
 
@@ -40,6 +43,8 @@ export function createApp(db: Database) {
   api.use("/teams/:teamId", authRequired, libraryRouter(repo));
   api.use("/teams/:teamId", authRequired, documentsRouter(repo));
   api.use("/documents", authRequired, documentLookupRouter(repo));
+  api.use("/feedback", authRequired, feedbackRouter(repo));
+  api.use("/admin", authRequired, adminRouter(repo));
   api.use("/", toolsRouter());
   api.use((_req, _res, next) => next(new HttpError(404, "알 수 없는 API")));
   api.use(errorHandler);

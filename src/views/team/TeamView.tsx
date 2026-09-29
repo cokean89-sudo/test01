@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AI_PERSPECTIVES,
+  AI_TONES,
   PAGE_SIZES,
   ROLE_LABEL,
   ROLE_RANK,
   type ActivityItem,
+  type AiPerspective,
+  type AiTone,
   type DocSettings,
   type InviteInfo,
   type PageSizeKey,
@@ -487,6 +491,26 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
                 {FOOTER_PRESETS.map((p) => (
                   <option key={p.key} value={p.key}>
                     {p.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="grid-2">
+            <Field label="AI 글쓰기 관점">
+              <select value={s.aiPerspective ?? "design"} onChange={(e) => set((d) => void (d.aiPerspective = e.target.value as AiPerspective))}>
+                {AI_PERSPECTIVES.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="AI 문체">
+              <select value={s.aiTone ?? "report"} onChange={(e) => set((d) => void (d.aiTone = e.target.value as AiTone))}>
+                {AI_TONES.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label} ({t.hint.split(" — ")[0]})
                   </option>
                 ))}
               </select>

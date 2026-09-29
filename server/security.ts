@@ -173,8 +173,10 @@ export function parseCookies(header: string | undefined): Record<string, string>
   return out;
 }
 
-export function setCookie(res: Response, name: string, value: string, maxAgeSec: number) {
-  const parts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly", "SameSite=Lax", `Max-Age=${Math.max(0, Math.floor(maxAgeSec))}`];
+/** maxAgeSec 가 null 이면 브라우저를 닫을 때 사라지는 세션 쿠키 */
+export function setCookie(res: Response, name: string, value: string, maxAgeSec: number | null) {
+  const parts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  if (maxAgeSec !== null) parts.push(`Max-Age=${Math.max(0, Math.floor(maxAgeSec))}`);
   if (SECURE_COOKIES) parts.push("Secure");
   res.append("Set-Cookie", parts.join("; "));
 }

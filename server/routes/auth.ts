@@ -1,9 +1,11 @@
 // 인증: 메일 가입·인증, 로그인/로그아웃, 비밀번호 재설정, 카카오·네이버 로그인
 
+import fs from "node:fs";
+import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import type { AuthProviders } from "../../shared/types";
-import { APP_URL, auth, isProd, LOCAL_ONLY, mailConfigured, oauth } from "../config";
+import { APP_URL, auth, isProd, LOCAL_ONLY, mailConfigured, oauth, ROOT } from "../config";
 import { requireUser } from "../context";
 import { sendExistingAccountMail, sendResetMail, sendVerifyMail } from "../mail";
 import type { Repo, UserRow } from "../repo";
@@ -27,11 +29,16 @@ const email = z.string().trim().toLowerCase().email("올바른 메일 주소가 
 const password = z.string().min(1).max(200);
 const name = z.string().trim().min(1, "이름을 입력하세요.").max(40);
 
-export function startSession(repo: Repo, req: Request, res: Response, user: UserRow) {
+/**
+ * 로그인 세션 발급. remember(로그인 상태 유지)
+ *  · true  — SESSION_MAX_DAYS 동안 남는 쿠키 (서버 세션은 SESSION_DAYS 무활동 시 만료)
+ *  · false — 브라우저를 닫으면 사라지는 세션 쿠키 (서버 세션도 12시간 무활동/최대 1일)
+ */
+export function startSession(repo: Repo, req: Request, res: Response, user: UserRow, remember = false) {
   // 세션 고정 공격 방지: 기존 세션을 버리고 새로 발급
   if (req.sessionToken) repo.deleteSession(req.sessionToken);
-  const token = repo.createSession(user.id, req.ip, req.get("user-agent"));
-  setCookie(res, SESSION_COOKIE, token, auth.sessionDays * 24 * 3600);
+  const token = repo.createSession(user.id, req.ip, req.get("user-agent"), remember);
+  setCookie(res, SESSION_COOKIE, token, remember ? auth.sessionMaxDays * 24 * 3600 : null);
   repo.recordLoginSuccess(user.id);
   return token;
 }
@@ -56,6 +63,7 @@ export function authRouter(repo: Repo): Router {
 
   r.get("/providers", (_req, res) => {
     const out: AuthProviders = {
+      brand: brandAssets(),
       email: true,
       signup: auth.allowSignup,
       kakao: !!oauth.kakao.clientId,
@@ -127,7 +135,7 @@ export function authRouter(repo: Repo): Router {
   });
 
   r.post("/login", async (req, res) => {
-    const body = z.object({ email, password }).parse(req.body);
+    const body = z.object({ email, password, remember: z.boolean().optional() }).parse(req.body);
     enforceLimit(`login:${req.ip}`, 30, 15 * 60_000);
     enforceLimit(`login:${body.email}`, 10, 15 * 60_000, "로그인 시도가 너무 많아요. 15분 후 다시 시도하세요.");
     const user = repo.findUserByEmail(body.email);
@@ -142,7 +150,7 @@ export function authRouter(repo: Repo): Router {
       throw new HttpError(401, "메일 주소 또는 비밀번호가 올바르지 않아요.", "invalid_credentials");
     }
     if (!user.email_verified_at) throw new HttpError(403, "메일 인증을 완료해야 로그인할 수 있어요.", "unverified");
-    startSession(repo, req, res, user);
+    startSession(repo, req, res, user, !!body.remember);
     repo.security("login", user.id, req.ip);
     res.json(sessionInfo(repo, user));
   });
@@ -221,8 +229,10 @@ export function authRouter(repo: Repo): Router {
     const provider = parseProvider(String(req.params.provider));
     enforceLimit(`oauth:${req.ip}`, 30, 10 * 60_000);
     const mode = req.query.mode === "link" && req.user ? "link" : "login";
+    const remember = req.query.remember === "1" ? "1" : "0";
     const state = randomToken(24);
-    setCookie(res, OAUTH_COOKIE, `${state}.${mode}`, 600);
+    // 로그인 상태 유지 선택을 콜백까지 가져간다
+    setCookie(res, OAUTH_COOKIE, `${state}.${mode}.${remember}`, 600);
     res.redirect(302, authorizeUrl(provider, state));
   });
 
@@ -234,7 +244,7 @@ export function authRouter(repo: Repo): Router {
     } catch {
       return fail("지원하지 않는 로그인 방식이에요.");
     }
-    const [savedState, mode] = (parseCookies(req.headers.cookie)[OAUTH_COOKIE] ?? "").split(".");
+    const [savedState, mode, remember] = (parseCookies(req.headers.cookie)[OAUTH_COOKIE] ?? "").split(".");
     clearCookie(res, OAUTH_COOKIE);
     const state = String(req.query.state ?? "");
     if (!savedState || !state || !safeEqual(savedState, state)) return fail("로그인 요청이 만료됐어요. 다시 시도하세요.");
@@ -272,12 +282,34 @@ export function authRouter(repo: Repo): Router {
       user = repo.createUser({ email: emailFree ? profile.email : null, name: profile.name || `${PROVIDER_LABEL[provider]} 사용자`, verified: !!emailFree });
     }
     repo.linkIdentity(provider, profile.id, user.id, profile.email);
-    startSession(repo, req, res, user);
+    startSession(repo, req, res, user, remember === "1");
     repo.security("login", user.id, req.ip, provider);
     res.redirect(302, `${APP_URL}/#/`);
   });
 
   return r;
+}
+
+// ─── 공식 로그인 버튼 리소스 ────────────────────────────────────
+
+/**
+ * 카카오·네이버 개발자 센터에서 받은 공식 심볼 파일을 public/brand/ 에 넣으면 그 파일을 쓴다.
+ *  · public/brand/kakao-symbol.svg (또는 .png) — 카카오 말풍선 심볼
+ *  · public/brand/naver-symbol.svg (또는 .png) — 네이버 N 로고
+ * 없으면 화면이 가이드 색·형태대로 그린 기본 심볼을 쓴다.
+ */
+function brandAssets(): { kakao?: string; naver?: string } {
+  const out: { kakao?: string; naver?: string } = {};
+  const dirs = [path.join(ROOT, isProd ? "dist" : "public", "brand")];
+  for (const p of ["kakao", "naver"] as const) {
+    for (const ext of ["svg", "png"]) {
+      if (dirs.some((d) => fs.existsSync(path.join(d, `${p}-symbol.${ext}`)))) {
+        out[p] = `/brand/${p}-symbol.${ext}`;
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 // ─── providers ──────────────────────────────────────────────

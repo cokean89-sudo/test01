@@ -7,6 +7,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "refboard-test-"));
+process.env.ADMIN_EMAILS = "fb-admin@example.com";
 vi.spyOn(console, "log").mockImplementation(() => {});
 
 let base = "";
@@ -150,6 +151,42 @@ describe("인증", () => {
     expect((await new Client().post("/api/auth/login", { email, password: "New-password-2026" })).status).toBe(200);
   });
 
+  it("로그인 상태 유지: 끄면 브라우저 세션 쿠키, 켜면 SESSION_MAX_DAYS 동안 유지", async () => {
+    const { email } = await signup("유지");
+    const cookieOf = async (remember?: boolean) => {
+      const res = await fetch(base + "/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-refboard": "1" },
+        body: JSON.stringify({ email, password: PW, ...(remember === undefined ? {} : { remember }) }),
+      });
+      expect(res.status).toBe(200);
+      return res.headers.getSetCookie()[0];
+    };
+    const session = await cookieOf(false);
+    expect(session).toMatch(/HttpOnly/);
+    expect(session).not.toMatch(/Max-Age/);
+    expect(await cookieOf()).not.toMatch(/Max-Age/); // 기본은 유지 안 함
+    const { auth } = await import("../server/config");
+    expect(await cookieOf(true)).toMatch(new RegExp(`Max-Age=${auth.sessionMaxDays * 24 * 3600}`));
+  });
+
+  it("브라우저 세션(유지 안 함)은 서버에서도 무활동 12시간 뒤 만료", async () => {
+    const { Database } = await import("../server/db");
+    const { Repo } = await import("../server/repo");
+    const repo = new Repo(new Database(":memory:"));
+    const u = repo.createUser({ email: "idle@example.com", name: "idle", verified: true });
+    const shortToken = repo.createSession(u.id, undefined, undefined, false);
+    const longToken = repo.createSession(u.id, undefined, undefined, true);
+    expect(repo.resolveSession(shortToken)?.id).toBe(u.id);
+    // 13시간 전으로 돌린다
+    const past = Date.now() - 13 * 60 * 60 * 1000;
+    const db = (repo as unknown as { db: { run: (sql: string, ...p: unknown[]) => void } }).db;
+    db.run("UPDATE sessions SET created_at = ?, last_seen_at = ?, expires_at = ? WHERE persistent = 0", past, past, past + 12 * 60 * 60 * 1000);
+    db.run("UPDATE sessions SET created_at = ?, last_seen_at = ? WHERE persistent = 1", past, past);
+    expect(repo.resolveSession(shortToken)).toBeUndefined();
+    expect(repo.resolveSession(longToken)?.id).toBe(u.id);
+  });
+
   it("다른 기기 모두 로그아웃 — 지금 기기는 유지", async () => {
     const { c, email } = await signup("다른기기");
     const laptop = new Client();
@@ -283,6 +320,44 @@ describe("라이브러리 · 문서", () => {
     expect(lib.json.references[0].updatedByName).toBe("이디자");
   });
 
+  it("태그 병합(동의어)·일괄 삭제", async () => {
+    const { c, personalTeam } = await signup("태그정리");
+    const T = `/api/teams/${personalTeam.id}`;
+    await c.post(`${T}/references`, [
+      { imageUrl: "https://example.com/t1.jpg", tags: ["야간조명", "pinterest"] },
+      { imageUrl: "https://example.com/t2.jpg", tags: ["야간 조명", "레드"] },
+    ]);
+    const m = await c.post(`${T}/tags/merge`, { from: ["야간조명", "야간 조명"], to: "야간조명" });
+    expect(m.status).toBe(200);
+    const all = m.json.references.flatMap((r: { tags: string[] }) => r.tags);
+    expect(all.filter((t: string) => t === "야간조명")).toHaveLength(2);
+    expect(all).not.toContain("야간 조명");
+    const d = await c.post(`${T}/tags/delete`, { tags: ["pinterest"] });
+    expect(d.json.references.flatMap((r: { tags: string[] }) => r.tags)).not.toContain("pinterest");
+  });
+
+  it("일부만 수정(PATCH)해도 태그·유형은 그대로 (이미지 크기 기록 등)", async () => {
+    const { c, personalTeam } = await signup("부분수정");
+    const T = `/api/teams/${personalTeam.id}`;
+    const add = await c.post(`${T}/references`, [{ imageUrl: "https://example.com/p1.jpg", tags: ["야간조명", "게이트"], kind: "logo", source: "pinterest" }]);
+    const ref = add.json.created[0];
+    const p = await c.patch(`${T}/references/${ref.id}`, { width: 1600, height: 900 });
+    expect(p.status).toBe(200);
+    expect(p.json).toMatchObject({ tags: ["야간조명", "게이트"], kind: "logo", source: "pinterest", width: 1600, height: 900 });
+    const cs = await c.post(`${T}/cases`, { name: "케이스", tags: ["스타디움"] });
+    const cp = await c.patch(`${T}/cases/${cs.json.id}`, { name: "새 이름" });
+    expect(cp.json).toMatchObject({ name: "새 이름", tags: ["스타디움"] });
+  });
+
+  it("AI 가 없으면 태그를 추측해 붙이지 않고 안내만 한다", async () => {
+    const { c } = await signup("태그AI");
+    process.env.DISABLE_AI = "1";
+    const r = await c.post("/api/ai/tags", { imageUrl: "https://example.com/x.jpg", title: "Stadium night lights pinterest" });
+    delete process.env.DISABLE_AI;
+    expect(r.json.engine).toBe("off");
+    expect(r.json.tags).toEqual([]);
+  });
+
   it("javascript: 같은 위험한 이미지 주소는 거부", async () => {
     const a = await signup("xss");
     const r = await a.c.post(`/api/teams/${a.personalTeam.id}/references`, [{ imageUrl: "javascript:alert(1)" }]);
@@ -322,5 +397,71 @@ describe("라이브러리 · 문서", () => {
     const restored = await a.c.post(`/api/teams/${teamId}/documents/${doc.id}/versions/1/restore`);
     expect(restored.json.pages).toHaveLength(2);
     expect(restored.json.version).toBe(4);
+  });
+});
+
+describe("의견 보내기", () => {
+  const PNG = "data:image/png;base64," + Buffer.from("89504e470d0a1a0a0000000d4948445200000001", "hex").toString("base64");
+  const CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  const send = (c: Client, body: Record<string, unknown>) =>
+    c.req("POST", "/api/feedback", { kind: "bug", message: "버튼이 안 눌려요", pageUrl: "http://localhost/#/library", screenshots: [], ...body }, { "user-agent": CHROME });
+
+  it("로그인하지 않으면 보낼 수 없다", async () => {
+    const r = await send(new Client(), {});
+    expect(r.status).toBe(401);
+  });
+
+  it("DB 에 저장되고(메일 미설정이어도) 관리자만 목록·스크린샷을 본다", async () => {
+    const { c, email } = await signup("의견1");
+    const r = await send(c, { pageUrl: "http://localhost/#/reset/SECRET-TOKEN?code=abc", viewport: "1440×900", screenshots: [{ name: "../../etc/passwd.png", dataUrl: PNG }] });
+    expect(r.status).toBe(200);
+    expect(r.json.ok).toBe(true);
+    await new Promise((res) => setTimeout(res, 20));
+
+    expect((await c.get("/api/admin/feedback")).status).toBe(403);
+
+    const admin = await signup("관리자", "fb-admin@example.com");
+    expect(admin.user.isAdmin).toBe(true);
+    const list = await admin.c.get("/api/admin/feedback");
+    expect(list.status).toBe(200);
+    const fb = list.json.items.find((x: { id: string }) => x.id === r.json.id);
+    expect(fb).toMatchObject({ kind: "bug", message: "버튼이 안 눌려요", userEmail: email, mailStatus: "skipped", status: "open" });
+    expect(fb.pageUrl).not.toContain("SECRET-TOKEN");
+    expect(fb.pageUrl).toContain("#/reset/***");
+    expect(fb.pageUrl).not.toContain("abc");
+    expect(fb.browser).toBe("Chrome 131 · Windows 10/11 · 화면 1440×900");
+    expect(fb.files).toHaveLength(1);
+    expect(fb.files[0].name).toBe("etcpasswd.png");
+
+    const file = await admin.c.get(`/api/admin/feedback/${fb.id}/files/${fb.files[0].id}`);
+    expect(file.headers.get("content-type")).toBe("image/png");
+    expect(file.headers.get("x-content-type-options")).toBe("nosniff");
+    expect((await c.get(`/api/admin/feedback/${fb.id}/files/${fb.files[0].id}`)).status).toBe(403);
+
+    const done = await admin.c.patch(`/api/admin/feedback/${fb.id}`, { status: "done" });
+    expect(done.json.status).toBe("done");
+    const open = await admin.c.get("/api/admin/feedback?status=open");
+    expect(open.json.items.some((x: { id: string }) => x.id === fb.id)).toBe(false);
+  });
+
+  it("스크린샷: 이미지가 아닌 파일·3장 초과·5MB 초과는 거부", async () => {
+    const { c } = await signup("의견2");
+    const fake = "data:image/png;base64," + Buffer.from("<script>alert(1)</script>").toString("base64");
+    expect((await send(c, { screenshots: [{ name: "x.png", dataUrl: fake }] })).status).toBe(400);
+    expect((await send(c, { screenshots: Array.from({ length: 4 }, () => ({ name: "a.png", dataUrl: PNG })) })).status).toBe(400);
+    const big = Buffer.alloc(5 * 1024 * 1024 + 1);
+    Buffer.from("89504e470d0a1a0a", "hex").copy(big);
+    const r = await send(c, { screenshots: [{ name: "big.png", dataUrl: "data:image/png;base64," + big.toString("base64") }] });
+    expect(r.status).toBe(400);
+    expect(r.json.error).toContain("5MB");
+    expect((await send(c, { message: "   " })).status).toBe(400);
+  });
+
+  it("사용자당 한 시간에 5번까지", async () => {
+    const { c } = await signup("의견3");
+    for (let i = 0; i < 5; i++) expect((await send(c, { message: `의견 ${i}` })).status).toBe(200);
+    const r = await send(c, { message: "여섯 번째" });
+    expect(r.status).toBe(429);
+    expect(r.json.error).toContain("한 시간에 5번");
   });
 });

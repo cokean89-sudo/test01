@@ -17,6 +17,8 @@ interface LibraryState {
   updateRef: (id: string, patch: RefPatch) => Promise<void>;
   bulk: (op: BulkOp) => Promise<void>;
   renameTag: (from: string, to: string) => Promise<void>;
+  mergeTags: (from: string[], to: string) => Promise<void>;
+  deleteTags: (tags: string[]) => Promise<void>;
   createCase: (input: CaseInput) => Promise<CaseStudy>;
   updateCase: (id: string, patch: Partial<CaseInput>) => Promise<void>;
   deleteCase: (id: string) => Promise<void>;
@@ -72,6 +74,16 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   async bulk(op) {
     const { references } = await api.bulk(op);
     set({ refs: references });
+  },
+
+  async mergeTags(from, to) {
+    const { references, cases } = await api.mergeTags(from, to);
+    set({ refs: references, cases });
+  },
+
+  async deleteTags(tags) {
+    const { references, cases } = await api.deleteTags(tags);
+    set({ refs: references, cases });
   },
 
   async renameTag(from, to) {

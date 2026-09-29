@@ -10,29 +10,40 @@ import { enforceLimit, HttpError } from "../security";
 
 const tagList = z.array(z.string().trim().min(1).max(60)).max(50);
 
-const RefInput = z.object({
+// 수정(PATCH)용 스키마는 기본값 없이 만든다 — Zod 4 의 .partial() 은 .default() 를 그대로 적용해서,
+// { width, height } 만 보내도 tags·kind·source 가 기본값으로 덮어써진다.
+const RefFields = z.object({
   imageUrl: z.string().trim().min(1).max(4000),
   sourceUrl: z.string().max(4000).optional(),
   title: z.string().max(500).optional(),
   note: z.string().max(5000).optional(),
-  tags: tagList.default([]),
+  tags: tagList,
   caseId: z.string().max(40).optional(),
-  kind: z.enum(["image", "logo"]).default("image"),
+  kind: z.enum(["image", "logo"]),
   logoLabel: z.string().max(100).optional(),
   width: z.number().positive().max(100000).optional(),
   height: z.number().positive().max(100000).optional(),
-  source: z.enum(["pinterest", "web", "image", "manual", "sample"]).default("manual"),
+  source: z.enum(["pinterest", "web", "image", "manual", "sample"]),
 });
 
-const RefPatch = RefInput.partial().extend({ caseId: z.string().max(40).nullable().optional() });
+const RefInput = RefFields.extend({
+  tags: tagList.default([]),
+  kind: RefFields.shape.kind.default("image"),
+  source: RefFields.shape.source.default("manual"),
+});
 
-const CaseInput = z.object({
+const RefPatch = RefFields.partial().extend({ caseId: z.string().max(40).nullable().optional() });
+
+const CaseFields = z.object({
   name: z.string().trim().min(1).max(200),
   subtitle: z.string().max(300).optional(),
   highlight: z.string().max(500).optional(),
   description: z.string().max(5000).optional(),
-  tags: tagList.default([]),
+  tags: tagList,
 });
+
+const CaseInput = CaseFields.extend({ tags: tagList.default([]) });
+const CasePatch = CaseFields.partial();
 
 /** 이미지 주소가 http(s) 또는 앱 내부 경로(/samples/…)인지 — javascript: 등 차단 */
 function safeImageUrl(url: string) {
@@ -139,6 +150,23 @@ export function libraryRouter(repo: Repo): Router {
     res.json({ references: repo.listRefs(req.teamId!), cases: repo.listCases(req.teamId!) });
   });
 
+  // 동의어 병합: 여러 태그 → 하나
+  r.post("/tags/merge", teamRole(repo, "editor"), (req, res) => {
+    const { from, to } = z.object({ from: z.array(z.string().min(1).max(60)).min(1).max(100), to: z.string().trim().min(1).max(60) }).parse(req.body);
+    repo.mergeTags(req.teamId!, from, to, req.user!.id);
+    repo.log(req.teamId!, req.user!.id, "tag.merge", `태그 ${from.map((f) => `'${f}'`).join(", ")} → '${to}' 병합`);
+    changed(req.teamId!, req.user!.id, "refs");
+    res.json({ references: repo.listRefs(req.teamId!), cases: repo.listCases(req.teamId!) });
+  });
+
+  r.post("/tags/delete", teamRole(repo, "editor"), (req, res) => {
+    const { tags } = z.object({ tags: z.array(z.string().min(1).max(60)).min(1).max(200) }).parse(req.body);
+    repo.mergeTags(req.teamId!, tags, "", req.user!.id);
+    repo.log(req.teamId!, req.user!.id, "tag.delete", `태그 ${tags.length}개 삭제: ${tags.slice(0, 10).join(", ")}${tags.length > 10 ? " …" : ""}`);
+    changed(req.teamId!, req.user!.id, "refs");
+    res.json({ references: repo.listRefs(req.teamId!), cases: repo.listCases(req.teamId!) });
+  });
+
   r.post("/cases", teamRole(repo, "editor"), (req, res) => {
     const c = repo.insertCase(req.teamId!, CaseInput.parse(req.body), req.user!.id);
     repo.log(req.teamId!, req.user!.id, "case.create", `케이스 '${c.name}' 생성`, { type: "case", id: c.id });
@@ -147,7 +175,7 @@ export function libraryRouter(repo: Repo): Router {
   });
 
   r.patch("/cases/:id", teamRole(repo, "editor"), (req, res) => {
-    const c = repo.updateCase(req.teamId!, String(req.params.id), CaseInput.partial().parse(req.body), req.user!.id);
+    const c = repo.updateCase(req.teamId!, String(req.params.id), CasePatch.parse(req.body), req.user!.id);
     if (!c) throw new HttpError(404, "케이스를 찾을 수 없어요.");
     changed(req.teamId!, req.user!.id, "cases");
     res.json(c);

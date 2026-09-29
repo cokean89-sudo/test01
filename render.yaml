@@ -1,0 +1,67 @@
+# Render Blueprint — GitHub 저장소를 연결하면 이 파일대로 웹 서비스를 만든다.
+# 자세한 순서와 환경변수 설명은 DEPLOY.md 를 보세요.
+#
+# · 비밀값(API 키, 메일 비밀번호, 소셜 로그인 키)은 여기에 적지 않는다 → sync: false
+#   (처음 Blueprint 를 만들 때 Render 화면에서 입력, 나중에는 서비스 > Environment 에서 수정)
+# · NODE_ENV 는 넣지 않는다 — production 이면 npm ci 가 빌드 도구(vite)를 설치하지 않아 빌드가 실패한다.
+#   운영 모드는 npm start(--prod)로 켜진다.
+
+services:
+  - type: web
+    name: refboard
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    # SQLite 데이터가 재배포 후에도 남도록 영구 디스크에 저장
+    disk:
+      name: refboard-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      # ── 실행 환경 (값 고정) ──
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /var/data
+      - key: TRUST_PROXY
+        value: "1"
+
+      # ── 공개 주소 (선택: 비우면 https://<서비스이름>.onrender.com 을 자동 사용) ──
+      - key: APP_URL
+        sync: false
+
+      # ── AI (Claude) ──
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # ── 메일 발송 (가입 인증 · 비밀번호 재설정 · 초대 · 의견 보내기) ──
+      # 포트는 기본 587. 465(네이버 등)를 쓰면 Environment 에 SMTP_PORT=465 를 추가
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+
+      # ── 소셜 로그인 (선택) ──
+      - key: KAKAO_CLIENT_ID
+        sync: false
+      - key: KAKAO_CLIENT_SECRET
+        sync: false
+      - key: NAVER_CLIENT_ID
+        sync: false
+      - key: NAVER_CLIENT_SECRET
+        sync: false
+
+      # ── 의견 보내기 · 관리자 ──
+      - key: FEEDBACK_EMAIL
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false

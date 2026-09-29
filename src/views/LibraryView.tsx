@@ -49,7 +49,8 @@ export function LibraryView() {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, [contenteditable]")) return;
+      // 입력 칸이나 다른 창(의견 보내기 등)이 열려 있으면 그쪽 붙여넣기에 맡긴다
+      if (t.closest("input, textarea, [contenteditable]") || document.querySelector(".modal-backdrop")) return;
       const text = e.clipboardData?.getData("text/plain") ?? "";
       if (extractUrls(text).length) {
         e.preventDefault();
@@ -111,7 +112,12 @@ export function LibraryView() {
     <div className="library">
       <aside className="sidebar">
         <section>
-          <h4>태그</h4>
+          <h4 className="sidebar-title">
+            태그
+            <a className="link-btn blue" href="#/tags">
+              관리
+            </a>
+          </h4>
           {tags.length === 0 && <p className="muted small">아직 태그가 없어요.</p>}
           <ul className="tag-list">
             {tags.map(({ tag, count }) => (

@@ -1,3 +1,4 @@
+import type { FeedbackInput, FeedbackItem } from "../shared/feedback";
 import type {
   ActivityItem,
   AnalyzeRequest,
@@ -96,7 +97,7 @@ export const authApi = {
   signup: (b: { email: string; password: string; name: string }) => request<{ ok: true; mailDelivered: boolean; devLink?: string }>("POST", "/api/auth/signup", b),
   verify: (token: string) => request<SessionInfo>("POST", "/api/auth/verify", { token }),
   resend: (email: string) => request<{ ok: true; devLink?: string }>("POST", "/api/auth/resend", { email }),
-  login: (email: string, password: string) => request<SessionInfo>("POST", "/api/auth/login", { email, password }),
+  login: (email: string, password: string, remember = false) => request<SessionInfo>("POST", "/api/auth/login", { email, password, remember }),
   logout: () => request<{ ok: true }>("POST", "/api/auth/logout", {}),
   logoutOthers: () => request<{ ok: true; removed: number }>("POST", "/api/auth/logout-others", {}),
   forgot: (email: string) => request<{ ok: true; devLink?: string }>("POST", "/api/auth/forgot", { email }),
@@ -139,6 +140,8 @@ export const api = {
   updateRef: (id: string, patch: RefPatch) => request<Reference>("PATCH", `${T()}/references/${id}`, patch),
   bulk: (op: BulkOp) => request<{ references: Reference[] }>("POST", `${T()}/references/bulk`, op),
   renameTag: (from: string, to: string) => request<{ references: Reference[]; cases: CaseStudy[] }>("POST", `${T()}/tags/rename`, { from, to }),
+  mergeTags: (from: string[], to: string) => request<{ references: Reference[]; cases: CaseStudy[] }>("POST", `${T()}/tags/merge`, { from, to }),
+  deleteTags: (tags: string[]) => request<{ references: Reference[]; cases: CaseStudy[] }>("POST", `${T()}/tags/delete`, { tags }),
   createCase: (c: CaseInput) => request<CaseStudy>("POST", `${T()}/cases`, c),
   updateCase: (id: string, c: Partial<CaseInput>) => request<CaseStudy>("PATCH", `${T()}/cases/${id}`, c),
   deleteCase: (id: string) => request<{ ok: true }>("DELETE", `${T()}/cases/${id}`, {}),
@@ -158,6 +161,14 @@ export const api = {
   suggestTags: (req: TagSuggestRequest) => request<TagSuggestResult>("POST", "/api/ai/tags", req),
   importBackup: (data: unknown) => request<{ references: number; cases: number; documents: number }>("POST", `${T()}/backup`, { data }),
   backupUrl: () => `${T()}/backup`,
+};
+
+export const feedbackApi = {
+  send: (b: FeedbackInput) => request<{ ok: true; id: string }>("POST", "/api/feedback", b),
+  list: (status: "open" | "done" | "all") => request<{ items: FeedbackItem[]; open: number }>("GET", `/api/admin/feedback?status=${status}`),
+  setStatus: (id: string, status: FeedbackItem["status"]) => request<FeedbackItem>("PATCH", `/api/admin/feedback/${encodeURIComponent(id)}`, { status }),
+  resend: (id: string) => request<FeedbackItem>("POST", `/api/admin/feedback/${encodeURIComponent(id)}/resend`, {}),
+  fileUrl: (id: string, fileId: string) => `/api/admin/feedback/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`,
 };
 
 /** 외부 이미지 → 서버 프록시 URL (핫링크 차단/CORS 회피용). 같은 출처 경로는 그대로. */

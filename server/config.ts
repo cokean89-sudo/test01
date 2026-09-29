@@ -18,8 +18,11 @@ export const openOnStart = process.argv.includes("--open") || flag(env.OPEN_BROW
 
 export const PORT = Number(env.PORT) || 5178;
 export const HOST = env.HOST || "127.0.0.1";
-/** 외부에서 접속하는 주소 (메일 링크, 소셜 로그인 콜백, Origin 검사에 사용) */
-export const APP_URL = (env.APP_URL || `http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`).replace(/\/+$/, "");
+/**
+ * 외부에서 접속하는 주소 (메일 링크, 소셜 로그인 콜백, Origin 검사에 사용).
+ * Render 에서는 비워 두면 Render 가 알려주는 서비스 주소(https://….onrender.com)를 쓴다.
+ */
+export const APP_URL = (env.APP_URL || env.RENDER_EXTERNAL_URL || `http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`).replace(/\/+$/, "");
 export const APP_ORIGIN = new URL(APP_URL).origin;
 const isLoopback = (host: string) => ["127.0.0.1", "localhost", "::1", "[::1]"].includes(host.toLowerCase());
 /** 이 컴퓨터에서만 접속 가능한 개인 실행 (외부 공개 아님) */
@@ -50,6 +53,11 @@ export const smtp = {
   from: env.MAIL_FROM || env.SMTP_USER || "RefBoard <no-reply@localhost>",
 };
 export const mailConfigured = !!smtp.host;
+
+/** 의견 보내기 수신 메일 */
+export const FEEDBACK_EMAIL = (env.FEEDBACK_EMAIL || "cokean89@gmail.com").trim();
+/** 관리자(피드백 목록을 볼 수 있는 계정) 메일 — 비우면 FEEDBACK_EMAIL */
+export const ADMIN_EMAILS = list(env.ADMIN_EMAILS).length ? list(env.ADMIN_EMAILS) : [FEEDBACK_EMAIL.toLowerCase()];
 
 export const oauth = {
   kakao: {

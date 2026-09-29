@@ -7,15 +7,18 @@ import { useLibrary } from "./store/library";
 import { connectTeamEvents, useCurrentTeam, useSession } from "./store/session";
 import { toast } from "./store/toast";
 import { useUI } from "./store/ui";
+import { AdminFeedbackView } from "./views/AdminFeedbackView";
 import { AccountView, ForgotView, InviteView, LoginView, ResetView, SignupView, VerifyView } from "./views/auth/AuthViews";
 import { BuildDialog } from "./views/BuildDialog";
 import { CasesView } from "./views/CasesView";
 import { CollectDialog } from "./views/CollectDialog";
 import { DocsView } from "./views/DocsView";
 import { EditorView } from "./views/editor/EditorView";
+import { FeedbackDialog } from "./views/FeedbackDialog";
 import { GuideView } from "./views/GuideView";
 import { LibraryView } from "./views/LibraryView";
 import { PrintView } from "./views/PrintView";
+import { TagsView } from "./views/TagsView";
 import { TeamView } from "./views/team/TeamView";
 import { ViewerView } from "./views/ViewerView";
 
@@ -28,11 +31,22 @@ export function App() {
   const init = useSession((s) => s.init);
   const collect = useUI((s) => s.collect);
   const build = useUI((s) => s.build);
+  const feedback = useUI((s) => s.feedback);
+  const setFeedback = useUI((s) => s.setFeedback);
   const [section = "library", id] = route;
 
   useEffect(() => {
     init().catch((err) => toast.error("서버에 연결할 수 없어요: " + (err as Error).message));
   }, [init]);
+
+  // 소셜 로그인은 첫 화면(#/)으로 돌아오므로, 로그인 전에 보던 페이지가 있으면 그리로 보낸다
+  useEffect(() => {
+    if (status !== "ready") return;
+    const after = sessionStorage.getItem("rb.after");
+    if (!after) return;
+    sessionStorage.removeItem("rb.after");
+    if (after.startsWith("#/") && ["", "#", "#/", "#/library", "#/login"].includes(location.hash)) location.hash = after;
+  }, [status]);
 
   // 팀이 바뀌면 라이브러리를 새로 불러오고, 팀 실시간 이벤트를 구독한다
   useEffect(() => {
@@ -109,12 +123,23 @@ export function App() {
           <AccountView />
         ) : section === "guide" ? (
           <GuideView section={id} />
+        ) : section === "tags" ? (
+          <TagsView />
+        ) : section === "admin" ? (
+          <AdminFeedbackView id={route[2]} />
         ) : (
           <LibraryView />
         )}
       </main>
       {collect.open && <CollectDialog initialUrls={collect.urls} />}
       {build.open && <BuildDialog preset={build.preset} />}
+      {section !== "edit" && (
+        <button className="feedback-fab" onClick={() => setFeedback(true)} title="오류 신고 · 개선 요청">
+          <Icon name="message" size={17} />
+          의견 보내기
+        </button>
+      )}
+      {feedback && <FeedbackDialog />}
       <Toasts />
     </div>
   );
@@ -156,7 +181,7 @@ function TopBar({ section }: { section: string }) {
   const refCount = useLibrary((s) => s.refs.length);
   const { user, teams, switchTeam, logout } = useSession();
   const team = useCurrentTeam();
-  const { openCollect, openBuild } = useUI();
+  const { openCollect, openBuild, setFeedback } = useUI();
   const canEdit = !!team && ROLE_RANK[team.role] >= ROLE_RANK.editor;
   const tabs = [
     { key: "library", label: "레퍼런스", icon: "grid" as const, count: refCount },
@@ -164,7 +189,7 @@ function TopBar({ section }: { section: string }) {
     { key: "docs", label: "문서", icon: "file" as const },
     { key: "team", label: "팀", icon: "layers" as const },
   ];
-  const active = section === "edit" ? "docs" : section;
+  const active = section === "edit" ? "docs" : section === "tags" ? "library" : section;
   return (
     <header className="topbar">
       <a className="brand" href="#/library">
@@ -248,6 +273,14 @@ function TopBar({ section }: { section: string }) {
               <MenuItem icon="settings" onClick={() => (close(), navigate("account"))}>
                 내 계정
               </MenuItem>
+              <MenuItem icon="message" onClick={() => (close(), setFeedback(true))}>
+                의견 보내기
+              </MenuItem>
+              {user?.isAdmin && (
+                <MenuItem icon="file" onClick={() => (close(), navigate("admin/feedback"))}>
+                  받은 의견 (관리자)
+                </MenuItem>
+              )}
               <MenuItem icon="x" onClick={() => (close(), void logout())}>
                 로그아웃
               </MenuItem>

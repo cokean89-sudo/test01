@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <rect width="1000" height="1000" fill="#f3ede2"/>
+  <ellipse cx="500" cy="850" rx="360" ry="40" fill="#d9ceba"/>
+  <g>
+    <path d="M250 330 l180 -60 l180 60 v470 l-180 60 l-180 -60 z" fill="#2f4a3a"/>
+    <path d="M430 270 l180 60 v470 l-180 60 z" fill="#243b2e"/>
+    <path d="M250 330 l180 -60 l180 60 l-180 60 z" fill="#3d5a48"/>
+    <rect x="280" y="470" width="130" height="150" fill="#f7f3ec" transform="skewY(-18) translate(0 140)"/>
+    <text x="345" y="610" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="30" fill="#2f4a3a" transform="skewY(-18) translate(0 140)">MR</text>
+  </g>
+  <g>
+    <rect x="610" y="360" width="150" height="460" rx="40" fill="#1f2a24"/>
+    <rect x="650" y="300" width="70" height="80" rx="12" fill="#e2a33b"/>
+    <rect x="610" y="500" width="150" height="170" fill="#f7f3ec"/>
+    <text x="685" y="570" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="26" fill="#2f4a3a">COLD</text>
+    <text x="685" y="604" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="26" fill="#2f4a3a">BREW</text>
+    <rect x="640" y="630" width="90" height="12" rx="4" fill="#e2a33b"/>
+  </g>
+</svg>

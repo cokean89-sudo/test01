@@ -252,7 +252,7 @@ function MergeDialog({ tags, usage, onClose, onMerge }: { tags: string[]; usage:
         ))}
       </div>
       <Field label="또는 새 이름" hint="선택한 태그가 모두 이 이름 하나로 바뀌어요">
-        <input value={sorted.includes(to) ? "" : to} onChange={(e) => setTo(e.target.value || sorted[0])} placeholder="예) 야간조명" maxLength={60} />
+        <input value={sorted.includes(to) ? "" : to} onChange={(e) => setTo(e.target.value || sorted[0])} placeholder="예) 팝업스토어" maxLength={60} />
       </Field>
     </Modal>
   );

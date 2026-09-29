@@ -26,7 +26,7 @@ export interface Reference {
   updatedByName?: string;
 }
 
-/** 케이스 스터디(예: 경기장, 브랜드, 매장) — 여러 레퍼런스를 묶는 단위 */
+/** 케이스 스터디(예: 브랜드, 경쟁사, 상품) — 여러 레퍼런스를 묶는 단위 */
 export interface CaseStudy {
   id: string;
   name: string;
@@ -105,6 +105,10 @@ interface BaseElement {
   rotation?: number;
   opacity?: number;
   locked?: boolean;
+  /** 템플릿 장식(배경 도형·구분선 등) — 템플릿을 바꾸면 새 템플릿의 장식으로 다시 그린다 */
+  deco?: boolean;
+  /** 템플릿의 내용 자리 이름 (title, body, toc-name, cmp-name-0 …) — 템플릿을 바꿔도 같은 자리로 옮긴다 */
+  slot?: string;
 }
 
 export interface TextElement extends BaseElement {
@@ -198,7 +202,7 @@ export interface PageFlow {
   resolved?: "header" | "side";
 }
 
-export type PageKind = "case" | "reference" | "cover" | "section" | "blank";
+export type PageKind = "case" | "reference" | "cover" | "section" | "blank" | "toc" | "compare" | "closing";
 
 export interface Rect {
   x: number;
@@ -243,7 +247,18 @@ export interface HeaderSettings {
   divider: boolean;
 }
 
+/** 문서 템플릿 — default 는 A4 부서 양식 */
+export type TemplateId = "default" | "clean" | "bold" | "editorial" | "mono" | "tonal";
+
+/**
+ * 색 토큰 — 요소·타이포 색에 hex 대신 쓰면 템플릿 팔레트로 바뀐다 (템플릿·메인 컬러를 바꾸면 함께 바뀐다).
+ * accent 는 문서 강조색(톤온톤은 메인 컬러).
+ */
+export type ColorToken = "accent" | "paper" | "surface" | "line" | "ink" | "muted" | "invert" | "accent2" | "tone1" | "tone2" | "tone3" | "tone4" | "tone5" | "tone6";
+
 export interface DocSettings {
+  /** 문서 템플릿 (없으면 default) */
+  template?: TemplateId;
   pageSize: PageSizeKey;
   margin: { top: number; right: number; bottom: number; left: number };
   background: string;

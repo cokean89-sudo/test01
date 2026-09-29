@@ -48,9 +48,9 @@ export function CasesView() {
         {active ? (
           <CaseEditor key={active.id} c={active} onBuild={(refIds) => openBuild({ refIds, groupBy: "case", query: "", title: active.name })} />
         ) : (
-          <Empty emoji="🏟️" title="케이스로 사례를 묶어 보세요">
+          <Empty emoji="🗂️" title="케이스로 사례를 묶어 보세요">
             <p>
-              케이스는 하나의 사례(경기장, 매장, 브랜드 등)의 이미지·로고·설명을 묶는 단위예요.
+              케이스는 하나의 사례(브랜드, 경쟁사, 상품 등)의 이미지·로고·설명을 묶는 단위예요.
               <br />
               케이스로 문서를 만들면 케이스 스터디 페이지가 한 번에 만들어져요.
             </p>
@@ -130,11 +130,11 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
           <Field label="케이스명 (타이틀)">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onBlur={() => form.name.trim() && save({ name: form.name })} />
           </Field>
-          <Field label="서브타이틀" hint="예: Bundesliga-FC Bayern München">
+          <Field label="서브타이틀" hint="예: MORNING ROUTINE · Seongsu Pop-up">
             <input value={form.subtitle ?? ""} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} onBlur={() => save({ subtitle: form.subtitle })} />
           </Field>
         </div>
-        <Field label="강조 라인" hint="예: 스폰서 : Allianz AG (보험/금융) / 소유: Allianz AG">
+        <Field label="강조 라인" hint="예: 유형 : 브랜드 팝업 / 채널: 오프라인 · SNS">
           <input value={form.highlight ?? ""} onChange={(e) => setForm({ ...form, highlight: e.target.value })} onBlur={() => save({ highlight: form.highlight })} />
         </Field>
         <Field label="설명">
@@ -217,8 +217,8 @@ function NewCaseDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (
           void submit();
         }}
       >
-        <Field label="케이스 이름" hint="경기장·매장·브랜드처럼 하나의 사례 이름이에요. 문서의 페이지 제목이 돼요.">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예) Allianz Arena" autoFocus maxLength={80} />
+        <Field label="케이스 이름" hint="브랜드·경쟁사·상품처럼 하나의 사례 이름이에요. 문서의 페이지 제목이 돼요.">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예) 모닝루틴 성수 팝업" autoFocus maxLength={80} />
         </Field>
       </form>
     </Modal>

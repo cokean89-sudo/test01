@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { LAYOUT_MODES, PAGE_SIZES, type PageSizeKey } from "../../shared/types";
 import { api } from "../api";
+import { MatchAllCheck } from "../components/MatchAllCheck";
+import { settingsWithTemplate, TemplatePicker, type TemplateChoice } from "../components/TemplatePicker";
 import { PageView } from "../components/PageView";
 import { SmartImage } from "../components/SmartImage";
 import { Button, Field, Modal, NumberInput, Segmented, Select, Toggle } from "../components/ui";
@@ -8,6 +10,7 @@ import { buildDocument, buildGroups, type BuildOptions, type GroupBy } from "../
 import { DEFAULT_LAYOUT, defaultSettings, FOOTER_PRESETS, REPORT_TYPOGRAPHY, TYPOGRAPHY_PRESETS } from "../lib/defaults";
 import { useTeamDefaults } from "../store/teamDefaults";
 import { navigate } from "../lib/router";
+import { matchSummary, noMatchHint, noMatchMessage, searchRefs } from "../lib/search";
 import { useLibrary } from "../store/library";
 import { toast } from "../store/toast";
 import { useUI } from "../store/ui";
@@ -28,6 +31,8 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
     maxPerPage: preset?.maxPerPage ?? 9,
     cover: preset?.cover ?? true,
     sections: preset?.sections ?? false,
+    toc: preset?.toc ?? false,
+    closing: preset?.closing ?? false,
     minGroupSize: preset?.minGroupSize ?? 2,
     refIds: preset?.refIds,
   });
@@ -36,6 +41,8 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
   const teamDefaults = useTeamDefaults();
   const [footerKey, setFooterKey] = useState("team");
   const [typoKey, setTypoKey] = useState("team");
+  const [template, setTemplate] = useState<TemplateChoice | null>(null);
+  const chosen: TemplateChoice = template ?? { id: teamDefaults?.template ?? "default", accent: teamDefaults?.template === "tonal" ? teamDefaults.accent : undefined };
   const [overrides, setOverrides] = useState<Record<string, { label?: string; excluded?: boolean }>>({});
   const [runAi, setRunAi] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -50,16 +57,18 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
     });
 
   const settings = useMemo(() => {
-    const s = structuredClone(teamDefaults ?? defaultSettings());
+    let s = structuredClone(teamDefaults ?? defaultSettings());
     s.pageSize = pageSize;
+    s = settingsWithTemplate(s, chosen);
     if (footerKey !== "team") s.footer = { ...FOOTER_PRESETS.find((f) => f.key === footerKey)!.footer, left: s.footer.left || "" };
-    if (typoKey !== "team") {
+    if (typoKey !== "team" && (s.template ?? "default") === "default") {
       const typo = TYPOGRAPHY_PRESETS.find((t) => t.key === typoKey)!;
       s.typography = structuredClone(REPORT_TYPOGRAPHY);
       for (const [role, style] of Object.entries(typo.apply)) Object.assign(s.typography[role as keyof typeof s.typography], style);
     }
     return s;
-  }, [teamDefaults, pageSize, footerKey, typoKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamDefaults, pageSize, footerKey, typoKey, chosen.id, chosen.accent]);
   useEffect(() => {
     if (teamDefaults) setPageSize(teamDefaults.pageSize);
   }, [teamDefaults]);
@@ -71,6 +80,8 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
   );
   const preview = useMemo(() => buildDocument(refs, cases, settings, opts, groups), [refs, cases, settings, opts, groups]);
   const total = groups.reduce((a, g) => a + g.refs.length, 0);
+  // 라이브러리 검색과 같은 기준으로 센 결과 수 (조건 문장용)
+  const hitCount = useMemo(() => (opts.refIds ? 0 : searchRefs(refs, cases, opts.query, opts.matchMode).length), [refs, cases, opts.query, opts.matchMode, opts.refIds]);
 
   async function create() {
     setCreating(true);
@@ -120,18 +131,13 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
           ) : (
             <>
               <Field label="키워드" hint="공백으로 구분 · #태그 정확히 · -제외">
-                <input value={opts.query} onChange={(e) => set("query", e.target.value)} placeholder="예) 조형물 야간조명 굿즈샵" autoFocus />
+                <input value={opts.query} onChange={(e) => set("query", e.target.value)} placeholder="예) 팝업스토어 패키지 경쟁사" autoFocus />
               </Field>
-              <Field label="매칭">
-                <Segmented
-                  value={opts.matchMode}
-                  onChange={(v) => set("matchMode", v)}
-                  options={[
-                    { value: "or", label: "하나라도 포함" },
-                    { value: "and", label: "모두 포함" },
-                  ]}
-                />
-              </Field>
+              <div className="field">
+                <span className="field-label">찾는 조건</span>
+                <MatchAllCheck query={opts.query} mode={opts.matchMode} onChange={(v) => set("matchMode", v)} />
+                <span className="field-hint">{rawGroups.length ? matchSummary(opts.query, opts.matchMode, hitCount) : noMatchMessage(opts.query, opts.matchMode)}</span>
+              </div>
             </>
           )}
           <Field label="페이지 구성 기준">
@@ -155,8 +161,14 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
               </Field>
             )}
           </div>
+          <div className="field">
+            <span className="field-label">템플릿</span>
+            <TemplatePicker value={chosen} onChange={setTemplate} compact pageSize={pageSize} />
+          </div>
           <Toggle checked={opts.cover} onChange={(v) => set("cover", v)} label="표지 페이지 넣기" />
+          <Toggle checked={!!opts.toc} onChange={(v) => set("toc", v)} label="목차 페이지 넣기 (간지·그룹 이름으로 자동 작성)" />
           <Toggle checked={opts.sections} onChange={(v) => set("sections", v)} label="그룹마다 간지(섹션) 페이지 넣기" />
+          <Toggle checked={!!opts.closing} onChange={(v) => set("closing", v)} label="마무리 페이지 넣기" />
           <details className="al-more">
             <summary>배치 · 양식 세부 설정</summary>
             <div className="build-options" style={{ paddingBottom: 6 }}>
@@ -169,7 +181,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
                       : setOpts((o) => ({ ...o, layoutAuto: false, layout: { ...o.layout, mode: mode as typeof o.layout.mode } }))
                   }
                   options={[
-                    { value: "auto", label: "템플릿 기본 (가로 줄 · 높이 맞춤)" },
+                    { value: "auto", label: "템플릿 기본 배치" },
                     ...LAYOUT_MODES.map((m) => ({ value: m.key, label: m.label })),
                   ]}
                 />
@@ -202,9 +214,11 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
               <Field label="문서 양식 (하단 태그라인)">
                 <Select value={footerKey} onChange={setFooterKey} options={[{ value: "team", label: `팀 기본 설정${teamDefaults?.footer.left ? ` (${teamDefaults.footer.left})` : ""}` }, ...FOOTER_PRESETS.map((f) => ({ value: f.key, label: f.label }))]} />
               </Field>
-              <Field label="타이포 프리셋">
-                <Select value={typoKey} onChange={setTypoKey} options={[{ value: "team", label: "팀 기본 설정" }, ...TYPOGRAPHY_PRESETS.map((t) => ({ value: t.key, label: t.label }))]} />
-              </Field>
+              {chosen.id === "default" && (
+                <Field label="타이포 프리셋">
+                  <Select value={typoKey} onChange={setTypoKey} options={[{ value: "team", label: "팀 기본 설정" }, ...TYPOGRAPHY_PRESETS.map((t) => ({ value: t.key, label: t.label }))]} />
+                </Field>
+              )}
             </div>
           </details>
           <Toggle
@@ -221,7 +235,11 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
 
         <div className="build-preview">
           <h4>이렇게 묶을게요</h4>
-          {rawGroups.length === 0 && <p className="muted">키워드와 일치하는 레퍼런스가 없어요.</p>}
+          {rawGroups.length === 0 && (
+            <p className="muted">
+              {opts.refIds ? "선택한 레퍼런스가 없어요." : `${noMatchMessage(opts.query, opts.matchMode)}. ${noMatchHint(opts.query, opts.matchMode)}`}
+            </p>
+          )}
           <div className="group-list">
             {rawGroups.map((g) => {
               const ov = overrides[g.key] ?? {};

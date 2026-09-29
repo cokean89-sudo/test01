@@ -31,6 +31,18 @@ describe("AI 글쓰기 프롬프트", () => {
     }
   });
 
+  it("예시는 문체 참고용 — 내용은 입력만 근거로, 예시는 여러 분야에 걸쳐 있다", () => {
+    for (const key of ["design", "planning", "fact"] as const) {
+      expect(systemPrompt("ko", key)).toContain("예시는 문체 참고용이며 내용은 입력 이미지와 메타데이터만 근거로 한다");
+    }
+    const all = Object.values(PERSPECTIVE_GUIDE).flatMap((g) => [...g.examples.report, ...g.examples.sentence]).join(" ");
+    expect(all).not.toMatch(/경기|스타디움|구단|리그|홈 팬|ETFE/);
+    // 매장·패키지·캠페인·진열 등 여러 분야가 섞여 있다
+    expect(all).toMatch(/패키지/);
+    expect(all).toMatch(/캠페인/);
+    expect(all).toMatch(/쇼윈도|매장|외관/);
+  });
+
   it("서술체를 고르면 평서문 지시와 서술체 예시를 쓴다", () => {
     const p = systemPrompt("ko", "design", "sentence");
     expect(p).toMatch(/서술체/);

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <rect width="1000" height="1000" fill="#2f4a3a"/>
+  <rect x="80" y="90" width="840" height="780" fill="#f3ede2"/>
+  <circle cx="500" cy="420" r="250" fill="#e8c78a"/>
+  <text x="500" y="200" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="600" font-size="34" letter-spacing="12" fill="#2f4a3a">SLOW MORNING SET</text>
+  <g>
+    <rect x="300" y="360" width="150" height="250" rx="18" fill="#f7f3ec" stroke="#2f4a3a" stroke-width="5"/>
+    <rect x="300" y="430" width="150" height="90" fill="#2f4a3a"/>
+    <text x="375" y="485" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="22" fill="#e2a33b">MR</text>
+    <rect x="480" y="300" width="220" height="310" rx="10" fill="#2f4a3a"/>
+    <rect x="505" y="330" width="170" height="120" rx="6" fill="#e2a33b"/>
+    <g fill="#f7f3ec"><rect x="520" y="480" width="140" height="12" rx="4"/><rect x="520" y="506" width="100" height="10" rx="4"/></g>
+    <path d="M720 520 h110 v90 h-110 z" fill="#f7f3ec" stroke="#2f4a3a" stroke-width="5"/>
+    <path d="M830 540 c34 0 34 50 0 50" fill="none" stroke="#2f4a3a" stroke-width="8"/>
+  </g>
+  <rect x="200" y="610" width="660" height="26" rx="6" fill="#6b5a45"/>
+  <rect x="160" y="636" width="740" height="234" fill="#e6ddcd"/>
+  <g fill="#2f4a3a"><rect x="240" y="700" width="220" height="16" rx="5"/><rect x="240" y="732" width="160" height="12" rx="5"/></g>
+  <rect x="80" y="90" width="840" height="780" fill="none" stroke="#e2a33b" stroke-width="10"/>
+</svg>

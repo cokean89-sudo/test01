@@ -130,3 +130,71 @@ export function normalizeTags(input: string | string[]): string[] {
   }
   return out;
 }
+
+// ─── 검색 조건을 문장으로 ──────────────────────────────────────
+
+/** 화면에 보여줄 검색어 (대소문자·# 유지, 따옴표만 뺌) */
+export function queryKeywords(q: string): { include: string[]; exclude: string[] } {
+  const include: string[] = [];
+  const exclude: string[] = [];
+  const re = /(-?)(#?)(?:"([^"]+)"|([^\s,]+))/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(q))) {
+    const text = (m[3] ?? m[4] ?? "").normalize("NFC").trim();
+    if (!text) continue;
+    (m[1] === "-" ? exclude : include).push(m[2] + text);
+  }
+  return { include, exclude };
+}
+
+/** 체크박스('키워드가 모두 있는 것만')가 의미 있는지 — 찾을 키워드가 2개 이상일 때 */
+export function keywordCount(q: string): number {
+  return queryKeywords(q).include.length;
+}
+
+/** 받침에 맞는 조사 — withBatchim("야경", "이", "가") → "이" */
+export function josa(word: string, withBatchim: string, without: string): string {
+  const ch = word.trim().slice(-1);
+  if (!ch) return without;
+  const code = ch.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) return (code - 0xac00) % 28 ? withBatchim : without;
+  if (/[0-9]/.test(ch)) return "013678".includes(ch) ? withBatchim : without; // 영·일·삼·육·칠·팔
+  if (/[lmn]/i.test(ch)) return withBatchim;
+  return without;
+}
+
+/** "야경, 파사드 중 하나라도 있는" / "야경, 파사드가 모두 있는" / "야경이 있는" / "" (키워드 없음) */
+export function matchCondition(q: string, mode: MatchMode): string {
+  const { include } = queryKeywords(q);
+  if (include.length === 0) return "";
+  const list = include.join(", ");
+  if (include.length === 1) return `${list}${josa(list, "이", "가")} 있는`;
+  return mode === "and" ? `${list}${josa(list, "이", "가")} 모두 있는` : `${list} 중 하나라도 있는`;
+}
+
+function excludedNote(q: string): string {
+  const { exclude } = queryKeywords(q);
+  return exclude.length ? ` (${exclude.join(", ")} 제외)` : "";
+}
+
+/** 검색 결과 위에 보여줄 문장 — "야경, 파사드 중 하나라도 있는 이미지 24개" */
+export function matchSummary(q: string, mode: MatchMode, count: number): string {
+  const cond = matchCondition(q, mode);
+  return `${cond ? cond + " " : "전체 "}이미지 ${count.toLocaleString()}개${excludedNote(q)}`;
+}
+
+/** 결과가 없을 때 — "야경, 파사드가 모두 있는 이미지가 없어요" */
+export function noMatchMessage(q: string, mode: MatchMode): string {
+  const cond = matchCondition(q, mode);
+  return `${cond ? cond + " " : ""}이미지가 없어요${excludedNote(q)}`;
+}
+
+/** 결과가 없을 때 다음 행동 제안 */
+export function noMatchHint(q: string, mode: MatchMode): string {
+  return mode === "and" && keywordCount(q) > 1
+    ? "‘키워드가 모두 있는 것만’ 체크를 풀면 키워드 중 하나라도 있는 이미지를 찾아요."
+    : "다른 키워드로 찾아보거나 철자를 확인해 보세요.";
+}
+
+export const MATCH_ALL_LABEL = "키워드가 모두 있는 것만";
+export const MATCH_ALL_DISABLED_HINT = "키워드를 2개 이상 입력하면 쓸 수 있어요";

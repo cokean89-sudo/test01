@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { normalizeTags } from "../lib/search";
 import { useToasts } from "../store/toast";
 import { Icon, type IconName } from "./icons";
@@ -124,11 +124,16 @@ function clamp(n: number, min?: number, max?: number) {
   return n;
 }
 
+/** 문서 템플릿 팔레트 — 색 토큰(ink, tone4 …)을 색 상자에 실제 색으로 보여 주는 데 쓴다 */
+export const ColorTokens = createContext<Record<string, string> | null>(null);
+
 export function ColorInput({ value, onChange, allowAccent, allowEmpty }: { value?: string; onChange: (v: string | undefined) => void; allowAccent?: boolean; allowEmpty?: boolean }) {
   const isAccent = value === "accent";
+  const tokens = useContext(ColorTokens);
+  const shown = value && tokens?.[value] ? tokens[value] : value;
   return (
     <span className="color-input">
-      <input type="color" value={!value ? "#ffffff" : isAccent ? "#000000" : toHex(value)} onChange={(e) => onChange(e.target.value)} />
+      <input type="color" value={!shown ? "#ffffff" : isAccent && !tokens ? "#000000" : toHex(shown)} onChange={(e) => onChange(e.target.value)} />
       <input
         type="text"
         value={value ?? ""}

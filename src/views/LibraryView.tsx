@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { ROLE_RANK, type Reference } from "../../shared/types";
 import { api } from "../api";
 import { Icon } from "../components/icons";
+import { MatchAllCheck } from "../components/MatchAllCheck";
 import { SmartImage } from "../components/SmartImage";
 import { Button, Empty, Menu, MenuItem, Modal, Segmented, Select, TagInput } from "../components/ui";
 import { groupHits } from "../layout/autobuild";
 import { navigate } from "../lib/router";
-import { norm, parseQuery, searchRefs, tagCounts, type MatchMode, type SortKey } from "../lib/search";
+import { matchSummary, noMatchHint, noMatchMessage, norm, parseQuery, searchRefs, tagCounts, type MatchMode, type SortKey } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { useCurrentTeam } from "../store/session";
 import { toast } from "../store/toast";
@@ -211,7 +212,7 @@ export function LibraryView() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder='키워드 검색 — 예) 조형물 야간조명   #네온사인   "포토 존"   -로고'
+              placeholder='키워드 검색 — 예) 팝업스토어 패키지   #경쟁사   "매장 사인"   -로고'
             />
             {query && (
               <button className="icon-mini" onClick={() => setQuery("")} aria-label="검색어 지우기">
@@ -219,14 +220,7 @@ export function LibraryView() {
               </button>
             )}
           </div>
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: "or", label: "하나라도", title: "키워드 중 하나라도 포함 (많이 맞을수록 위로)" },
-              { value: "and", label: "모두", title: "모든 키워드 포함" },
-            ]}
-          />
+          <MatchAllCheck query={query} mode={mode} onChange={setMode} />
           <Select value={sort} onChange={setSort} options={SORTS} />
           <Segmented
             value={view}
@@ -319,7 +313,7 @@ export function LibraryView() {
                 <div className="onboard-step">
                   <span className="step-no">2</span>
                   <strong>키워드 달기</strong>
-                  <span>#스타디움 #야간조명 처럼 나중에 찾을 말을 달아 두세요</span>
+                  <span>#팝업스토어 #패키지 #경쟁사 처럼 나중에 찾을 말을 달아 두세요</span>
                 </div>
                 <div className="onboard-step">
                   <span className="step-no">3</span>
@@ -339,18 +333,18 @@ export function LibraryView() {
               </div>
             </div>
           ) : hits.length === 0 ? (
-            <Empty emoji="🔍" title="검색 결과가 없어요">
-              <p className="muted">다른 키워드를 입력하거나 &lsquo;하나라도&rsquo; 모드로 바꿔 보세요.</p>
+            <Empty emoji="🔍" title={noMatchMessage(query, mode)}>
+              <p className="muted">{noMatchHint(query, mode)}</p>
             </Empty>
           ) : view === "grid" ? (
             <>
-              <p className="result-meta">
-                {hits.length}개{query ? ` · '${query}'` : ""}
-              </p>
+              <p className="result-meta">{matchSummary(query, mode, hits.length)}</p>
               <div className="masonry">{hits.map((h) => card(h.ref))}</div>
             </>
           ) : (
-            groups.map((g) => (
+            <>
+            <p className="result-meta">{matchSummary(query, mode, hits.length)}</p>
+            {groups.map((g) => (
               <section key={g.key} className="group-section">
                 <header>
                   <h3>{g.label}</h3>
@@ -364,7 +358,8 @@ export function LibraryView() {
                 </header>
                 <div className="masonry">{[...g.logos, ...g.refs].map(card)}</div>
               </section>
-            ))
+            ))}
+            </>
           )}
         </div>
       </section>

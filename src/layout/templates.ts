@@ -24,6 +24,8 @@ import { DEFAULT_LAYOUT, MM, REPORT_TYPOGRAPHY } from "../lib/defaults";
 import { dummyText, LOREM, PLACEHOLDER_ASPECTS, placeholderImage } from "../lib/dummy";
 import { uid } from "../lib/id";
 import { computeLayout, safeAspect } from "./engine";
+import { buildThemedPage } from "./themePages";
+import { themeOf } from "./themes";
 
 export function pageDims(settings: DocSettings): { W: number; H: number } {
   const size = PAGE_SIZES[settings.pageSize];
@@ -150,7 +152,180 @@ function flowFor(slots: HeaderSlots, g: PageGrid): PageFlow {
   return { mode: "auto", header: slots.text, side: slots.side, gutter: g.gutter };
 }
 
-// ─── templates ──────────────────────────────────────────────
+// ─── content model (템플릿 전환 시 내용 보존) ─────────────────────
+
+/**
+ * 페이지 내용 — 템플릿과 무관하게 옮겨 다니는 부분.
+ * texts: 자리(slot) 이름 → 글, images: 자동 레이아웃 이미지, logos: 로고 + 라벨,
+ * slotImages: 고정 자리 이미지(비교 항목 등), extras: 사용자가 직접 추가한 요소(그대로 둔다)
+ */
+export interface PageContent {
+  texts: Partial<Record<string, string>>;
+  images: ImageElement[];
+  logos: { img: ImageElement; label: string }[];
+  slotImages: Partial<Record<string, ImageElement>>;
+  extras: PageElement[];
+}
+
+/** 페이지를 다시 만들 때 유지하는 정보 */
+export interface PageMeta {
+  id?: string;
+  group?: string;
+  caseId?: string;
+  layout?: Partial<PageLayout>;
+  flowMode?: PageFlow["mode"];
+  notes?: string;
+  hideFooter?: boolean;
+  /** 비교 페이지 항목 수 (2~4) */
+  items?: number;
+}
+
+export function emptyContent(): PageContent {
+  return { texts: {}, images: [], logos: [], slotImages: {}, extras: [] };
+}
+
+export function slotText(slot: string, role: TextRole, text: string, rect: Rect, style?: TextStyle): TextElement {
+  return { ...textEl(role, text, rect, style), slot };
+}
+
+function logoElements(logos: PageContent["logos"]): PageElement[] {
+  const out: PageElement[] = [];
+  for (const { img, label } of logos) {
+    const logo = { ...img, logo: true, managed: true, fit: "contain" as const };
+    out.push(logo, { ...textEl("label", label, { x: 0, y: 0, w: 80, h: 10 }), labelFor: logo.id });
+  }
+  return out;
+}
+
+function basePage(kind: Page["kind"], meta: PageMeta, fields: Omit<Page, "id" | "kind" | "layout"> & { layout: PageLayout }): Page {
+  return {
+    id: meta.id ?? uid("p"),
+    kind,
+    group: meta.group,
+    caseId: meta.caseId,
+    notes: meta.notes,
+    ...fields,
+  };
+}
+
+// ─── 기본 템플릿 (A4 부서 양식) ─────────────────────────────────
+
+/** 케이스 스터디 — 타이틀 | 서브타이틀 | (강조 라인 +) 설명, 로고 패널 + 이미지. 설명이 길면 왼쪽 단으로 */
+export function defaultCase(settings: DocSettings, c: PageContent, meta: PageMeta): Page {
+  const g = pageGrid(settings);
+  const slots = headerSlots(settings);
+  const elements: PageElement[] = [
+    slotText("title", "title", c.texts.title || dummyText("title"), slots.title),
+    slotText("subtitle", "subtitle", c.texts.subtitle || dummyText("subtitle"), slots.subtitle),
+  ];
+  const highlight = c.texts.highlight?.trim();
+  if (highlight) elements.push(slotText("highlight", "highlight", c.texts.highlight!, { ...slots.text, h: 17 }));
+  elements.push(slotText("body", "body", c.texts.body || dummyText("body"), slots.text));
+  elements.push(...logoElements(c.logos), ...c.images, ...c.extras);
+  const page = basePage("case", meta, {
+    layout: { ...DEFAULT_LAYOUT, ...meta.layout },
+    area: slots.area,
+    flow: { ...flowFor(slots, g), mode: meta.flowMode ?? "auto" },
+    elements,
+  });
+  return relayoutPage(page, settings);
+}
+
+/** 레퍼런스 — 타이틀 | 서브타이틀 | 짧은 글, 아래 전체 폭에 이미지 (글이 길면 왼쪽 단으로) */
+export function defaultReference(settings: DocSettings, c: PageContent, meta: PageMeta): Page {
+  const g = pageGrid(settings);
+  const slots = headerSlots(settings);
+  const elements: PageElement[] = [
+    slotText("title", "title", c.texts.title || dummyText("title"), slots.title),
+    slotText("subtitle", "subtitle", c.texts.subtitle || dummyText("subtitle"), slots.subtitle),
+  ];
+  if (c.texts.highlight?.trim()) elements.push(slotText("highlight", "highlight", c.texts.highlight, { ...slots.text, h: 17 }));
+  // 레퍼런스 페이지 설명은 보통 한두 줄 (템플릿 '짧은 텍스트')
+  elements.push(slotText("body", "body", c.texts.body || LOREM.body.split(". ")[0] + ".", slots.text));
+  elements.push(...logoElements(c.logos), ...c.images, ...c.extras);
+  const page = basePage("reference", meta, {
+    layout: { ...DEFAULT_LAYOUT, ...meta.layout },
+    area: slots.area,
+    flow: { ...flowFor(slots, g), mode: meta.flowMode ?? "auto" },
+    elements,
+  });
+  return relayoutPage(page, settings);
+}
+
+/** 표지 · 간지 공통: 페이지 가운데에 타이틀(아래 정렬)과 설명(위 정렬)을 붙여 둔다 — 줄이 늘어도 겹치지 않는다 */
+function centeredPair(settings: DocSettings, title: { text: string; style: TextStyle; bottom: number }, sub: { text: string; style: TextStyle; top: number }) {
+  const g = pageGrid(settings);
+  const w = g.right - g.left;
+  return [
+    slotText("title", "title", title.text, { x: g.left, y: title.bottom - 120, w, h: 120 }, { align: "center", vAlign: "bottom", ...title.style }),
+    slotText("subtitle", "subtitle", sub.text, { x: g.left, y: sub.top, w, h: 60 }, { align: "center", vAlign: "top", ...sub.style }),
+  ];
+}
+
+/** 표지 · 간지 · 마무리에 이미지가 있으면 아래쪽에 모은다 (다른 템플릿에서 옮겨 온 경우) */
+function lowerArea(settings: DocSettings): Rect {
+  const g = pageGrid(settings);
+  const top = g.H / 2 + 46;
+  return { x: g.left, y: top, w: g.right - g.left, h: Math.max(20, g.contentBottom - top) };
+}
+
+/**
+ * 표지 — 템플릿: 가운데 TITLE (Poppins SemiBold 14.5pt, 대문자) + PRESENTED BY 부서명 (ExtraLight 8pt).
+ * {title} 은 문서 제목, {dept} 는 부서명(하단 왼쪽 문구)으로 표시된다.
+ */
+export function defaultCover(settings: DocSettings, c: PageContent, meta: PageMeta): Page {
+  const g = pageGrid(settings);
+  const mid = g.H / 2;
+  const elements: PageElement[] = centeredPair(
+    settings,
+    { text: c.texts.title || "{title}", style: { fontSize: 14.5, lineHeight: 1.2, uppercase: true }, bottom: mid + 2.99 },
+    { text: c.texts.subtitle ?? "PRESENTED BY {dept}", style: { fontSize: 8, fontWeight: 200, lineHeight: 1.4, uppercase: true }, top: mid + 3.36 },
+  );
+  if (c.texts.highlight?.trim()) {
+    elements.push(slotText("highlight", "highlight", c.texts.highlight, { x: g.left, y: g.top, w: g.right - g.left, h: 14 }, { align: "center", fontSize: 7.5, color: INK_TOKEN }));
+  }
+  elements.push(...c.images, ...c.extras);
+  return relayoutPage(
+    basePage("cover", meta, { layout: { ...DEFAULT_LAYOUT, ...meta.layout }, area: lowerArea(settings), elements, hideFooter: meta.hideFooter ?? true }),
+    settings,
+  );
+}
+
+/** 간지(도비라) — 템플릿: 가운데 Section Break (Poppins Medium 14pt) + 설명 (ExtraLight 10.5pt) */
+export function defaultSection(settings: DocSettings, c: PageContent, meta: PageMeta): Page {
+  const g = pageGrid(settings);
+  const mid = g.H / 2;
+  const elements: PageElement[] = centeredPair(
+    settings,
+    { text: c.texts.title || "Section Break", style: { fontSize: 14, fontWeight: 500, lineHeight: 1.2 }, bottom: mid + 1.16 },
+    { text: c.texts.subtitle ?? "Relevant Contents Goes Here", style: { fontSize: 10.5, fontWeight: 200, lineHeight: 1.4 }, top: mid + 1.66 },
+  );
+  if (c.texts.number?.trim()) {
+    elements.push(slotText("number", "free", c.texts.number, { x: g.left, y: mid - 150, w: g.right - g.left, h: 20 }, { align: "center", fontFamily: "Poppins", fontSize: 10, fontWeight: 300 }));
+  }
+  elements.push(...c.images, ...c.extras);
+  return relayoutPage(
+    basePage("section", meta, { layout: { ...DEFAULT_LAYOUT, ...meta.layout }, area: lowerArea(settings), elements, hideFooter: meta.hideFooter ?? true }),
+    settings,
+  );
+}
+
+export function defaultBlank(settings: DocSettings, c: PageContent, meta: PageMeta): Page {
+  const g = pageGrid(settings);
+  return relayoutPage(
+    basePage("blank", meta, {
+      layout: { ...DEFAULT_LAYOUT, ...meta.layout },
+      area: { x: g.left, y: g.headerBottom, w: g.right - g.left, h: g.contentBottom - g.headerBottom },
+      elements: [...logoElements(c.logos), ...c.images, ...c.extras],
+      hideFooter: meta.hideFooter,
+    }),
+    settings,
+  );
+}
+
+const INK_TOKEN = "ink";
+
+// ─── 페이지 만들기 (입력 → 내용 → 템플릿) ──────────────────────────
 
 export interface CasePageInput {
   caseStudy?: CaseStudy;
@@ -165,42 +340,18 @@ export interface CasePageInput {
   placeholders?: { images: number; logos: number };
 }
 
-/** 케이스 스터디 페이지 — 타이틀 | 서브타이틀 | (강조 라인 +) 설명, 로고 패널 + 이미지. 설명이 길면 왼쪽 단으로 */
+/** 케이스 스터디 페이지 */
 export function createCasePage(settings: DocSettings, input: CasePageInput): Page {
-  const g = pageGrid(settings);
-  const slots = headerSlots(settings);
-  const elements: PageElement[] = [
-    textEl("title", input.title || dummyText("title"), slots.title),
-    textEl("subtitle", input.subtitle || dummyText("subtitle"), slots.subtitle),
-  ];
+  const c = emptyContent();
   const templateOnly = !input.images.length && !input.logos.length && !!input.placeholders;
-  const highlight = input.highlight?.trim() || (templateOnly ? dummyText("highlight") : "");
-  if (highlight) elements.push(textEl("highlight", highlight, { ...slots.text, h: 17 }));
-  elements.push(textEl("body", input.description || dummyText("body"), slots.text));
-  const addLogo = (img: ImageElement, label: string) =>
-    elements.push(img, { ...textEl("label", label, { x: 0, y: 0, w: 80, h: 10 }), labelFor: img.id });
-  for (const logo of input.logos.slice(0, 3)) {
-    const img = imageFromRef(logo, true);
-    img.logo = true;
-    img.fit = "contain";
-    addLogo(img, logo.logoLabel || logo.title || "Logo");
-  }
-  for (const ref of input.images) elements.push(imageFromRef(ref, true));
+  c.texts = { title: input.title, subtitle: input.subtitle, highlight: input.highlight?.trim() || (templateOnly ? dummyText("highlight") : ""), body: input.description };
+  for (const logo of input.logos.slice(0, 3)) c.logos.push({ img: imageFromRef(logo, true), label: logo.logoLabel || logo.title || "Logo" });
+  c.images = input.images.map((r) => imageFromRef(r, true));
   if (templateOnly) {
-    for (let i = 0; i < input.placeholders!.logos; i++) addLogo(placeholderImage(1.6, { logo: true }), "Logo");
-    for (let i = 0; i < input.placeholders!.images; i++) elements.push(placeholderImage(PLACEHOLDER_ASPECTS[i % PLACEHOLDER_ASPECTS.length]));
+    for (let i = 0; i < input.placeholders!.logos; i++) c.logos.push({ img: placeholderImage(1.6, { logo: true }), label: "Logo" });
+    for (let i = 0; i < input.placeholders!.images; i++) c.images.push(placeholderImage(PLACEHOLDER_ASPECTS[i % PLACEHOLDER_ASPECTS.length]));
   }
-  const page: Page = {
-    id: uid("p"),
-    kind: "case",
-    group: input.title,
-    caseId: input.caseStudy?.id,
-    layout: { ...DEFAULT_LAYOUT, ...input.layout },
-    area: slots.area,
-    flow: flowFor(slots, g),
-    elements,
-  };
-  return relayoutPage(page, settings);
+  return buildPage("case", settings, c, { group: input.title, caseId: input.caseStudy?.id, layout: input.layout });
 }
 
 export interface ReferencePageInput {
@@ -214,93 +365,149 @@ export interface ReferencePageInput {
   placeholders?: number;
 }
 
-/** 레퍼런스 페이지 — 타이틀 | 서브타이틀 | 짧은 글, 아래 전체 폭에 이미지 (글이 길면 왼쪽 단으로) */
+/** 레퍼런스(그리드) 페이지 */
 export function createReferencePage(settings: DocSettings, input: ReferencePageInput): Page {
-  const g = pageGrid(settings);
-  const slots = headerSlots(settings);
-  const elements: PageElement[] = [
-    textEl("title", input.title || dummyText("title"), slots.title),
-    textEl("subtitle", input.subtitle || dummyText("subtitle"), slots.subtitle),
-    // 레퍼런스 페이지 설명은 보통 한두 줄 (템플릿 '짧은 텍스트')
-    textEl("body", input.description || LOREM.body.split(". ")[0] + ".", slots.text),
-    ...input.images.map((r) => imageFromRef(r, true)),
-  ];
+  const c = emptyContent();
+  c.texts = { title: input.title, subtitle: input.subtitle, body: input.description };
+  c.images = input.images.map((r) => imageFromRef(r, true));
   if (!input.images.length && input.placeholders) {
-    for (let i = 0; i < input.placeholders; i++) elements.push(placeholderImage(PLACEHOLDER_ASPECTS[i % PLACEHOLDER_ASPECTS.length]));
+    for (let i = 0; i < input.placeholders; i++) c.images.push(placeholderImage(PLACEHOLDER_ASPECTS[i % PLACEHOLDER_ASPECTS.length]));
   }
-  const page: Page = {
-    id: uid("p"),
-    kind: "reference",
-    group: input.group ?? input.title,
-    layout: { ...DEFAULT_LAYOUT, ...input.layout },
-    area: slots.area,
-    flow: flowFor(slots, g),
-    elements,
-  };
-  return relayoutPage(page, settings);
+  return buildPage("reference", settings, c, { group: input.group ?? input.title, layout: input.layout });
 }
 
-/** 표지 · 간지 공통: 페이지 가운데에 타이틀(아래 정렬)과 설명(위 정렬)을 붙여 둔다 — 줄이 늘어도 겹치지 않는다 */
-function centeredPair(settings: DocSettings, title: { text: string; style: TextStyle; bottom: number }, sub: { text: string; style: TextStyle; top: number }) {
-  const g = pageGrid(settings);
-  const w = g.right - g.left;
-  return [
-    textEl("title", title.text, { x: g.left, y: title.bottom - 120, w, h: 120 }, { align: "center", vAlign: "bottom", ...title.style }),
-    textEl("subtitle", sub.text, { x: g.left, y: sub.top, w, h: 60 }, { align: "center", vAlign: "top", ...sub.style }),
-  ];
+/** 표지 — 이미지 자리가 있는 템플릿은 회색 박스 하나를 넣어 둔다 */
+export function createCoverPage(settings: DocSettings, input: { title?: string; subtitle?: string; highlight?: string; images?: Reference[] } = {}): Page {
+  const c = emptyContent();
+  c.texts = { title: input.title, subtitle: input.subtitle, highlight: input.highlight };
+  c.images = (input.images ?? []).map((r) => imageFromRef(r, true));
+  if (!c.images.length) for (let i = 0; i < coverPlaceholders(settings); i++) c.images.push(placeholderImage(i ? 1 : 0.8));
+  return buildPage("cover", settings, c, {});
 }
 
-/**
- * 표지 — 템플릿: 가운데 TITLE (Poppins SemiBold 14.5pt, 대문자) + PRESENTED BY 부서명 (ExtraLight 8pt).
- * {title} 은 문서 제목, {dept} 는 부서명(하단 왼쪽 문구)으로 표시된다.
- */
-export function createCoverPage(settings: DocSettings, input: { title?: string; subtitle?: string } = {}): Page {
-  const g = pageGrid(settings);
-  const mid = g.H / 2;
-  const elements = centeredPair(
-    settings,
-    { text: input.title || "{title}", style: { fontSize: 14.5, lineHeight: 1.2, uppercase: true }, bottom: mid + 2.99 },
-    { text: input.subtitle ?? "PRESENTED BY {dept}", style: { fontSize: 8, fontWeight: 200, lineHeight: 1.4, uppercase: true }, top: mid + 3.36 },
-  );
-  return {
-    id: uid("p"),
-    kind: "cover",
-    layout: { ...DEFAULT_LAYOUT },
-    area: { x: g.left, y: g.top, w: g.right - g.left, h: g.contentBottom - g.top },
-    elements,
-    hideFooter: true,
-  };
-}
-
-/** 간지(도비라) — 템플릿: 가운데 Section Break (Poppins Medium 14pt) + 설명 (ExtraLight 10.5pt) */
-export function createSectionPage(settings: DocSettings, input: { title: string; subtitle?: string }): Page {
-  const g = pageGrid(settings);
-  const mid = g.H / 2;
-  const elements = centeredPair(
-    settings,
-    { text: input.title || "Section Break", style: { fontSize: 14, fontWeight: 500, lineHeight: 1.2 }, bottom: mid + 1.16 },
-    { text: input.subtitle ?? "Relevant Contents Goes Here", style: { fontSize: 10.5, fontWeight: 200, lineHeight: 1.4 }, top: mid + 1.66 },
-  );
-  return {
-    id: uid("p"),
-    kind: "section",
-    group: input.title,
-    layout: { ...DEFAULT_LAYOUT },
-    area: { x: g.left, y: g.top, w: g.right - g.left, h: g.contentBottom - g.top },
-    elements,
-    hideFooter: true,
-  };
+/** 간지 (섹션 구분) */
+export function createSectionPage(settings: DocSettings, input: { title: string; subtitle?: string; number?: string }): Page {
+  const c = emptyContent();
+  c.texts = { title: input.title, subtitle: input.subtitle, number: input.number ?? (themeOf(settings).id === "default" ? undefined : "01") };
+  return buildPage("section", settings, c, { group: input.title });
 }
 
 export function createBlankPage(settings: DocSettings): Page {
-  const g = pageGrid(settings);
+  return buildPage("blank", settings, emptyContent(), {});
+}
+
+/** 목차 — entries 가 없으면 Lorem Ipsum 목록 */
+export function createTocPage(settings: DocSettings, input: { entries?: TocEntry[] } = {}): Page {
+  const c = emptyContent();
+  const entries = input.entries?.length ? input.entries : DUMMY_TOC;
+  c.texts = tocTexts(entries);
+  return buildPage("toc", settings, c, {});
+}
+
+/** 경쟁사·상품 비교 — 2~4개 항목을 나란히 */
+export function createComparePage(settings: DocSettings, input: { items?: number; title?: string; subtitle?: string } = {}): Page {
+  const c = emptyContent();
+  c.texts = { title: input.title, subtitle: input.subtitle };
+  return buildPage("compare", settings, c, { items: input.items ?? 3 });
+}
+
+/** 마무리 */
+export function createClosingPage(settings: DocSettings, input: { title?: string; subtitle?: string; body?: string } = {}): Page {
+  const c = emptyContent();
+  c.texts = { title: input.title, subtitle: input.subtitle, body: input.body };
+  return buildPage("closing", settings, c, {});
+}
+
+/**
+ * 새 문서 시작 페이지 — full: 표지 · 목차 · 간지 · 케이스 스터디 · 레퍼런스 그리드 · 비교 · 마무리 (템플릿 페이지 세트),
+ * basic: 표지 + 레퍼런스 1장
+ */
+export function createStarterPages(settings: DocSettings, set: "full" | "basic" = "full"): Page[] {
+  if (set === "basic") return [createCoverPage(settings), createReferencePage(settings, { title: "", images: [], placeholders: 5 })];
+  const pages = [
+    createCoverPage(settings),
+    createTocPage(settings),
+    createSectionPage(settings, { title: "", number: "01" }),
+    createCasePage(settings, { title: "", images: [], logos: [], placeholders: { images: 4, logos: 2 } }),
+    createReferencePage(settings, { title: "", images: [], placeholders: 5 }),
+    createComparePage(settings),
+    createClosingPage(settings),
+  ];
+  pages[1] = createTocPage(settings, { entries: tocEntries(pages, settings) });
+  return pages;
+}
+
+/** 표지에 이미지 자리가 있는 템플릿 */
+export function coverWantsImage(settings: DocSettings): boolean {
+  const id = themeOf(settings).id;
+  return id === "clean" || id === "editorial" || id === "mono";
+}
+
+function coverPlaceholders(settings: DocSettings): number {
+  return coverWantsImage(settings) ? 1 : 0;
+}
+
+// ─── 목차 ───────────────────────────────────────────────────
+
+export interface TocEntry {
+  num: string;
+  name: string;
+  page: string;
+}
+
+const DUMMY_TOC: TocEntry[] = [
+  { num: "01", name: "Lorem ipsum", page: "03" },
+  { num: "02", name: "Dolor sit amet", page: "05" },
+  { num: "03", name: "Consectetur adipiscing", page: "08" },
+  { num: "04", name: "Sed do eiusmod", page: "11" },
+];
+
+export function tocTexts(entries: TocEntry[]): Partial<Record<string, string>> {
   return {
-    id: uid("p"),
-    kind: "blank",
-    layout: { ...DEFAULT_LAYOUT },
-    area: { x: g.left, y: g.headerBottom, w: g.right - g.left, h: g.contentBottom - g.headerBottom },
-    elements: [],
+    "toc-num": entries.map((e) => e.num).join("\n"),
+    "toc-name": entries.map((e) => e.name).join("\n"),
+    "toc-page": entries.map((e) => e.page).join("\n"),
   };
+}
+
+/** 문서의 간지(섹션)로 목차 항목을 만든다. 간지가 없으면 케이스·레퍼런스·비교 페이지 그룹으로 */
+export function tocEntries(pages: Page[], settings: DocSettings): TocEntry[] {
+  const titleOf = (p: Page) =>
+    (p.elements.find((e): e is TextElement => e.type === "text" && !e.deco && (e.slot === "title" || (!e.slot && e.role === "title")))?.text ?? p.group ?? "").replace(/\s*\(\d+\/\d+\)$/, "");
+  const pick = (kinds: Page["kind"][]) => {
+    const seen = new Set<string>();
+    const out: { name: string; index: number }[] = [];
+    pages.forEach((p, index) => {
+      if (!kinds.includes(p.kind)) return;
+      const name = titleOf(p).replace(/\s+/g, " ").trim();
+      if (!name || seen.has(name)) return;
+      seen.add(name);
+      out.push({ name, index });
+    });
+    return out;
+  };
+  let list = pick(["section"]);
+  if (!list.length) list = pick(["case", "reference", "compare"]);
+  return list.slice(0, 12).map((e, i) => ({
+    num: String(i + 1).padStart(2, "0"),
+    name: e.name,
+    page: String(e.index + settings.pageNumberStart).padStart(2, "0"),
+  }));
+}
+
+// ─── dispatch ───────────────────────────────────────────────
+
+/** 페이지 종류 × 문서 템플릿으로 페이지를 만든다 — 기본 템플릿은 A4 부서 양식 좌표를 그대로 쓴다 */
+export function buildPage(kind: Page["kind"], settings: DocSettings, content: PageContent, meta: PageMeta): Page {
+  const theme = themeOf(settings);
+  if (theme.id === "default") {
+    if (kind === "case") return defaultCase(settings, content, meta);
+    if (kind === "reference") return defaultReference(settings, content, meta);
+    if (kind === "cover") return defaultCover(settings, content, meta);
+    if (kind === "section") return defaultSection(settings, content, meta);
+    if (kind === "blank") return defaultBlank(settings, content, meta);
+  }
+  return buildThemedPage(kind, settings, content, meta);
 }
 
 // ─── text flow (짧은 글 / 긴 글) ───────────────────────────────

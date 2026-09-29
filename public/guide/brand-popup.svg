@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <rect width="1200" height="900" fill="#efe9df"/>
+  <rect x="0" y="760" width="1200" height="140" fill="#d8cfc1"/>
+  <rect x="120" y="150" width="960" height="610" fill="#f7f3ec" stroke="#cfc5b5" stroke-width="4"/>
+  <rect x="120" y="150" width="960" height="120" fill="#2f4a3a"/>
+  <text x="600" y="228" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="54" letter-spacing="16" fill="#f7f3ec">MORNING ROUTINE</text>
+  <g fill="#e2a33b"><path d="M120 270 H1080 V300 H120 Z"/></g>
+  <g fill="#f7f3ec" stroke="#2f4a3a" stroke-width="3">
+    <path d="M120 300 H240 L220 350 H140 Z"/><path d="M240 300 H360 L340 350 H260 Z" fill="#2f4a3a"/><path d="M360 300 H480 L460 350 H380 Z"/><path d="M480 300 H600 L580 350 H500 Z" fill="#2f4a3a"/>
+    <path d="M600 300 H720 L700 350 H620 Z"/><path d="M720 300 H840 L820 350 H740 Z" fill="#2f4a3a"/><path d="M840 300 H960 L940 350 H860 Z"/><path d="M960 300 H1080 L1060 350 H980 Z" fill="#2f4a3a"/>
+  </g>
+  <rect x="170" y="390" width="400" height="370" fill="#cfe0d4"/>
+  <rect x="630" y="390" width="180" height="370" fill="#3d5a48"/>
+  <circle cx="790" cy="580" r="7" fill="#e2a33b"/>
+  <rect x="860" y="390" width="170" height="250" fill="#cfe0d4"/>
+  <g fill="#2f4a3a"><rect x="200" y="620" width="340" height="18" rx="4"/><rect x="215" y="638" width="14" height="122"/><rect x="511" y="638" width="14" height="122"/></g>
+  <g><rect x="230" y="560" width="46" height="60" rx="6" fill="#f7f3ec"/><rect x="296" y="548" width="52" height="72" rx="6" fill="#e2a33b"/><rect x="368" y="560" width="46" height="60" rx="6" fill="#f7f3ec"/><rect x="434" y="552" width="50" height="68" rx="6" fill="#2f4a3a"/></g>
+  <g fill="#2f4a3a" opacity=".85"><path d="M880 470 h130 v14 h-130z M880 500 h100 v10 h-100z M880 522 h116 v10 h-116z"/></g>
+  <g><circle cx="80" cy="690" r="46" fill="#7aa084"/><rect x="72" y="690" width="16" height="70" fill="#6b5a45"/><circle cx="1120" cy="690" r="46" fill="#7aa084"/><rect x="1112" y="690" width="16" height="70" fill="#6b5a45"/></g>
+  <g fill="#1f2330"><circle cx="330" cy="700" r="20"/><rect x="312" y="720" width="36" height="96" rx="13"/><circle cx="960" cy="706" r="18"/><rect x="944" y="724" width="32" height="88" rx="12"/></g>
+  <rect x="936" y="742" width="46" height="36" rx="5" fill="#e2a33b"/>
+</svg>

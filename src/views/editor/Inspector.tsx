@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useMemo, useState, type ReactElement, type ReactNode } from "react";
 import {
   AI_PERSPECTIVES,
   AI_TONES,
@@ -24,7 +24,10 @@ import {
 import { Icon } from "../../components/icons";
 import { resolveStyle } from "../../components/PageView";
 import { SmartImage } from "../../components/SmartImage";
-import { Button, ColorInput, Field, NumberInput, Segmented, Select, Toggle } from "../../components/ui";
+import { fontsNote, MainColorPicker, TemplatePicker, TemplateThumbs, type TemplateChoice } from "../../components/TemplatePicker";
+import { Button, ColorInput, ColorTokens, Field, Modal, NumberInput, Segmented, Select, Toggle } from "../../components/ui";
+import { extractContent } from "../../layout/switchTemplate";
+import { paletteOf, themeOf } from "../../layout/themes";
 import { FOOTER_PRESETS, REPORT_TYPOGRAPHY, TYPOGRAPHY_PRESETS } from "../../lib/defaults";
 import { useCurrentPage, useEditor } from "../../store/editor";
 import { teamApi } from "../../api";
@@ -33,11 +36,16 @@ import { useCurrentTeam } from "../../store/session";
 import { toast } from "../../store/toast";
 import {
   align,
+  applyDocTemplate,
   changePageSize,
   deleteSelection,
   includeInLayout,
   patchElements,
+  refreshToc,
   relayout,
+  replaceDocSettings,
+  setCompareItems,
+  setDocMainColor,
   setArea,
   setCaptionsVisible,
   setTextFlow,
@@ -52,7 +60,10 @@ export function Inspector({ onAiPage }: { onAiPage: () => void }) {
   const [tab, setTab] = useState<Tab>("element");
   const selection = useEditor((s) => s.selection);
   const shown: Tab = tab === "element" && selection.length === 0 ? "page" : tab;
+  const settings = useEditor((s) => s.doc!.settings);
+  const tokens = useMemo(() => ({ ...paletteOf(settings), accent: settings.accent }), [settings]);
   return (
+    <ColorTokens.Provider value={tokens}>
     <aside className="inspector">
       <div className="inspector-tabs">
         {(
@@ -75,6 +86,7 @@ export function Inspector({ onAiPage }: { onAiPage: () => void }) {
         {shown === "type" && <TypePanel />}
       </div>
     </aside>
+    </ColorTokens.Provider>
   );
 }
 
@@ -350,7 +362,34 @@ function PagePanel({ onAiPage }: { onAiPage: () => void }) {
 
       {page.flow && <TextFlowSection pageId={page.id} flow={page.flow} />}
 
-      {(page.kind === "cover" || page.kind === "section") && managed === 0 ? (
+      {page.kind === "compare" && (
+        <Section title="경쟁사 · 상품 비교">
+          <Field label="비교 항목 수">
+            <Segmented<string>
+              value={String(compareCount(page))}
+              onChange={(v) => {
+                const n = Number(v);
+                if (n < compareCount(page) && !confirm(`항목을 ${n}개로 줄이면 오른쪽 항목 내용이 빠져요. 계속할까요? (Ctrl+Z 로 되돌리기)`)) return;
+                setCompareItems(page.id, n);
+              }}
+              options={["2", "3", "4"].map((v) => ({ value: v, label: `${v}개` }))}
+            />
+          </Field>
+          <p className="help-text">왼쪽 칸은 비교 기준(행), 항목마다 한 줄에 하나씩 적으면 행이 맞춰져요. 이미지는 더블클릭해서 바꿔요.</p>
+        </Section>
+      )}
+
+      {page.kind === "toc" && (
+        <Section title="목차">
+          <Button size="sm" icon="refresh" onClick={() => (refreshToc(page.id), toast.success("간지 제목으로 목차를 다시 만들었어요"))}>
+            목차 다시 만들기
+          </Button>
+          <p className="help-text">간지(섹션) 제목과 쪽 번호로 채워요. 간지가 없으면 케이스·레퍼런스·비교 페이지 제목으로 만들어요.</p>
+        </Section>
+      )}
+
+      {(page.kind === "cover" || page.kind === "section" || page.kind === "toc" || page.kind === "compare" || page.kind === "closing") && managed === 0 ? (
+        page.kind === "cover" || page.kind === "section" ? (
         <Section title={page.kind === "cover" ? "표지" : "간지"}>
           <p className="help-text">
             가운데 제목은 아래쪽, 설명은 위쪽에 붙어 있어서 줄이 늘어도 겹치지 않아요.
@@ -362,6 +401,7 @@ function PagePanel({ onAiPage }: { onAiPage: () => void }) {
             )}
           </p>
         </Section>
+        ) : null
       ) : (
         <AutoLayoutSection pageId={page.id} layout={L} count={managed} area={page.area} />
       )}
@@ -603,7 +643,7 @@ function DocPanel() {
             onClick={async () => {
               if (!team) return;
               const d = await teamApi.detail(team.id);
-              set((x) => Object.assign(x, structuredClone(d.defaults)));
+              replaceDocSettings({ ...structuredClone(d.defaults), pageSize: s.pageSize });
               toast.success("팀 기본 양식을 이 문서에 적용했어요 (Ctrl+Z 로 되돌리기)");
             }}
           >
@@ -627,11 +667,12 @@ function DocPanel() {
           )}
         </div>
       </Section>
+      <TemplateSection />
       <Section title="페이지">
         <Field label="크기">
           <Select value={s.pageSize} onChange={(v) => changePageSize(v)} options={Object.entries(PAGE_SIZES).map(([k, v]) => ({ value: k as PageSizeKey, label: `${v.label} (${v.w}×${v.h}pt)` }))} />
         </Field>
-        <Field label="여백 (위 · 오른쪽 · 아래 · 왼쪽, pt)" hint="템플릿 기준 위 13mm · 좌우 10mm · 아래 12mm (1mm ≈ 2.83pt). 새로 추가하는 페이지부터 적용돼요">
+        <Field label="여백 (위 · 오른쪽 · 아래 · 왼쪽, pt)" hint="템플릿마다 기본 여백이 달라요 (1mm ≈ 2.83pt). 새로 추가하는 페이지부터 적용되고, 템플릿을 다시 적용하면 기본값으로 돌아가요">
           <div className="grid-4">
             {(["top", "right", "bottom", "left"] as const).map((k) => (
               <NumberInput key={k} value={s.margin[k]} min={0} max={200} onChange={(v) => set((x) => void (x.margin[k] = v), `margin:${k}`)} />
@@ -642,8 +683,8 @@ function DocPanel() {
           <Field label="배경색">
             <ColorInput value={s.background} onChange={(v) => set((x) => void (x.background = v ?? "#ffffff"), "bg")} />
           </Field>
-          <Field label="강조색">
-            <ColorInput value={s.accent} onChange={(v) => set((x) => void (x.accent = v ?? "#c8102e"), "accent")} />
+          <Field label={themeOf(s).swatches ? "메인 컬러" : "강조색"}>
+            <ColorInput value={s.accent} onChange={(v) => (themeOf(s).swatches ? setDocMainColor(v ?? themeOf(s).accent) : set((x) => void (x.accent = v ?? "#c8102e"), "accent"))} />
           </Field>
         </div>
       </Section>
@@ -818,4 +859,65 @@ function clean<T extends object>(o: T): T {
   const out = { ...o } as Record<string, unknown>;
   for (const k of Object.keys(out)) if (out[k] === undefined || out[k] === "") delete out[k];
   return out as T;
+}
+
+function compareCount(page: Page): number {
+  return Object.keys(extractContent(page).texts).filter((k) => /^cmp-name-\d$/.test(k)).length || 3;
+}
+
+/** 문서 템플릿 — 지금 템플릿 · 바꾸기 · 톤온톤 메인 컬러 */
+function TemplateSection() {
+  const s = useEditor((st) => st.doc!.settings);
+  const [open, setOpen] = useState(false);
+  const theme = themeOf(s);
+  return (
+    <Section title="템플릿" right={<Button size="sm" onClick={() => setOpen(true)}>바꾸기</Button>}>
+      <button className="tpl-current" onClick={() => setOpen(true)} title="템플릿 바꾸기">
+        <TemplateThumbs id={theme.id} accent={s.accent} pageSize={s.pageSize} pages={1} />
+        <span>
+          <strong>{theme.name}</strong>
+          <span className="muted small">{theme.description}</span>
+        </span>
+      </button>
+      {theme.swatches && (
+        <Field label="메인 컬러" hint="명암 단계가 자동으로 맞춰져요">
+          <MainColorPicker value={s.accent} swatches={theme.swatches} onChange={setDocMainColor} />
+        </Field>
+      )}
+      <p className="help-text">폰트: {fontsNote(theme.id)} — 모두 상업적 사용이 가능한 무료 폰트(OFL)</p>
+      {open && <TemplateSwitchDialog current={{ id: theme.id, accent: s.accent }} onClose={() => setOpen(false)} />}
+    </Section>
+  );
+}
+
+function TemplateSwitchDialog({ current, onClose }: { current: TemplateChoice; onClose: () => void }) {
+  const [choice, setChoice] = useState<TemplateChoice>(current);
+  const pageSizeKey = useEditor((st) => st.doc!.settings.pageSize);
+  const pages = useEditor((st) => st.doc!.pages.length);
+  return (
+    <Modal
+      title="템플릿 바꾸기"
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <span className="muted small">{pages}페이지의 글 · 이미지는 그대로 두고 배치 · 색 · 폰트만 바꿔요. Ctrl+Z 로 되돌릴 수 있어요.</span>
+          <span className="spacer" />
+          <Button onClick={onClose}>취소</Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              applyDocTemplate(choice.id, choice.accent);
+              toast.success("템플릿을 바꿨어요 (Ctrl+Z 로 되돌리기)");
+              onClose();
+            }}
+          >
+            이 템플릿으로 바꾸기
+          </Button>
+        </>
+      }
+    >
+      <TemplatePicker value={choice} onChange={setChoice} pageSize={pageSizeKey} />
+    </Modal>
+  );
 }

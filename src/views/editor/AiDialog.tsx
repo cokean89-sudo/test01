@@ -114,7 +114,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
             className="ai-instruction"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
-            placeholder="추가 요청 (예: 더 짧게 / 영문 타이틀 / 조명 연출 위주로)"
+            placeholder="추가 요청 (예: 더 짧게 / 영문 타이틀 / 패키지 컬러 위주로)"
             onKeyDown={(e) => e.key === "Enter" && !loading && run()}
           />
           <Button icon="refresh" onClick={run} disabled={loading || !!busyField}>

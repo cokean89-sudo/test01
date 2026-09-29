@@ -16,6 +16,7 @@ import {
 import { formatPageNumber, REPORT_TYPOGRAPHY } from "../lib/defaults";
 import { dummyText } from "../lib/dummy";
 import { fontStack } from "../lib/fonts";
+import { resolveToken } from "../layout/themes";
 import { SmartImage } from "./SmartImage";
 
 export const PAGE_CSS = `
@@ -57,9 +58,9 @@ export function resolveStyle(settings: DocSettings, role: TextRole, override?: T
   };
 }
 
+/** 색 토큰(accent, ink, paper, tone1~6 …)을 문서 템플릿 팔레트로 바꾼다 */
 export function resolveColor(c: string | undefined, settings: DocSettings): string | undefined {
-  if (!c) return undefined;
-  return c === "accent" ? settings.accent : c;
+  return resolveToken(c, settings);
 }
 
 interface Props {
@@ -84,7 +85,7 @@ export function PageView({ page, settings, index, total, mode = "view", editingI
   return (
     <div
       className={"rb-page " + (className ?? "")}
-      style={{ aspectRatio: `${W} / ${H}`, background: page.background ?? settings.background, ...style }}
+      style={{ aspectRatio: `${W} / ${H}`, background: resolveColor(page.background ?? settings.background, settings), ...style }}
       data-page-id={page.id}
     >
       {page.elements.map((el) => (

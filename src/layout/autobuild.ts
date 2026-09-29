@@ -3,7 +3,8 @@
 import type { CaseStudy, DocSettings, DocumentData, Page, PageLayout, Reference } from "../../shared/types";
 import { uid } from "../lib/id";
 import { norm, parseQuery, searchRefs, type MatchMode, type SearchHit } from "../lib/search";
-import { createCasePage, createCoverPage, createReferencePage, createSectionPage } from "./templates";
+import { coverWantsImage, createCasePage, createClosingPage, createCoverPage, createReferencePage, createSectionPage, createTocPage, tocEntries } from "./templates";
+import { themeOf } from "./themes";
 
 export type GroupBy = "tag" | "case" | "none";
 
@@ -18,6 +19,10 @@ export interface BuildOptions {
   maxPerPage: number;
   cover: boolean;
   sections: boolean;
+  /** 표지 다음에 목차 페이지 */
+  toc?: boolean;
+  /** 마지막에 마무리 페이지 */
+  closing?: boolean;
   /** 이 개수보다 작은 태그 그룹은 '기타'로 합친다 */
   minGroupSize: number;
   /** 지정하면 검색 대신 이 레퍼런스들만 사용 (라이브러리에서 선택 후 생성) */
@@ -186,14 +191,24 @@ export function buildDocument(
 ): DocumentData {
   const caseMap = new Map(cases.map((c) => [c.id, c]));
   const pages: Page[] = [];
+  // 기본 템플릿은 간격만 지정(템플릿 기본 배치), 다른 템플릿은 템플릿 기본 오토 레이아웃
+  const autoLayout = themeOf(settings).id === "default" ? { gap: opts.layout.gap } : undefined;
   if (opts.cover) {
-    // 표지 제목은 문서 제목과 연결({title}), 설명은 부서명({dept})
-    pages.push(createCoverPage(settings));
+    // 표지 제목은 문서 제목과 연결({title}), 설명은 부서명({dept}). 이미지 자리가 있는 템플릿은 첫 이미지를 표지에
+    const hero = coverWantsImage(settings) ? groups.flatMap((g) => g.refs).slice(0, 1) : [];
+    pages.push(createCoverPage(settings, { images: hero }));
   }
+  const tocAt = opts.toc ? pages.push(createTocPage(settings)) - 1 : -1;
 
   groups.forEach((group, gi) => {
     if (opts.sections && groups.length > 1) {
-      pages.push(createSectionPage(settings, { title: group.label, subtitle: `${String(gi + 1).padStart(2, "0")} · ${group.refs.length} References` }));
+      pages.push(
+        createSectionPage(settings, {
+          title: group.label,
+          subtitle: `${String(gi + 1).padStart(2, "0")} · ${group.refs.length} References`,
+          number: themeOf(settings).id === "default" ? undefined : String(gi + 1).padStart(2, "0"),
+        }),
+      );
     }
     const chunks = paginate(group.refs, opts.maxPerPage);
     chunks.forEach((chunk, ci) => {
@@ -209,7 +224,7 @@ export function buildDocument(
             description: ci === 0 ? c?.description : "",
             images: chunk,
             logos: ci === 0 ? group.logos : [],
-            layout: opts.layoutAuto ? { gap: opts.layout.gap } : opts.layout,
+            layout: opts.layoutAuto ? autoLayout : opts.layout,
           }),
         );
       } else {
@@ -218,12 +233,15 @@ export function buildDocument(
             title: group.label + suffix,
             group: group.label,
             images: chunk,
-            layout: opts.layoutAuto ? { gap: opts.layout.gap } : opts.layout,
+            layout: opts.layoutAuto ? autoLayout : opts.layout,
           }),
         );
       }
     });
   });
+
+  if (opts.closing) pages.push(createClosingPage(settings));
+  if (tocAt >= 0) pages[tocAt] = createTocPage(settings, { entries: tocEntries(pages, settings) });
 
   const now = Date.now();
   return { id: uid("d"), title: opts.title, query: opts.query, createdAt: now, updatedAt: now, settings, pages };

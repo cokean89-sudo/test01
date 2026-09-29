@@ -17,6 +17,8 @@ import {
 import { teamApi } from "../../api";
 import { PageView } from "../../components/PageView";
 import { Button, ColorInput, Empty, Field, Modal, NumberInput, Segmented, Select, Spinner, Toggle } from "../../components/ui";
+import { settingsWithTemplate, TemplatePicker } from "../../components/TemplatePicker";
+import { setThemeAccent } from "../../layout/themes";
 import { createCasePage, createCoverPage, createReferencePage } from "../../layout/templates";
 import { FOOTER_PRESETS, REPORT_TYPOGRAPHY, TYPOGRAPHY_PRESETS } from "../../lib/defaults";
 import { navigate } from "../../lib/router";
@@ -414,6 +416,18 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
           {!editable && " (관리자만 수정할 수 있어요)"}
         </p>
         <fieldset disabled={!editable} className="defaults-form">
+          <div className="field">
+            <span className="field-label">기본 템플릿</span>
+            <TemplatePicker
+              compact
+              pageSize={s.pageSize}
+              value={{ id: s.template ?? "default", accent: s.template === "tonal" ? s.accent : undefined }}
+              onChange={(c) => {
+                setS(settingsWithTemplate(s, c));
+                setDirty(true);
+              }}
+            />
+          </div>
           <Field label="부서명 (하단 왼쪽 · 표지의 PRESENTED BY)" hint="예: BRAND STRATEGY TEAM, EMART BRAND DIVISION">
             <input value={s.footer.left} onChange={(e) => set((d) => void (d.footer.left = e.target.value))} maxLength={80} />
           </Field>
@@ -454,11 +468,12 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
             <Field label="페이지 크기">
               <Select value={s.pageSize} onChange={(v) => set((d) => void (d.pageSize = v))} options={Object.entries(PAGE_SIZES).map(([k, v]) => ({ value: k as PageSizeKey, label: v.label }))} />
             </Field>
-            <Field label="강조색">
-              <ColorInput value={s.accent} onChange={(v) => set((d) => void (d.accent = v ?? "#c8102e"))} />
+            <Field label={s.template === "tonal" ? "메인 컬러" : "강조색"}>
+              <ColorInput value={s.accent} onChange={(v) => set((d) => void Object.assign(d, setThemeAccent(d, v ?? "#c8102e")))} />
             </Field>
           </div>
           <div className="grid-2">
+            {(s.template ?? "default") === "default" && (
             <Field label="타이포 프리셋">
               <select
                 value=""
@@ -479,6 +494,7 @@ function DefaultsTab({ team, editable, onSaved }: { team: TeamDetail; editable: 
                 ))}
               </select>
             </Field>
+            )}
             <Field label="하단 양식 프리셋">
               <select
                 value=""
@@ -699,7 +715,7 @@ export function CreateTeamButton() {
             }}
           >
             <Field label="팀 이름">
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 브랜드전략팀 스타디움 TF" maxLength={60} required autoFocus />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 브랜드전략팀 신상품 TF" maxLength={60} required autoFocus />
             </Field>
             <Button type="submit" variant="primary">
               만들기

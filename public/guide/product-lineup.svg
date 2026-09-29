@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="800" viewBox="0 0 1400 800">
+  <rect width="1400" height="800" fill="#faf7f1"/>
+  <rect x="0" y="600" width="1400" height="200" fill="#e9e1d3"/>
+  <g font-family="Poppins, Arial, sans-serif" font-weight="700" text-anchor="middle">
+    <g transform="translate(260 0)"><rect x="-90" y="200" width="180" height="420" rx="46" fill="#2f4a3a"/><rect x="-42" y="140" width="84" height="80" rx="14" fill="#e2a33b"/><rect x="-90" y="340" width="180" height="150" fill="#f7f3ec"/><text x="0" y="410" font-size="26" fill="#2f4a3a">ORIGINAL</text><rect x="-50" y="440" width="100" height="12" rx="4" fill="#2f4a3a"/></g>
+    <g transform="translate(560 0)"><rect x="-90" y="200" width="180" height="420" rx="46" fill="#6b4a33"/><rect x="-42" y="140" width="84" height="80" rx="14" fill="#e2a33b"/><rect x="-90" y="340" width="180" height="150" fill="#f7f3ec"/><text x="0" y="410" font-size="26" fill="#6b4a33">MILK</text><rect x="-50" y="440" width="100" height="12" rx="4" fill="#6b4a33"/></g>
+    <g transform="translate(860 0)"><rect x="-90" y="200" width="180" height="420" rx="46" fill="#b24a3b"/><rect x="-42" y="140" width="84" height="80" rx="14" fill="#e2a33b"/><rect x="-90" y="340" width="180" height="150" fill="#f7f3ec"/><text x="0" y="410" font-size="26" fill="#b24a3b">BERRY</text><rect x="-50" y="440" width="100" height="12" rx="4" fill="#b24a3b"/></g>
+    <g transform="translate(1160 0)"><rect x="-90" y="200" width="180" height="420" rx="46" fill="#3f5f8a"/><rect x="-42" y="140" width="84" height="80" rx="14" fill="#e2a33b"/><rect x="-90" y="340" width="180" height="150" fill="#f7f3ec"/><text x="0" y="410" font-size="26" fill="#3f5f8a">DECAF</text><rect x="-50" y="440" width="100" height="12" rx="4" fill="#3f5f8a"/></g>
+  </g>
+</svg>

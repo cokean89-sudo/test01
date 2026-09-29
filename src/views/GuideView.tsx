@@ -1,4 +1,4 @@
-// TIP — 사용 가이드. 스타디움 사례로 모으기 → 정리 → 문서 → 공유까지 순서대로 설명한다.
+// TIP — 사용 가이드. 브랜드 · 경쟁사 · 상품 사례(가상 예시)로 모으기 → 정리 → 문서 → 공유까지 순서대로 설명한다.
 // 핀터레스트 링크 복사(공유 → 링크 복사 / 이미지 우클릭 → 이미지 주소 복사)는 화면 모형으로 보여준다.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -8,26 +8,15 @@ import { PageView } from "../components/PageView";
 import { Button } from "../components/ui";
 import { createCasePage, createCoverPage, createReferencePage, createSectionPage } from "../layout/templates";
 import { defaultSettings } from "../lib/defaults";
+import { SAMPLE_CASES, SAMPLE_IMAGES, sampleCase, sampleImage } from "../lib/dummy";
 import { navigate } from "../lib/router";
 import { useCurrentTeam, useSession } from "../store/session";
 import { useUI } from "../store/ui";
 
-/** 가이드 예시 이미지 (public/guide — 직접 그린 스타디움 일러스트) */
-const IMG = {
-  night: { src: "/guide/stadium-night.svg", w: 1200, h: 800, title: "야간 조명 파사드" },
-  aerial: { src: "/guide/stadium-aerial.svg", w: 1200, h: 900, title: "경기장 항공 뷰" },
-  stands: { src: "/guide/stadium-stands.svg", w: 1440, h: 810, title: "응원석 배너" },
-  gate: { src: "/guide/stadium-gate.svg", w: 800, h: 1000, title: "게이트 사인" },
-  lights: { src: "/guide/stadium-lights.svg", w: 800, h: 1200, title: "조명탑" },
-  store: { src: "/guide/stadium-store.svg", w: 1000, h: 1000, title: "팀 스토어" },
-  facade: { src: "/guide/stadium-facade.svg", w: 1600, h: 900, title: "주간 파사드" },
-  tunnel: { src: "/guide/stadium-tunnel.svg", w: 800, h: 1000, title: "선수 입장 터널" },
-};
-type ImgKey = keyof typeof IMG;
-
-function ref(key: ImgKey, tags: string[] = []): Reference {
-  const i = IMG[key];
-  return { id: "g-" + key, imageUrl: i.src, title: i.title, tags, kind: "image", width: i.w, height: i.h, source: "manual", createdAt: 0 };
+/** 가이드 예시 이미지 — 샘플 사례(src/lib/dummy.ts, public/guide 의 직접 그린 일러스트) */
+function ref(key: string): Reference {
+  const i = sampleImage(key);
+  return { id: "g-" + key, imageUrl: i.src, title: i.title, tags: i.tags, kind: "image", width: i.w, height: i.h, source: "manual", createdAt: 0 };
 }
 
 const STEPS: { id: string; label: string }[] = [
@@ -87,10 +76,12 @@ export function GuideView({ section }: { section?: string }) {
             <br />
             이렇게 하면 쉬워요
           </h1>
-          <p>스타디움 케이스를 예시로 처음부터 끝까지 따라해 볼게요. 순서대로 봐도 좋고, 필요한 단계만 골라 봐도 돼요.</p>
+          <p>
+            가상의 커피 브랜드 &lsquo;모닝루틴&rsquo;의 팝업, 경쟁사 매장, 신상품 패키지를 예시로 처음부터 끝까지 따라해 볼게요. 순서대로 봐도 좋고, 필요한 단계만 골라 봐도 돼요.
+          </p>
           <div className="guide-hero-strip" aria-hidden="true">
-            {(["night", "gate", "aerial", "lights", "stands", "store", "tunnel", "facade"] as ImgKey[]).map((k) => (
-              <img key={k} src={IMG[k].src} alt="" />
+            {SAMPLE_IMAGES.slice(0, 8).map((i) => (
+              <img key={i.key} src={i.src} alt="" />
             ))}
           </div>
         </div>
@@ -193,7 +184,7 @@ function PinterestStep({ onCollect, canEdit }: { onCollect: () => void; canEdit:
           <BrowserMock url="pinterest.com/pin/1029876…">
             <div className="mock-pin">
               <div className="mock-pin-img">
-                <img src={IMG.night.src} alt="" />
+                <img src={sampleImage("brand-popup").src} alt="" />
               </div>
               <div className="mock-pin-side">
                 <div className="mock-icons">
@@ -250,14 +241,14 @@ function PinterestStep({ onCollect, canEdit }: { onCollect: () => void; canEdit:
           <h3>
             <span className="pill alt">빠르게</span> 이미지 우클릭 → 이미지 주소 복사
           </h3>
-          <BrowserMock url="pinterest.com/search/pins/?q=stadium">
+          <BrowserMock url="pinterest.com/search/pins/?q=popup store">
             <div style={{ position: "relative", height: 262 }}>
               <div className="mock-library" style={{ gridTemplateColumns: "1fr 1fr" }}>
                 <div className="mock-pin-img">
-                  <img src={IMG.gate.src} alt="" style={{ aspectRatio: "4/5", objectFit: "cover" }} />
+                  <img src={sampleImage("brand-poster").src} alt="" style={{ aspectRatio: "4/5", objectFit: "cover" }} />
                 </div>
                 <div className="mock-pin-img">
-                  <img src={IMG.lights.src} alt="" style={{ aspectRatio: "4/5", objectFit: "cover" }} />
+                  <img src={sampleImage("product-pack").src} alt="" style={{ aspectRatio: "4/5", objectFit: "cover" }} />
                 </div>
               </div>
               <Cursor x="30%" y="38%" />
@@ -289,7 +280,7 @@ function PinterestStep({ onCollect, canEdit }: { onCollect: () => void; canEdit:
           <span>
             https://pin.it/3xAbCdE
             <br />
-            https://i.pinimg.com/originals/8f/2c/…/stadium.jpg
+            https://i.pinimg.com/originals/8f/2c/…/popup-store.jpg
           </span>
           <Button variant="primary" size="sm" icon="link" tabIndex={-1}>
             가져오기
@@ -355,11 +346,7 @@ function WebStep() {
 // ─── 3. 키워드 ──────────────────────────────────────────────
 
 function TagsStep() {
-  const cards: { key: ImgKey; tags: string[] }[] = [
-    { key: "night", tags: ["스타디움", "야간조명", "파사드"] },
-    { key: "gate", tags: ["스타디움", "사인물"] },
-    { key: "store", tags: ["굿즈샵", "리테일"] },
-  ];
+  const cards = ["brand-popup", "competitor-shelf", "product-lineup"].map(sampleImage);
   return (
     <Step
       id="tags"
@@ -373,9 +360,9 @@ function TagsStep() {
           <div className="mock-library" aria-hidden="true">
             {cards.map((c) => (
               <div key={c.key} className="mock-card">
-                <img src={IMG[c.key].src} alt="" />
+                <img src={c.src} alt="" />
                 <div>
-                  <strong>{IMG[c.key].title}</strong>
+                  <strong>{c.title}</strong>
                   <span className="ref-tags">
                     {c.tags.map((t) => (
                       <span key={t} className="tag tag-sm">
@@ -392,10 +379,10 @@ function TagsStep() {
           <h3>이렇게 정리해요</h3>
           <ol className="guide-steps">
             <li>
-              <b>키워드</b>: 장소·소재·용도를 짧게. 예) 스타디움, 야간조명, 사인물, 굿즈샵
+              <b>키워드</b>: 대상·요소·소재를 짧게. 예) 팝업스토어, 패키지, 매대, 쇼윈도
             </li>
             <li>
-              <b>케이스</b>: &lsquo;Allianz Arena&rsquo;처럼 하나의 사례로 묶어요. 이름·서브타이틀·설명을 적어 두면 문서에 그대로 들어가요.
+              <b>케이스</b>: 브랜드·경쟁사·상품 하나를 사례로 묶어요. 예) {SAMPLE_CASES.slice(0, 3).map((c) => `‘${c.name}’(${c.label})`).join(", ")}. 이름·서브타이틀·설명을 적어 두면 문서에 그대로 들어가요.
             </li>
             <li>
               <b>로고</b>: 유형을 &lsquo;로고&rsquo;로 두면 케이스 페이지의 로고 칸에 따로 배치돼요.
@@ -422,26 +409,26 @@ function SearchStep() {
         <div className="mock-search" aria-hidden="true">
           <Icon name="search" size={17} />
           <span>
-            스타디움 <mark>#야간조명</mark> "게이트 사인" <em>-로고</em>
+            팝업스토어 <mark>#패키지</mark> "매장 사인" <em>-로고</em>
           </span>
         </div>
         <table className="guide-table">
           <tbody>
             <tr>
               <td>
-                <code>스타디움 야간조명</code>
+                <code>팝업스토어 패키지</code>
               </td>
-              <td>여러 단어 — 하나라도 맞으면 찾고, 많이 맞을수록 위로 (&lsquo;모두&rsquo;로 바꾸면 전부 맞는 것만)</td>
+              <td>여러 단어 — 키워드 중 하나라도 있는 이미지를 찾고, 많이 맞을수록 위로. &lsquo;키워드가 모두 있는 것만&rsquo;을 체크하면 전부 있는 이미지만 (키워드가 2개 이상일 때)</td>
             </tr>
             <tr>
               <td>
-                <code>#야간조명</code>
+                <code>#패키지</code>
               </td>
               <td>태그와 정확히 같은 것만</td>
             </tr>
             <tr>
               <td>
-                <code>"게이트 사인"</code>
+                <code>"매장 사인"</code>
               </td>
               <td>띄어쓰기까지 그대로인 문구</td>
             </tr>
@@ -467,21 +454,20 @@ function useSamplePages() {
   return useMemo(() => {
     const s = defaultSettings();
     const cover = createCoverPage(s);
-    const section = createSectionPage(s, { title: "Stadium Experience", subtitle: "01 · Signage & Night Lighting" });
+    const brand = sampleCase("brand");
+    const section = createSectionPage(s, { title: "Brand & Competitor", subtitle: "01 · Pop-up · Store · Package" });
     const short = createReferencePage(s, {
-      title: "Night Facade",
-      subtitle: "Stadium\nLighting Reference",
-      description: "경기가 있는 밤, 외벽 전체가 팀 컬러로 빛나며 도시의 랜드마크가 되는 경기장 조명 사례",
-      images: [ref("night"), ref("stands"), ref("lights"), ref("facade"), ref("gate")],
+      title: "Pop-up Store",
+      subtitle: "Brand\nSpace Reference",
+      description: "브랜드 컬러를 외관 · 쇼윈도 · 포스터까지 이어서 적용한 팝업스토어와 경쟁사 매장 비교",
+      images: [ref("brand-popup"), ref("brand-window"), ref("competitor-store"), ref("brand-poster"), ref("product-lineup")],
     });
     const long = createCasePage(s, {
       title: "Case Study",
-      subtitle: "Allianz Arena\nMünchen",
-      description:
-        "외벽의 ETFE 패널이 경기마다 홈팀 컬러로 바뀌는 독일 뮌헨의 축구 전용 경기장. " +
-        "야간 조명 자체가 브랜드 경험이 되어, 경기장을 찾지 않은 사람에게도 팀의 존재감을 알려요.\n\n" +
-        "* 게이트·사인물·팀 스토어까지 같은 컬러 시스템을 적용해 방문 동선 전체가 하나의 경험으로 이어져요.",
-      images: [ref("aerial"), ref("tunnel"), ref("store")],
+      subtitle: brand.subtitle,
+      highlight: brand.highlight,
+      description: brand.description,
+      images: brand.images.map((i) => ref(i.key)),
       logos: [],
     });
     return { settings: s, pages: [cover, section, short, long] };
@@ -509,13 +495,13 @@ function BuildStep({ onBuild, canEdit }: { onBuild: () => void; canEdit: boolean
       id="build"
       no={5}
       title="키워드 하나로 문서가 만들어져요"
-      lead="키워드를 넣으면 태그·케이스별로 묶고, 페이지를 나누고, 보고서 양식(A4 가로)에 맞춰 배치까지 해 줘요. 아래는 스타디움 예시로 만든 페이지예요."
+      lead="키워드를 넣으면 태그·케이스별로 묶고, 페이지를 나누고, 보고서 양식(A4 가로)에 맞춰 배치까지 해 줘요. 아래는 브랜드 팝업 예시로 만든 페이지예요."
     >
       <div className="guide-pages">
         {pages.slice(0, 3).map((p, i) => (
           <figure key={p.id}>
             <div className="guide-shot">
-              <PageView page={p} settings={settings} index={i} total={pages.length} docTitle="Stadium Case Study" />
+              <PageView page={p} settings={settings} index={i} total={pages.length} docTitle="Brand Case Study" />
             </div>
             <figcaption>{captions[i]}</figcaption>
           </figure>
@@ -524,7 +510,7 @@ function BuildStep({ onBuild, canEdit }: { onBuild: () => void; canEdit: boolean
       <div className="guide-demo">
         <figure style={{ margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           <div className="guide-shot">
-            <PageView page={pages[3]} settings={settings} index={3} total={pages.length} docTitle="Stadium Case Study" />
+            <PageView page={pages[3]} settings={settings} index={3} total={pages.length} docTitle="Brand Case Study" />
           </div>
           <figcaption className="muted small">{captions[3]}</figcaption>
         </figure>
@@ -532,7 +518,7 @@ function BuildStep({ onBuild, canEdit }: { onBuild: () => void; canEdit: boolean
           <h3>만드는 순서</h3>
           <ol className="guide-steps">
             <li>
-              오른쪽 위 <b>문서 만들기</b>를 누르고 키워드를 넣어요. 예) 스타디움 조명
+              오른쪽 위 <b>문서 만들기</b>를 누르고 키워드를 넣어요. 예) 팝업스토어 패키지
             </li>
             <li>
               오른쪽에 <b>그룹 미리보기</b>가 바로 떠요. 그룹 이름을 고치거나 빼고 싶은 그룹의 체크를 해제하세요.
@@ -551,6 +537,10 @@ function BuildStep({ onBuild, canEdit }: { onBuild: () => void; canEdit: boolean
           )}
         </div>
       </div>
+      <Tip>
+        <b>템플릿 6종</b>(기본 · 클린 비즈니스 · 볼드 브리프 · 뉴트럴 에디토리얼 · 모노 포트폴리오 · 톤온톤)을 썸네일로 보고 고를 수 있어요. 표지 · 목차 · 섹션 구분 · 케이스 스터디 ·
+        레퍼런스 그리드 · 경쟁사·상품 비교 · 마무리 페이지가 들어 있고, 편집 중에도 <b>문서 양식 → 템플릿</b>에서 바꾸면 글과 이미지는 그대로 옮겨져요.
+      </Tip>
       <Tip>
         부서명은 <b>팀 설정 → 문서 기본값</b>에서 한 번만 정해 두면(기본 &lsquo;OO TEAM&rsquo;) 표지의 PRESENTED BY와 모든 페이지 하단에 자동으로 들어가요.
       </Tip>

@@ -9,7 +9,16 @@ const Thumb = memo(function Thumb({ page, settings, index, total, title }: { pag
   return <PageView page={page} settings={settings} index={index} total={total} mode="thumb" docTitle={title} />;
 });
 
-const KIND_LABEL: Record<Page["kind"], string> = { case: "케이스", reference: "레퍼런스", cover: "표지", section: "간지", blank: "빈 페이지" };
+export const KIND_LABEL: Record<Page["kind"], string> = {
+  case: "케이스",
+  reference: "레퍼런스",
+  cover: "표지",
+  section: "간지",
+  blank: "빈 페이지",
+  toc: "목차",
+  compare: "비교",
+  closing: "마무리",
+};
 
 export function PageList() {
   const doc = useEditor((s) => s.doc)!;
@@ -39,6 +48,15 @@ export function PageList() {
               </MenuItem>
               <MenuItem icon="heading" hint="섹션 구분" onClick={() => (close(), addPage("section"))}>
                 간지
+              </MenuItem>
+              <MenuItem icon="compare" hint="경쟁사·상품 2~4개 나란히" onClick={() => (close(), addPage("compare"))}>
+                경쟁사·상품 비교
+              </MenuItem>
+              <MenuItem icon="listNum" hint="간지로 자동 작성" onClick={() => (close(), addPage("toc"))}>
+                목차
+              </MenuItem>
+              <MenuItem icon="flag" hint="감사 인사 · 연락처" onClick={() => (close(), addPage("closing"))}>
+                마무리
               </MenuItem>
               <MenuItem icon="rect" onClick={() => (close(), addPage("blank"))}>
                 빈 페이지

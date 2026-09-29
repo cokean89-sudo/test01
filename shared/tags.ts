@@ -4,10 +4,10 @@
 export type TagAxis = "field" | "subject" | "element" | "material" | "color" | "mood";
 
 export const TAG_AXES: { key: TagAxis; label: string; hint: string; examples: string[] }[] = [
-  { key: "field", label: "분야", hint: "업종·영역", examples: ["스포츠", "리테일", "전시", "F&B"] },
-  { key: "subject", label: "대상", hint: "무엇·어디", examples: ["스타디움", "팝업스토어", "파사드"] },
-  { key: "element", label: "요소", hint: "눈에 띄는 구성 요소", examples: ["사인물", "조명", "그래픽월", "굿즈"] },
-  { key: "material", label: "소재·기법", hint: "재료·가공·표현 기법", examples: ["ETFE", "네온", "미디어파사드", "패턴"] },
+  { key: "field", label: "분야", hint: "업종·영역", examples: ["F&B", "뷰티", "리테일", "패션"] },
+  { key: "subject", label: "대상", hint: "무엇·어디", examples: ["팝업스토어", "패키지", "매대", "쇼윈도"] },
+  { key: "element", label: "요소", hint: "눈에 띄는 구성 요소", examples: ["사인물", "진열대", "POP", "굿즈"] },
+  { key: "material", label: "소재·기법", hint: "재료·가공·표현 기법", examples: ["크라프트지", "아크릴", "홀로그램", "패턴"] },
   { key: "color", label: "컬러", hint: "주조색", examples: ["레드", "모노톤", "파스텔"] },
   { key: "mood", label: "무드", hint: "분위기", examples: ["야간", "미니멀", "다이내믹"] },
 ];
@@ -27,7 +27,7 @@ const BANNED = new Set(
   ].map((w) => w.toLowerCase()),
 );
 
-/** 비교용 키 — 대소문자·띄어쓰기·하이픈·밑줄·점 무시 ("야간 조명" = "야간조명", "Night-Light" = "night light") */
+/** 비교용 키 — 대소문자·띄어쓰기·하이픈·밑줄·점 무시 ("팝업 스토어" = "팝업스토어", "Pop-Up" = "pop up") */
 export function tagKey(tag: string): string {
   return tag.normalize("NFC").toLowerCase().replace(/[\s\-_.·/]+/g, "").trim();
 }

@@ -370,7 +370,7 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
             </Field>
             {caseId === "__new" && (
               <Field label="새 케이스 이름">
-                <input value={newCaseName} onChange={(e) => setNewCaseName(e.target.value)} placeholder="예: Allianz Arena" autoFocus />
+                <input value={newCaseName} onChange={(e) => setNewCaseName(e.target.value)} placeholder="예: 모닝루틴 성수 팝업" autoFocus />
               </Field>
             )}
             <Field label="유형">
@@ -385,7 +385,7 @@ export function CollectDialog({ initialUrls }: { initialUrls?: string }) {
             </Field>
             {kind === "logo" && (
               <Field label="로고 라벨">
-                <input value={logoLabel} onChange={(e) => setLogoLabel(e.target.value)} placeholder="예: Stadium Logo / Team Logo" />
+                <input value={logoLabel} onChange={(e) => setLogoLabel(e.target.value)} placeholder="예: Brand Logo / Partner Logo" />
               </Field>
             )}
             <Field label="메모">

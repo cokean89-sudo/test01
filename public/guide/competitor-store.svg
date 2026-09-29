@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#f5f5f2"/>
+  <rect x="0" y="0" width="1200" height="90" fill="#1c2230"/>
+  <text x="600" y="60" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-weight="700" font-size="40" letter-spacing="14" fill="#fff">DAILY BREW</text>
+  <rect x="120" y="150" width="960" height="200" rx="8" fill="#1c2230"/>
+  <g font-family="Poppins, Arial, sans-serif" font-weight="600" font-size="22" fill="#fff">
+    <text x="170" y="210">ESPRESSO</text><text x="470" y="210">COLD BREW</text><text x="790" y="210">SEASONAL</text>
+  </g>
+  <g fill="#6c7482"><rect x="170" y="235" width="200" height="10" rx="4"/><rect x="170" y="262" width="160" height="10" rx="4"/><rect x="170" y="289" width="180" height="10" rx="4"/><rect x="470" y="235" width="200" height="10" rx="4"/><rect x="470" y="262" width="150" height="10" rx="4"/><rect x="790" y="235" width="190" height="10" rx="4"/><rect x="790" y="262" width="170" height="10" rx="4"/></g>
+  <rect x="80" y="470" width="1040" height="240" fill="#d8352a"/>
+  <rect x="80" y="450" width="1040" height="26" fill="#1c2230"/>
+  <g><rect x="200" y="380" width="90" height="70" rx="6" fill="#9aa2ad"/><rect x="330" y="400" width="44" height="50" rx="5" fill="#fff" stroke="#1c2230" stroke-width="4"/><rect x="390" y="394" width="44" height="56" rx="5" fill="#d8352a"/></g>
+  <g><circle cx="880" cy="415" r="36" fill="#9ad0f5"/><rect x="930" y="392" width="120" height="58" rx="8" fill="#1c2230"/></g>
+  <g fill="#fff" opacity=".9"><rect x="140" y="540" width="260" height="18" rx="6"/><rect x="140" y="574" width="190" height="14" rx="6"/></g>
+  <rect x="0" y="710" width="1200" height="90" fill="#c9c9c2"/>
+</svg>

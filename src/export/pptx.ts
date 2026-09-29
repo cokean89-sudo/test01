@@ -152,7 +152,7 @@ export async function exportPptx(doc: DocumentData): Promise<void> {
 
   for (const [i, page] of doc.pages.entries()) {
     const slide = pptx.addSlide();
-    slide.background = { color: hex(page.background ?? settings.background, "FFFFFF") };
+    slide.background = { color: hex(resolveColor(page.background ?? settings.background, settings), "FFFFFF") };
     for (const el of page.elements) {
       const box = { x: inch(el.x), y: inch(el.y), w: inch(el.w), h: inch(el.h), rotate: el.rotation || undefined };
       const transparency = el.opacity !== undefined && el.opacity < 1 ? Math.round((1 - el.opacity) * 100) : undefined;
@@ -170,7 +170,8 @@ export async function exportPptx(doc: DocumentData): Promise<void> {
           align: st.align,
           valign: st.vAlign,
           charSpacing: (st.tracking / 1000) * st.fontSize,
-          lineSpacingMultiple: st.lineHeight,
+          // 줄 간격은 pt 로 고정 — 화면(CSS line-height)과 같은 줄 높이라서 목차·비교 표의 행이 어긋나지 않는다
+          lineSpacing: Math.round(st.lineHeight * st.fontSize * 10) / 10,
           margin: st.bgMode === "box" && st.background ? st.padding : 0,
           fill: st.background ? { color: hex(st.background) } : undefined,
           fit: "none",

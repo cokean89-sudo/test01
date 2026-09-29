@@ -70,9 +70,9 @@ async function imageBlock(url: string): Promise<ImageBlock | null> {
 const PageAnalysis = z.object({
   title: z.string().describe("페이지 타이틀. 2~4단어, 문장부호 없이 (고유명사·영문 가능)"),
   subtitle: z.string().describe("타이틀 옆 서브타이틀 한 줄 명사구 (카테고리·장소·컨셉 요약)"),
-  highlight: z.string().describe("강조 라인 한 줄 — 입력에서 확인되는 사실 정보(스폰서·소유·위치 등). 없으면 빈 문자열"),
+  highlight: z.string().describe("강조 라인 한 줄 — 입력에서 확인되는 사실 정보(유형·채널·위치·협업 브랜드 등). 없으면 빈 문자열"),
   description: z.string().describe("본문 설명 2~4문장. 문체 규칙을 따를 것"),
-  sectionLabel: z.string().describe("이미지 그룹 라벨 — 영문 1~2단어 (예: Facade, Signage, Night View)"),
+  sectionLabel: z.string().describe("이미지 그룹 라벨 — 영문 1~2단어 (예: Package, Display, Signage)"),
   captions: z.array(z.string()).describe("입력 이미지 순서대로 각 이미지의 캡션 (20자 내외 명사구)"),
   tags: z.array(z.string()).describe("이 페이지를 찾을 때 쓸 키워드 태그 3~8개"),
 });
@@ -96,12 +96,12 @@ function analysisSchema(fields?: AiTextField[]) {
 const axisList = (what: string) => z.array(z.string()).describe(`${what} — 0~2개, 각 1~3단어`);
 const TagSuggestion = z.object({
   title: z.string().describe("이미지를 설명하는 짧은 제목 (명사구)"),
-  field: axisList("분야: 업종·영역 (예: 스포츠, 리테일, 전시)"),
-  subject: axisList("대상: 무엇·어디 (예: 스타디움, 팝업스토어, 파사드)"),
-  element: axisList("요소: 눈에 띄는 구성 요소 (예: 사인물, 조명, 그래픽월)"),
-  material: axisList("소재·기법: 재료·가공·표현 기법 (예: ETFE, 네온, 미디어파사드)"),
-  color: axisList("컬러: 주조색 (예: 레드, 모노톤)"),
-  mood: axisList("무드: 분위기 (예: 야간, 미니멀, 다이내믹)"),
+  field: axisList("분야: 업종·영역 (예: F&B, 뷰티, 리테일)"),
+  subject: axisList("대상: 무엇·어디 (예: 팝업스토어, 패키지, 매대)"),
+  element: axisList("요소: 눈에 띄는 구성 요소 (예: 사인물, 진열대, POP)"),
+  material: axisList("소재·기법: 재료·가공·표현 기법 (예: 크라프트지, 아크릴, 홀로그램)"),
+  color: axisList("컬러: 주조색 (예: 딥그린, 모노톤)"),
+  mood: axisList("무드: 분위기 (예: 미니멀, 빈티지, 다이내믹)"),
 });
 
 function tagSystemPrompt(language: "ko" | "en"): string {
@@ -112,7 +112,8 @@ function tagSystemPrompt(language: "ko" | "en"): string {
     "[재사용] 라이브러리에 이미 있는 태그와 같은 개념이면 반드시 그 표기를 그대로 쓴다 (동의어·띄어쓰기·영문/한글 차이 포함).",
     "[형식] 1~3단어의 짧은 명사. 문장·형용사구·해시(#) 없이.",
     "[금지] pinterest, pin, image, photo, jpg, png, www, com 같은 사이트·파일 흔적, 숫자만 있는 말, 한 글자 말, '레퍼런스'처럼 뭐든 해당되는 말.",
-    language === "ko" ? "태그는 한국어로 쓰되, 브랜드명·고유명사·재료명(ETFE 등)은 원어 표기를 쓴다." : "Write tags in English.",
+    "[근거] 축 설명의 예시는 형식 참고용이다. 태그는 입력 이미지와 메타데이터에서 확인되는 것만 쓴다.",
+    language === "ko" ? "태그는 한국어로 쓰되, 브랜드명·고유명사·재료명(PET, PLA 등)은 원어 표기를 쓴다." : "Write tags in English.",
   ].join("\n");
 }
 
@@ -124,24 +125,27 @@ export const PERSPECTIVE_GUIDE: Record<AiPerspective, { label: string; focus: st
     label: "디자인 관점",
     focus: "형태·비례, 컬러, 소재·마감, 타이포그래피, 조명·공간 연출과 그 시각적 의도. 이미지에서 보이는 조형 요소를 구체 명사로 짚는다.",
     examples: {
-      report: ["외벽 전체를 반투명 ETFE 패널로 감싼 곡면 볼륨 구성.", "팀 컬러 레드 조명으로 야간 파사드를 단일 색면으로 연출."],
-      sentence: ["외벽 전체를 반투명 ETFE 패널로 감싼 곡면 볼륨으로 구성했다.", "팀 컬러 레드 조명으로 야간 파사드를 단일 색면으로 연출했다."],
+      // 매장 공간 · 상품 패키지
+      report: ["딥그린 외관에 머스터드 어닝을 더한 2색 브랜드 컬러 구성.", "무광 크라프트 박스에 단색 로고만 남긴 미니멀 패키지 표현."],
+      sentence: ["딥그린 외관에 머스터드 어닝을 더해 2색 브랜드 컬러로 구성했다.", "무광 크라프트 박스에 단색 로고만 남겨 미니멀한 패키지로 표현했다."],
     },
   },
   planning: {
     label: "기획 관점",
     focus: "목적, 타깃, 전략, 경험(동선·체류) 설계, 기대 효과. 무엇을 누구에게 어떻게 전달하려는지 구조로 정리한다.",
     examples: {
-      report: ["경기 없는 날에도 방문 동기를 만드는 체류형 공간 구성.", "입장 동선 전체에 팀 컬러를 적용해 홈 팬의 소속감 강조."],
-      sentence: ["경기 없는 날에도 방문 동기를 만드는 체류형 공간으로 구성했다.", "입장 동선 전체에 팀 컬러를 적용해 홈 팬의 소속감을 강조했다."],
+      // 매장 동선 · 캠페인
+      report: ["신제품 시음대를 입구 동선에 배치해 첫 구매 유도.", "캠페인 슬로건을 매장·SNS·패키지에 같은 문구로 적용해 메시지 일관성 강조."],
+      sentence: ["신제품 시음대를 입구 동선에 배치해 첫 구매를 유도했다.", "캠페인 슬로건을 매장·SNS·패키지에 같은 문구로 적용해 메시지 일관성을 강조했다."],
     },
   },
   fact: {
     label: "팩트 나열",
     focus: "이미지와 메타데이터에서 확인 가능한 정보만 나열. 해석·평가·의도 추정 없이 무엇이 어디에 어떻게 있는지만.",
     examples: {
-      report: ["게이트 상단에 'GATE 7' 사인 설치.", "외벽에 마름모 패턴 조명 패널 반복 배치."],
-      sentence: ["게이트 상단에 'GATE 7' 사인이 있다.", "외벽에 마름모 패턴 조명 패널이 반복 배치되어 있다."],
+      // 진열 · 광고물
+      report: ["쇼윈도 중앙에 박스 세트 3단 적층 배치.", "포스터 하단에 캠페인 문구와 QR 코드 표기."],
+      sentence: ["쇼윈도 중앙에 박스 세트가 3단으로 쌓여 있다.", "포스터 하단에 캠페인 문구와 QR 코드가 있다."],
     },
   },
 };
@@ -162,7 +166,8 @@ export function systemPrompt(language: "ko" | "en", perspective: AiPerspective =
     "",
     "[근거]",
     "- 이미지와 함께 준 메타데이터(제목, 태그, 메모, 케이스 정보)에서 확인되는 내용만 쓴다.",
-    "- 확인할 수 없는 수치·연도·고유 사실(개장 연도, 수용 인원, 매출, 수상 이력 등)은 쓰지 않는다. 입력에 있으면 그대로 옮긴다.",
+    "- 확인할 수 없는 수치·연도·고유 사실(출시 연도, 매장 수, 매출, 판매량, 수상 이력 등)은 쓰지 않는다. 입력에 있으면 그대로 옮긴다.",
+    "- 아래 예시는 문체 참고용이며 내용은 입력 이미지와 메타데이터만 근거로 한다. 예시의 업종·소재·단어를 결과에 가져오지 않는다.",
     "- 추측 표현(~로 보인다, ~인 듯, ~일 것, ~로 추정)은 쓰지 않는다. 확실하지 않으면 그 문장을 뺀다.",
     "",
     "[문장]",
@@ -173,7 +178,7 @@ export function systemPrompt(language: "ko" | "en", perspective: AiPerspective =
     `[관점 — ${guide.label}]`,
     "- 초점: " + guide.focus,
     ...(ko ? guide.examples[tone].map((e) => "- 좋은 예: " + e) : []),
-    ko ? "- 피할 예: 웅장하고 아름다운 경기장으로 보인다. (수식어·추측) / 2005년 개장해 7만 명을 수용한다. (입력에 없는 수치)" : "",
+    ko ? "- 피할 예: 세련되고 고급스러운 패키지로 보인다. (수식어·추측) / 출시 첫 달 10만 개가 판매됐다. (입력에 없는 수치)" : "",
     "",
     "[항목]",
     "- 타이틀: 2~4단어, 문장부호 없이. 서브타이틀: 한 줄 명사구.",

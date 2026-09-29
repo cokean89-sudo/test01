@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CaseStudy, Reference } from "../shared/types";
-import { normalizeTags, parseQuery, searchRefs, tagCounts } from "../src/lib/search";
+import { josa, keywordCount, matchSummary, noMatchHint, noMatchMessage, normalizeTags, parseQuery, searchRefs, tagCounts } from "../src/lib/search";
 
 let t = 1000;
 const ref = (id: string, tags: string[], extra: Partial<Reference> = {}): Reference => ({
@@ -80,5 +80,41 @@ describe("tags", () => {
       { tag: "야간조명", count: 2 },
       { tag: "조형물", count: 2 },
     ]);
+  });
+});
+
+describe("검색 조건 문장", () => {
+  it("하나라도 / 모두", () => {
+    expect(matchSummary("야경 파사드", "or", 24)).toBe("야경, 파사드 중 하나라도 있는 이미지 24개");
+    expect(matchSummary("야경 파사드", "and", 5)).toBe("야경, 파사드가 모두 있는 이미지 5개");
+    expect(matchSummary("파사드, 야경", "and", 5)).toBe("파사드, 야경이 모두 있는 이미지 5개");
+  });
+
+  it("키워드 하나 · 없음 · 제외어 · #태그 · 구문", () => {
+    expect(matchSummary("야경", "and", 12)).toBe("야경이 있는 이미지 12개");
+    expect(matchSummary("  ", "or", 1200)).toBe("전체 이미지 1,200개");
+    expect(matchSummary("팝업 -로고", "or", 3)).toBe("팝업이 있는 이미지 3개 (로고 제외)");
+    expect(matchSummary('#Nike "포토 존"', "or", 2)).toBe("#Nike, 포토 존 중 하나라도 있는 이미지 2개");
+  });
+
+  it("결과 없음 안내", () => {
+    expect(noMatchMessage("야경 파사드", "and")).toBe("야경, 파사드가 모두 있는 이미지가 없어요");
+    expect(noMatchHint("야경 파사드", "and")).toContain("체크를 풀면");
+    expect(noMatchHint("야경", "and")).not.toContain("체크");
+  });
+
+  it("체크박스는 키워드 2개 이상일 때만", () => {
+    expect(keywordCount("")).toBe(0);
+    expect(keywordCount("야경 -로고")).toBe(1);
+    expect(keywordCount("야경, 파사드")).toBe(2);
+  });
+
+  it("받침에 맞는 조사", () => {
+    expect(josa("야경", "이", "가")).toBe("이");
+    expect(josa("파사드", "이", "가")).toBe("가");
+    expect(josa("Nike", "이", "가")).toBe("가");
+    expect(josa("Autumn", "이", "가")).toBe("이");
+    expect(josa("2026", "이", "가")).toBe("이");
+    expect(josa("5", "이", "가")).toBe("가");
   });
 });

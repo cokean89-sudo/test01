@@ -13,11 +13,27 @@ import type {
   PageLayout,
   Rect,
   Reference,
+  TemplateId,
   TextElement,
   TextRole,
 } from "../../../shared/types";
 import { pageSize } from "../../components/PageView";
-import { createBlankPage, createCasePage, createCoverPage, createReferencePage, createSectionPage, imageFromRef, relayoutPage as relayoutWith, scalePage } from "../../layout/templates";
+import { applyTemplate as applyTemplateToDoc, rebuildPage, redrawPage, refreshToc as refreshTocPage, setCompareItems as setCompareItemsOf } from "../../layout/switchTemplate";
+import {
+  createBlankPage,
+  createCasePage,
+  createClosingPage,
+  createComparePage,
+  createCoverPage,
+  createReferencePage,
+  createSectionPage,
+  createTocPage,
+  imageFromRef,
+  relayoutPage as relayoutWith,
+  scalePage,
+  tocEntries,
+} from "../../layout/templates";
+import { setThemeAccent, themeOf } from "../../layout/themes";
 import { dummyText, isDummyText } from "../../lib/dummy";
 import { uid } from "../../lib/id";
 import { parseQuery } from "../../lib/search";
@@ -353,16 +369,23 @@ export function addPage(kind: NewPageKind, afterIndex?: number) {
   const { doc, pageId } = st();
   if (!doc) return;
   const s = doc.settings;
+  const sections = doc.pages.filter((p) => p.kind === "section").length;
   const page =
     kind === "reference"
       ? createReferencePage(s, { title: "", images: [], placeholders: 5 })
       : kind === "case"
         ? createCasePage(s, { title: "", images: [], logos: [], placeholders: { images: 4, logos: 2 } })
         : kind === "section"
-          ? createSectionPage(s, { title: "" })
+          ? createSectionPage(s, { title: "", number: String(sections + 1).padStart(2, "0") })
           : kind === "cover"
             ? createCoverPage(s)
-            : createBlankPage(s);
+            : kind === "toc"
+              ? createTocPage(s, { entries: tocEntries(doc.pages, s) })
+              : kind === "compare"
+                ? createComparePage(s)
+                : kind === "closing"
+                  ? createClosingPage(s)
+                  : createBlankPage(s);
   const idx = afterIndex ?? doc.pages.findIndex((p) => p.id === pageId);
   st().update((d) => void d.pages.splice(idx + 1, 0, page));
   st().setPage(page.id);
@@ -411,7 +434,52 @@ export function changePageSize(next: DocumentData["settings"]["pageSize"]) {
   st().update((d) => {
     d.settings.pageSize = next;
     d.pages = d.pages.map((p) => scalePage(p, b.W / a.W, b.H / a.H, d.settings));
+    // 템플릿 장식·자리는 새 쪽 크기로 다시 그린다 (내용은 그대로)
+    if (themeOf(d.settings).id !== "default") d.pages = d.pages.map((p) => redrawPage(p, d.settings));
   });
+}
+
+// ─── 템플릿 ─────────────────────────────────────────────────
+
+/** 문서 템플릿 바꾸기 — 모든 페이지의 내용은 그대로, 장식·자리·색·폰트만 바뀐다 (Ctrl+Z 로 되돌리기) */
+export function applyDocTemplate(id: TemplateId, accent?: string) {
+  const { doc } = st();
+  if (!doc) return;
+  const next = applyTemplateToDoc(doc, id, accent);
+  st().update((d) => {
+    d.settings = next.settings;
+    d.pages = next.pages;
+  });
+}
+
+/** 문서 설정을 통째로 바꾸기 (팀 기본 양식 적용) — 템플릿이 다르면 페이지도 새 템플릿으로 다시 그린다 */
+export function replaceDocSettings(next: DocumentData["settings"]) {
+  const { doc } = st();
+  if (!doc) return;
+  const from = doc.settings;
+  st().update((d) => {
+    d.settings = structuredClone(next);
+    if ((from.template ?? "default") !== (next.template ?? "default")) d.pages = d.pages.map((p) => rebuildPage(p, from, d.settings));
+  });
+}
+
+/** 톤온톤 등 메인 컬러 바꾸기 — 색 토큰을 쓰므로 페이지는 다시 그릴 필요 없다 */
+export function setDocMainColor(accent: string) {
+  st().update((d) => {
+    d.settings = setThemeAccent(d.settings, accent);
+  }, { key: "main-color" });
+}
+
+export function setCompareItems(pageId: string, items: number) {
+  const { doc } = st();
+  if (!doc) return;
+  updatePage(pageId, (p) => setCompareItemsOf(p, doc.settings, items));
+}
+
+export function refreshToc(pageId: string) {
+  const { doc } = st();
+  if (!doc) return;
+  updatePage(pageId, (p) => refreshTocPage(p, doc));
 }
 
 // ─── AI ─────────────────────────────────────────────────────
@@ -443,7 +511,8 @@ export function analyzeRequestFor(page: Page, doc: DocumentData, instruction?: s
   };
   const c = page.caseId ? lib.cases.find((x) => x.id === page.caseId) : undefined;
   return {
-    kind: page.kind,
+    // 목차 · 비교 · 마무리는 AI 에게 빈 페이지로 알려 준다 (제목 · 설명만 쓴다)
+    kind: page.kind === "toc" || page.kind === "compare" || page.kind === "closing" ? "blank" : page.kind,
     language: doc.settings.aiLanguage,
     perspective: doc.settings.aiPerspective ?? "design",
     tone: doc.settings.aiTone ?? "report",

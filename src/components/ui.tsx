@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { placePopover, type Placement } from "../lib/placement";
 import { normalizeTags } from "../lib/search";
 import { useToasts } from "../store/toast";
 import { Icon, type IconName } from "./icons";
@@ -283,28 +285,89 @@ export function Toasts() {
   );
 }
 
+/**
+ * 버튼 옆에 뜨는 메뉴.
+ * 스크롤 영역(overflow) 안에 있어도 잘리지 않게 문서 맨 위 레이어(body)에 그리고,
+ * 화면 가장자리에 가까우면 위 · 반대쪽으로 뒤집는다. 높이가 모자라면 메뉴 안에서 스크롤.
+ */
 export function Menu({ trigger, children, align = "left" }: { trigger: (open: () => void) => ReactNode; children: (close: () => void) => ReactNode; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<Placement | null>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const close = () => setOpen(false);
+
+  // 열릴 때(그리기 전에) 크기를 재서 자리를 잡고, 스크롤 · 창 크기 · 내용이 바뀌면 다시 잡는다
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlace(null);
+      return;
+    }
+    const update = () => {
+      const a = anchorRef.current?.getBoundingClientRect();
+      const m = menuRef.current;
+      if (!a || !m) return;
+      // 줄였던 높이를 풀고 원래 크기로 잰다
+      const prev = m.style.maxHeight;
+      m.style.maxHeight = "none";
+      const size = { width: m.offsetWidth, height: m.offsetHeight };
+      m.style.maxHeight = prev;
+      const next = placePopover(a, size, { width: window.innerWidth, height: window.innerHeight }, align);
+      setPlace((cur) => (cur && cur.left === next.left && cur.top === next.top && cur.maxHeight === next.maxHeight && cur.up === next.up ? cur : next));
+    };
+    update();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    if (menuRef.current) ro?.observe(menuRef.current);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, align]);
+
+  // 바깥을 누르거나 Esc → 닫기 (Esc 는 메뉴만 닫고 편집기 · 창의 Esc 동작으로 번지지 않게)
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!anchorRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setOpen(false);
     };
     window.addEventListener("pointerdown", onDown);
-    return () => window.removeEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, [open]);
+
+  const style: CSSProperties = place
+    ? { left: place.left, top: place.top, maxHeight: place.maxHeight }
+    : { left: 0, top: 0, visibility: "hidden" }; // 첫 측정용 — 그리기 전에 자리가 잡힌다
   return (
-    <div className="menu-wrap" ref={ref}>
+    <div className={"menu-wrap" + (open ? " open" : "")} ref={anchorRef}>
       {trigger(() => setOpen((o) => !o))}
-      {open && <div className={"menu menu-" + align}>{children(() => setOpen(false))}</div>}
+      {open &&
+        createPortal(
+          <div ref={menuRef} role="menu" className={"menu" + (place?.up ? " menu-up" : "") + (place?.maxHeight !== undefined ? " menu-scroll" : "")} style={style}>
+            {children(close)}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
 
 export function MenuItem({ icon, children, onClick, hint, disabled }: { icon?: IconName; children: ReactNode; onClick: () => void; hint?: string; disabled?: boolean }) {
   return (
-    <button type="button" className="menu-item" onClick={onClick} disabled={disabled}>
+    <button type="button" role="menuitem" className="menu-item" onClick={onClick} disabled={disabled}>
       {icon ? <Icon name={icon} size={15} /> : <span style={{ width: 15 }} />}
       <span className="menu-label">{children}</span>
       {hint && <span className="menu-hint">{hint}</span>}

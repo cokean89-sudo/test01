@@ -86,7 +86,7 @@ export function DocsView() {
                     <MenuItem icon="file" onClick={() => navigate("edit/" + d.id)}>
                       {canEdit ? "편집" : "열기"}
                     </MenuItem>
-                    <MenuItem icon="eye" onClick={() => window.open("#/view/" + d.id, "_blank")}>
+                    <MenuItem icon="eye" onClick={() => (close(), window.open("#/view/" + d.id, "_blank"))}>
                       웹 뷰어로 보기
                     </MenuItem>
                     {canEdit && (

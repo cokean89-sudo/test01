@@ -1001,7 +1001,8 @@ select.sm {
 .tag-list .menu-wrap {
   opacity: 0;
 }
-.tag-list li:hover .menu-wrap {
+.tag-list li:hover .menu-wrap,
+.tag-list .menu-wrap.open {
   opacity: 1;
 }
 .sidebar-foot {
@@ -1742,24 +1743,38 @@ select.sm {
   position: relative;
   display: inline-flex;
 }
+/* 메뉴는 body 에 그려진다(포털) — 스크롤 영역에 잘리지 않고, 모달 위에도 뜬다. 자리는 Menu 가 계산 */
 .menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  z-index: 60;
+  position: fixed;
+  z-index: 300;
   min-width: 210px;
+  max-width: calc(100vw - 16px);
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), 0 12px 36px rgba(2, 32, 71, 0.16);
   padding: 6px;
   display: flex;
   flex-direction: column;
-  animation: pop-in 0.14s ease-out;
+  animation: menu-in 0.14s ease-out;
 }
-.menu-left {
-  left: 0;
+.menu-up {
+  animation-name: menu-in-up;
 }
-.menu-right {
-  right: 0;
+.menu-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+@keyframes menu-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
 }
 .menu-item {
   display: flex;

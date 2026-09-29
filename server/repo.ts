@@ -82,7 +82,7 @@ export class Repo {
 
   userInfo(u: UserRow): UserInfo {
     const providers = this.db.all<{ provider: string }>("SELECT provider FROM identities WHERE user_id = ?", u.id).map((r) => r.provider);
-    return { id: u.id, email: u.email, name: u.name, emailVerified: !!u.email_verified_at, hasPassword: !!u.password_hash, providers, isAdmin: isAdminUser(u) };
+    return { id: u.id, email: u.email, name: u.name, emailVerified: !!u.email_verified_at, hasPassword: !!u.password_hash, providers, isAdmin: isAdminUser(u), createdAt: u.created_at };
   }
 
   markVerified(userId: string) {

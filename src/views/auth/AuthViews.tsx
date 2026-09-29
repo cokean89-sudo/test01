@@ -3,9 +3,11 @@ import { ROLE_LABEL } from "../../../shared/types";
 import { ApiError, authApi, teamApi } from "../../api";
 import { Icon } from "../../components/icons";
 import { Button, Field, Spinner } from "../../components/ui";
+import { APP_VERSION, CHANGELOG, formatUpdateDate } from "../../lib/changelog";
 import { navigate } from "../../lib/router";
 import { useSession } from "../../store/session";
 import { toast } from "../../store/toast";
+import { useUpdates } from "../../store/updates";
 
 const AFTER_KEY = "rb.after";
 
@@ -703,6 +705,31 @@ export function AccountView() {
           </Button>
         </div>
       </section>
+      <AppInfo />
     </div>
+  );
+}
+
+/** 앱 정보 — 현재 버전 · 업데이트 기록 */
+function AppInfo() {
+  const unseen = useUpdates((s) => s.unseen.size);
+  const current = CHANGELOG.find((e) => e.version === APP_VERSION);
+  return (
+    <section className="panel app-info">
+      <h4>앱 정보</h4>
+      <div className="app-info-row">
+        <div>
+          <strong className="app-info-version">RefBoard v{APP_VERSION}</strong>
+          {current && (
+            <p className="muted small">
+              {formatUpdateDate(current.date)} 업데이트 · {current.title}
+            </p>
+          )}
+        </div>
+        <Button icon="bell" onClick={() => useUpdates.getState().openAll()}>
+          업데이트 기록{unseen > 0 ? ` (새 소식 ${unseen})` : ""}
+        </Button>
+      </div>
+    </section>
   );
 }

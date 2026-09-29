@@ -4,6 +4,7 @@ import { api } from "../api";
 import { Icon } from "../components/icons";
 import { MatchAllCheck } from "../components/MatchAllCheck";
 import { SmartImage } from "../components/SmartImage";
+import { UpdatesCard } from "../components/Updates";
 import { Button, Empty, Menu, MenuItem, Modal, Segmented, Select, TagInput } from "../components/ui";
 import { groupHits } from "../layout/autobuild";
 import { navigate } from "../lib/router";
@@ -177,6 +178,7 @@ export function LibraryView() {
             </ul>
           </section>
         )}
+        <UpdatesCard />
         {isAdmin && <section className="sidebar-foot">
           <a className="link-btn" href={api.backupUrl()}>
             <Icon name="download" size={13} /> 팀 백업 내려받기

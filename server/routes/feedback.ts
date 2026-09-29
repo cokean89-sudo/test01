@@ -20,6 +20,11 @@ const FeedbackInput = z.object({
   message: z.string().trim().min(1, "내용을 적어 주세요.").max(FEEDBACK_LIMITS.messageMax, `내용은 ${FEEDBACK_LIMITS.messageMax.toLocaleString()}자까지 쓸 수 있어요.`),
   pageUrl: z.string().max(4000).default(""),
   viewport: z.string().max(40).optional(),
+  appVersion: z
+    .string()
+    .regex(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/)
+    .optional()
+    .catch(undefined),
   screenshots: z
     .array(z.object({ name: z.string().max(300).default(""), dataUrl: z.string().max(DATA_URL_MAX, "스크린샷은 장당 5MB 이하만 첨부할 수 있어요.") }))
     .max(FEEDBACK_LIMITS.maxFiles, `스크린샷은 ${FEEDBACK_LIMITS.maxFiles}장까지 첨부할 수 있어요.`)
@@ -60,7 +65,7 @@ export function feedbackRouter(repo: Repo): Router {
       const body = FeedbackInput.parse(req.body);
       const files = body.screenshots.map(decodeScreenshot);
       const userAgent = (req.get("user-agent") ?? "").slice(0, 500);
-      const browser = [describeUserAgent(userAgent), body.viewport ? `화면 ${body.viewport.replace(/[^\d×x]/g, "")}` : ""].filter(Boolean).join(" · ");
+      const browser = [describeUserAgent(userAgent), body.viewport ? `화면 ${body.viewport.replace(/[^\d×x]/g, "")}` : "", body.appVersion ? `앱 v${body.appVersion}` : ""].filter(Boolean).join(" · ");
       const input = {
         userId: user.id,
         userEmail: user.email,

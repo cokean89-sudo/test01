@@ -97,7 +97,7 @@ export async function sendFeedbackMail(fb: FeedbackMail): Promise<MailResult> {
     `보낸 사람: ${fb.userName} <${fb.userEmail ?? "메일 없음(소셜 로그인)"}>`,
     `보낸 시각: ${when} (KST)`,
     `페이지: ${fb.pageUrl || "-"}`,
-    `브라우저·OS: ${fb.browser || "-"}`,
+    `브라우저·OS·앱: ${fb.browser || "-"}`,
     `User-Agent: ${fb.userAgent || "-"}`,
     `스크린샷: ${fb.files.length}장`,
     `관리 화면: ${APP_URL}/#/admin/feedback/${fb.id}`,

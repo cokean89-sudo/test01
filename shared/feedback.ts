@@ -26,6 +26,8 @@ export interface FeedbackInput {
   pageUrl: string;
   /** 화면 크기 (예: 1440×900) */
   viewport?: string;
+  /** 보낸 사람이 쓰던 앱 버전 (예: 0.8.0) */
+  appVersion?: string;
   screenshots: { name: string; dataUrl: string }[];
 }
 

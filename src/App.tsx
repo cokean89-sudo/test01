@@ -1,12 +1,14 @@
 import { useEffect, type ReactNode } from "react";
 import { ROLE_LABEL, ROLE_RANK } from "../shared/types";
 import { Icon } from "./components/icons";
+import { UpdatesDialog, VersionLink } from "./components/Updates";
 import { Button, Menu, MenuItem, Spinner, Toasts } from "./components/ui";
 import { navigate, useRoute } from "./lib/router";
 import { useLibrary } from "./store/library";
 import { connectTeamEvents, useCurrentTeam, useSession } from "./store/session";
 import { toast } from "./store/toast";
 import { useUI } from "./store/ui";
+import { useUpdates } from "./store/updates";
 import { AdminFeedbackView } from "./views/AdminFeedbackView";
 import { AccountView, ForgotView, InviteView, LoginView, ResetView, SignupView, VerifyView } from "./views/auth/AuthViews";
 import { BuildDialog } from "./views/BuildDialog";
@@ -33,7 +35,15 @@ export function App() {
   const build = useUI((s) => s.build);
   const feedback = useUI((s) => s.feedback);
   const setFeedback = useUI((s) => s.setFeedback);
+  const updatesOpen = useUpdates((s) => s.open);
+  const userId = useSession((s) => s.user?.id);
+  const signedUpAt = useSession((s) => s.user?.createdAt);
   const [section = "library", id] = route;
+
+  // 업데이트 소식: 사용자마다 본 기록이 따로
+  useEffect(() => {
+    useUpdates.getState().init(userId ? { id: userId, createdAt: signedUpAt } : null);
+  }, [userId, signedUpAt]);
 
   useEffect(() => {
     init().catch((err) => toast.error("서버에 연결할 수 없어요: " + (err as Error).message));
@@ -140,6 +150,7 @@ export function App() {
         </button>
       )}
       {feedback && <FeedbackDialog />}
+      {updatesOpen && <UpdatesDialog />}
       <Toasts />
     </div>
   );
@@ -284,6 +295,8 @@ function TopBar({ section }: { section: string }) {
               <MenuItem icon="x" onClick={() => (close(), void logout())}>
                 로그아웃
               </MenuItem>
+              <div className="menu-sep" />
+              <VersionLink onOpen={close} />
             </>
           )}
         </Menu>

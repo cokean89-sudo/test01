@@ -126,7 +126,7 @@ export function AdminFeedbackView({ id }: { id?: string }) {
                 <dd className="ellipsis" title={fb.pageUrl}>
                   {fb.pageUrl || "—"}
                 </dd>
-                <dt>브라우저·OS</dt>
+                <dt>브라우저·OS·앱</dt>
                 <dd title={fb.userAgent}>{fb.browser || "—"}</dd>
                 <dt>메일</dt>
                 <dd className={fb.mailStatus === "failed" ? "danger" : ""} title={fb.mailError}>

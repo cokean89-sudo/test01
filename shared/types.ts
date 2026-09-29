@@ -444,6 +444,8 @@ export interface UserInfo {
   providers: string[];
   /** 의견(피드백) 목록을 볼 수 있는 관리자 */
   isAdmin?: boolean;
+  /** 가입 시각 — 가입 뒤에 나온 업데이트만 '새 소식'으로 */
+  createdAt?: number;
 }
 
 export interface TeamSummary {

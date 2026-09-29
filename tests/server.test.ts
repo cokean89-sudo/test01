@@ -7,7 +7,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "refboard-test-"));
-process.env.ADMIN_EMAILS = "fb-admin@example.com";
+process.env.ADMIN_EMAILS = "fb-admin@example.com,fb-admin2@example.com";
 vi.spyOn(console, "log").mockImplementation(() => {});
 
 let base = "";
@@ -463,6 +463,17 @@ describe("의견 보내기", () => {
     expect(done.json.status).toBe("done");
     const open = await admin.c.get("/api/admin/feedback?status=open");
     expect(open.json.items.some((x: { id: string }) => x.id === fb.id)).toBe(false);
+  });
+
+  it("보낸 사람이 쓰던 앱 버전이 함께 기록된다 (형식이 이상하면 버린다)", async () => {
+    const { c } = await signup("의견버전");
+    const ok = await send(c, { viewport: "1280×800", appVersion: "0.8.0" });
+    const bad = await send(c, { appVersion: "<b>1</b>" });
+    expect([ok.status, bad.status]).toEqual([200, 200]);
+    const admin = await signup("관리자2", "fb-admin2@example.com");
+    const items = (await admin.c.get("/api/admin/feedback")).json.items as { id: string; browser: string }[];
+    expect(items.find((x) => x.id === ok.json.id)?.browser).toBe("Chrome 131 · Windows 10/11 · 화면 1280×800 · 앱 v0.8.0");
+    expect(items.find((x) => x.id === bad.json.id)?.browser).toBe("Chrome 131 · Windows 10/11");
   });
 
   it("스크린샷: 이미지가 아닌 파일·3장 초과·5MB 초과는 거부", async () => {

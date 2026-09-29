@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { describeUserAgent, FEEDBACK_KINDS, FEEDBACK_LIMITS, FEEDBACK_MIME, maskSensitiveUrl, type FeedbackKind } from "../../shared/feedback";
 import { feedbackApi } from "../api";
+import { APP_VERSION } from "../lib/changelog";
 import { uid } from "../lib/id";
 import { Icon } from "../components/icons";
 import { Button, Modal, Segmented, Spinner } from "../components/ui";
@@ -100,6 +101,7 @@ export function FeedbackDialog() {
         message: message.trim(),
         pageUrl: info.pageUrl,
         viewport: info.viewport,
+        appVersion: APP_VERSION,
         screenshots: shots.map((s) => ({ name: s.name, dataUrl: s.dataUrl })),
       });
       setDone(true);
@@ -232,6 +234,8 @@ export function FeedbackDialog() {
             <dd>
               {info.browser} · 화면 {info.viewport}
             </dd>
+            <dt>앱 버전</dt>
+            <dd>v{APP_VERSION}</dd>
             <dt>보낸 시각</dt>
             <dd>보내기를 누른 시각이 기록돼요</dd>
           </dl>

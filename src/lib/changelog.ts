@@ -1,10 +1,11 @@
-// 업데이트 기록 — 저장소 루트의 CHANGELOG.md 를 그대로 읽어 앱에 보여 준다 (원본은 그 파일 하나)
+// 업데이트 기록 형식 읽기 · 버전 비교 · 안 본 소식 계산.
+// 앱 화면의 '업데이트 소식'은 고객용 RELEASE_NOTES.md 만 보여 준다 (src/lib/releaseNotes.ts).
+// 개발 기록 CHANGELOG.md 는 같은 형식이지만 앱에 싣지 않는다 (tests/changelog.test.ts 가 버전 · 순서만 확인).
 //
 //   ## 0.8.0 — 2026-09-29      ← 버전 — 날짜
 //   ### 한 줄 요약              ← 제목
 //   - 쉬운 말로 쓴 바뀐 점       ← 항목
 
-import raw from "../../CHANGELOG.md?raw";
 import { version } from "../../package.json";
 
 export interface ChangelogEntry {
@@ -44,8 +45,6 @@ export function parseChangelog(md: string): ChangelogEntry[] {
   for (const e of out) if (!e.title) e.title = e.items[0] ?? `버전 ${e.version}`;
   return out;
 }
-
-export const CHANGELOG: ChangelogEntry[] = parseChangelog(raw);
 
 /** a > b → 양수 */
 export function compareVersions(a: string, b: string): number {

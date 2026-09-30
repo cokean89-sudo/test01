@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { FeedbackKind } from "../../shared/feedback";
 import type { BuildOptions } from "../layout/autobuild";
 
 interface UIState {
@@ -12,9 +13,10 @@ interface UIState {
   closeCollect: () => void;
   openBuild: (preset?: Partial<BuildOptions>) => void;
   closeBuild: () => void;
-  /** 의견 보내기 창 */
+  /** 의견 보내기 창 — preset 이 있으면 유형 · 내용을 미리 채운다 (예: 한도 요청) */
   feedback: boolean;
-  setFeedback: (open: boolean) => void;
+  feedbackPreset?: { kind: FeedbackKind; message: string };
+  setFeedback: (open: boolean, preset?: { kind: FeedbackKind; message: string }) => void;
 }
 
 export const useUI = create<UIState>((set) => ({
@@ -27,5 +29,5 @@ export const useUI = create<UIState>((set) => ({
   openBuild: (preset) => set({ build: { open: true, preset } }),
   closeBuild: () => set({ build: { open: false } }),
   feedback: false,
-  setFeedback: (open) => set({ feedback: open }),
+  setFeedback: (open, preset) => set({ feedback: open, feedbackPreset: open ? preset : undefined }),
 }));

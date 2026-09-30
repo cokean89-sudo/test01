@@ -227,7 +227,7 @@ export function BuildDialog({ preset }: { preset?: Partial<BuildOptions> }) {
             label={
               <>
                 만든 뒤 AI 로 타이틀·설명·캡션 채우기
-                {!status?.ai && <small className="muted"> (API 키 없음 → 규칙 기반)</small>}
+                {!status?.ai && <small className="muted"> ({status?.aiPaused ? "AI 쉬는 중" : "API 키 없음"} → 규칙 기반)</small>}
               </>
             }
           />

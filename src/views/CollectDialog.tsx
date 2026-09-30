@@ -579,7 +579,7 @@ export function CollectDialog({ initialUrls, initialFiles }: { initialUrls?: str
                 AI 태그 제안 받기
               </Button>
             ) : (
-              <div className="note-box">AI 태그 제안은 AI 연결 후 사용할 수 있어요.</div>
+              <div className="note-box">{status?.aiPaused ? status.aiReason : "AI 태그 제안은 AI 연결 후 사용할 수 있어요."}</div>
             )}
             {(suggesting || suggest) && (
               <TagSuggestions

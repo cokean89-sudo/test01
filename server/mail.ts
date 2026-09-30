@@ -120,3 +120,17 @@ export async function sendFeedbackMail(fb: FeedbackMail): Promise<MailResult> {
   });
   return { delivered: true };
 }
+
+/** 이번 달 AI 예산 도달 — 관리자에게 한 번 */
+export function sendBudgetAlertMail(to: string, a: { month: string; spentUsd: number; budgetUsd: number; resumes: string }) {
+  return send(
+    to,
+    `[RefBoard] ${a.month} AI 예산 도달 — AI 기능이 멈췄어요`,
+    [
+      `${a.month} AI 예상 비용이 $${a.spentUsd.toFixed(2)} 로 월 예산 $${a.budgetUsd.toFixed(2)} 에 도달했어요.`,
+      `모든 사용자의 AI 기능(글쓰기 · 태그 제안)이 ${a.resumes}까지 멈추고, 앱에는 'AI 쉬는 중' 안내가 보여요.`,
+      "예산을 늘리려면 환경변수 AI_MONTHLY_BUDGET_USD 를 올리고 저장하세요 (재시작 후 바로 다시 켜져요).",
+    ],
+    { url: `${APP_URL}/#/admin/usage`, label: "사용량 대시보드 보기" },
+  );
+}

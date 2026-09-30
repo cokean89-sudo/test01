@@ -1,10 +1,12 @@
-// 업데이트 기록 — CHANGELOG.md 와 package.json 버전이 맞는지, 앱에 보일 형식인지, 안 본 소식 계산
+// 개발 기록 — CHANGELOG.md 와 package.json 버전이 맞는지, 형식 · 순서, 안 본 소식 계산
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { APP_VERSION, CHANGELOG, compareVersions, formatUpdateDate, parseChangelog, unseenVersions } from "../src/lib/changelog";
+import { APP_VERSION, compareVersions, formatUpdateDate, parseChangelog, unseenVersions } from "../src/lib/changelog";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+/** 개발 기록 — 앱에는 싣지 않고 여기서만 읽는다 */
+const CHANGELOG = parseChangelog(readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8"));
 
 describe("CHANGELOG.md 규칙 (CLAUDE.md)", () => {
   it("맨 위 항목 버전 = package.json 버전 = 앱에 보이는 버전", () => {

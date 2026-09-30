@@ -10,6 +10,7 @@ import { toast } from "./store/toast";
 import { useUI } from "./store/ui";
 import { useUpdates } from "./store/updates";
 import { AdminFeedbackView } from "./views/AdminFeedbackView";
+import { AdminUsageView } from "./views/AdminUsageView";
 import { AccountView, ForgotView, InviteView, LoginView, ResetView, SignupView, VerifyView } from "./views/auth/AuthViews";
 import { BuildDialog } from "./views/BuildDialog";
 import { CasesView } from "./views/CasesView";
@@ -135,6 +136,8 @@ export function App() {
           <GuideView section={id} />
         ) : section === "tags" ? (
           <TagsView />
+        ) : section === "admin" && id === "usage" ? (
+          <AdminUsageView />
         ) : section === "admin" ? (
           <AdminFeedbackView id={route[2]} />
         ) : (
@@ -253,9 +256,12 @@ function TopBar({ section }: { section: string }) {
           <Icon name="bulb" size={16} />
           TIP
         </a>
-        <span className={"ai-status" + (status?.ai ? " on" : "")} title={status?.ai ? `Claude 연결됨 (${status.model})` : status?.aiReason}>
+        <span
+          className={"ai-status" + (status?.ai ? " on" : status?.aiPaused ? " paused" : "")}
+          title={status?.ai ? `Claude 연결됨 (${status.model})` : status?.aiReason}
+        >
           <Icon name="sparkle" size={14} />
-          {status?.ai ? "AI 켜짐" : "AI 꺼짐"}
+          {status?.ai ? "AI 켜짐" : status?.aiPaused ? "AI 쉬는 중" : "AI 꺼짐"}
         </span>
         {canEdit && (
           <>
@@ -288,9 +294,14 @@ function TopBar({ section }: { section: string }) {
                 의견 보내기
               </MenuItem>
               {user?.isAdmin && (
-                <MenuItem icon="file" onClick={() => (close(), navigate("admin/feedback"))}>
-                  받은 의견 (관리자)
-                </MenuItem>
+                <>
+                  <MenuItem icon="file" onClick={() => (close(), navigate("admin/feedback"))}>
+                    받은 의견 (관리자)
+                  </MenuItem>
+                  <MenuItem icon="layers" onClick={() => (close(), navigate("admin/usage"))}>
+                    사용량 (관리자)
+                  </MenuItem>
+                </>
               )}
               <MenuItem icon="x" onClick={() => (close(), void logout())}>
                 로그아웃

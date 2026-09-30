@@ -102,7 +102,7 @@ export function EditorView({ id }: { id: string }) {
         const cur = useEditor.getState().doc!;
         const page = cur.pages.find((p) => p.id === target.id);
         if (!page) continue;
-        const result = await api.analyze(analyzeRequestFor(page, cur));
+        const result = await api.analyze(analyzeRequestFor(page, cur), cur.teamId);
         notice ??= result.engine === "heuristic" ? result.notice : undefined;
         const textOf = (role: string) => page.elements.find((e): e is TextElement => e.type === "text" && e.role === role && !e.labelFor)?.text.trim() ?? "";
         const fields = new Set<AiField>();

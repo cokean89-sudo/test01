@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { AiPerspective, AiTextField, AiTone, AnalyzeRequest, AnalyzeResult, AppStatus, TagSuggestRequest, TagSuggestResult } from "../shared/types";
 import { emptyAxes, flattenAxes, refineAxes, tagKey } from "../shared/tags";
 import { fetchImage } from "./net";
+import type { TokenUsage } from "./pricing";
 
 /**
  * 작업별 모델 — .env 로 바꿀 수 있다.
@@ -57,6 +58,17 @@ type ImageBlock = Anthropic.Beta.BetaImageBlockParam;
  * undefined = 저장한 이미지가 아님(링크로 가져온다), null = 볼 수 없음
  */
 export type ImageLoader = (url: string) => Promise<{ data: Buffer; type: string } | null | undefined>;
+
+/** 실제로 AI 를 부른 뒤 알려 주는 사용량 — 실제로 답한 모델(대체 모델 포함) · 토큰 수만 (내용은 없음) */
+export interface AiUsage {
+  model: string;
+  tokens: TokenUsage;
+}
+
+export interface AiCallOptions {
+  load?: ImageLoader;
+  onUsage?: (u: AiUsage) => void;
+}
 
 /** 서버에서 직접 받아 base64 로 전달 (핫링크 차단 회피). 실패하면 URL 소스로 넘긴다. */
 async function imageBlock(url: string, load?: ImageLoader): Promise<ImageBlock | null> {
@@ -247,12 +259,33 @@ export function modelOptions(model: string): { adaptive: boolean; fallback: bool
   return { adaptive: !older, fallback: /^claude-(opus-5|opus-5-5|fable-5-1|sonnet-5-5)$/.test(m) };
 }
 
+/** 응답의 usage → 토큰 수 (캐시 쓰기는 5분 · 1시간 단가가 달라 나눠서) */
+export function tokensOf(usage: unknown): TokenUsage {
+  const u = (usage ?? {}) as {
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    cache_creation_input_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+    cache_creation?: { ephemeral_5m_input_tokens?: number | null; ephemeral_1h_input_tokens?: number | null } | null;
+  };
+  const write = u.cache_creation_input_tokens ?? 0;
+  const w1h = u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+  return {
+    input: u.input_tokens ?? 0,
+    output: u.output_tokens ?? 0,
+    cacheWrite5m: u.cache_creation ? (u.cache_creation.ephemeral_5m_input_tokens ?? 0) : write,
+    cacheWrite1h: u.cache_creation ? w1h : 0,
+    cacheRead: u.cache_read_input_tokens ?? 0,
+  };
+}
+
 async function callStructured<T extends z.ZodType>(
   model: string,
   schema: T,
   system: string,
   content: Anthropic.Beta.BetaContentBlockParam[],
   effort: "low" | "medium" | "high",
+  onUsage?: (u: AiUsage) => void,
 ): Promise<z.infer<T>> {
   const opts = modelOptions(model);
   const response = await client.beta.messages.parse({
@@ -264,6 +297,8 @@ async function callStructured<T extends z.ZodType>(
     system,
     messages: [{ role: "user", content }],
   });
+  // 거절된 응답도 토큰은 쓴 것이니 먼저 기록한다
+  onUsage?.({ model: response.model || model, tokens: tokensOf(response.usage) });
   if (response.stop_reason === "refusal") {
     throw new RefusalError(response.stop_details?.explanation ?? "모델이 요청을 거절했어요.");
   }
@@ -287,7 +322,7 @@ function isMissingCredentials(err: unknown): boolean {
   );
 }
 
-export async function analyzePage(req: AnalyzeRequest, load?: ImageLoader): Promise<AnalyzeResult> {
+export async function analyzePage(req: AnalyzeRequest, { load, onUsage }: AiCallOptions = {}): Promise<AnalyzeResult> {
   const status = aiStatus();
   if (!status.ai) return { ...heuristicAnalysis(req), fields: req.fields, notice: status.aiReason };
   try {
@@ -298,6 +333,7 @@ export async function analyzePage(req: AnalyzeRequest, load?: ImageLoader): Prom
       systemPrompt(req.language, req.perspective, req.tone),
       content,
       "medium",
+      onUsage,
     )) as Partial<z.infer<typeof PageAnalysis>>;
     const captions = req.images.slice(0, MAX_IMAGES).map((_, i) => out.captions?.[i] ?? "");
     return {
@@ -320,7 +356,7 @@ export async function analyzePage(req: AnalyzeRequest, load?: ImageLoader): Prom
 }
 
 /** 태그 제안 — 축별 1~2개. AI 가 없으면 제안하지 않는다 (단어 쪼개기 같은 추측 태깅은 하지 않음) */
-export async function suggestTags(req: TagSuggestRequest, load?: ImageLoader): Promise<TagSuggestResult> {
+export async function suggestTags(req: TagSuggestRequest, { load, onUsage }: AiCallOptions = {}): Promise<TagSuggestResult> {
   const status = aiStatus();
   const off = (notice?: string): TagSuggestResult => ({ axes: emptyAxes(), tags: [], engine: "off", notice: notice ?? "AI 연결 후 사용할 수 있어요." });
   if (!status.ai) return off("AI 연결 후 사용할 수 있어요. (ANTHROPIC_API_KEY 설정 필요)");
@@ -336,7 +372,7 @@ export async function suggestTags(req: TagSuggestRequest, load?: ImageLoader): P
       .filter(Boolean)
       .join("\n");
     const content = [...(await withImages([{ url: req.imageUrl }], load)), { type: "text" as const, text: context }];
-    const out = await callStructured(MODELS.tags, TagSuggestion, tagSystemPrompt(req.language), content, "low");
+    const out = await callStructured(MODELS.tags, TagSuggestion, tagSystemPrompt(req.language), content, "low", onUsage);
     const axes = refineAxes(out, vocabulary, req.existingTags ?? []);
     return { axes, tags: flattenAxes(axes), title: out.title, engine: "ai", model: MODELS.tags };
   } catch (err) {

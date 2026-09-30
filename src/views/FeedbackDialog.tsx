@@ -31,9 +31,10 @@ function readAsDataUrl(file: File): Promise<string> {
 
 export function FeedbackDialog() {
   const setFeedback = useUI((s) => s.setFeedback);
+  const preset = useUI((s) => s.feedbackPreset);
   const user = useSession((s) => s.user);
-  const [kind, setKind] = useState<FeedbackKind>("bug");
-  const [message, setMessage] = useState("");
+  const [kind, setKind] = useState<FeedbackKind>(preset?.kind ?? "bug");
+  const [message, setMessage] = useState(preset?.message ?? "");
   const [shots, setShots] = useState<Shot[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);

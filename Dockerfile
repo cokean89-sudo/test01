@@ -18,7 +18,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY --from=build --chown=root:root /app/node_modules ./node_modules
 COPY --from=build --chown=root:root /app/dist ./dist
-COPY --chown=root:root package.json tsconfig.json ./
+COPY --chown=root:root package.json tsconfig.json ai-prices.json ./
 COPY --chown=root:root server ./server
 COPY --chown=root:root shared ./shared
 COPY --chown=root:root src/lib ./src/lib

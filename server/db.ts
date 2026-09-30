@@ -226,6 +226,36 @@ const MIGRATIONS: string[] = [
   CREATE INDEX refs_file ON refs(file_id);
   CREATE INDEX refs_original_key ON refs(team_id, original_key);
   `,
+  // v5: 사용량 — 횟수 · 수치만 (글 · 이미지 내용은 저장하지 않는다). month · day 는 한국 시간 기준
+  `
+  CREATE TABLE usage_events (
+    id INTEGER PRIMARY KEY,
+    user_id TEXT,
+    team_id TEXT,
+    kind TEXT NOT NULL,
+    detail TEXT NOT NULL,
+    model TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    month TEXT NOT NULL,
+    day TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX usage_user ON usage_events(user_id, month, kind, detail);
+  CREATE INDEX usage_team ON usage_events(team_id, month);
+  CREATE INDEX usage_month ON usage_events(month, kind);
+  -- 관리자가 사용자별로 조정한 한도 (요금제 기본값 위에 덮어쓴다)
+  CREATE TABLE user_limits (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    overrides_json TEXT NOT NULL,
+    updated_by TEXT,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export class Database {

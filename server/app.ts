@@ -14,6 +14,7 @@ import { libraryRouter } from "./routes/library";
 import { invitesRouter, teamsRouter } from "./routes/teams";
 import { toolsRouter } from "./routes/tools";
 import { cleanupStaleUploads, filesRouter, uploadsRouter } from "./routes/uploads";
+import { usageAdminRouter, usageRouter } from "./routes/usage";
 import { csrfGuard, HttpError, noStore, permissionsPolicy, rateLimit, securityHeaders } from "./security";
 import { createStore, type FileStore } from "./storage";
 
@@ -50,6 +51,8 @@ export function createApp(db: Database, opts: { store?: FileStore } = {}) {
   api.use("/documents", authRequired, documentLookupRouter(repo));
   api.use("/feedback", authRequired, feedbackRouter(repo));
   api.use("/admin", authRequired, adminRouter(repo));
+  api.use("/admin", authRequired, usageAdminRouter(repo));
+  api.use("/usage", authRequired, usageRouter(repo));
   api.use("/files", authRequired, filesRouter(repo, store));
   api.use("/", toolsRouter(repo, store));
   api.use((_req, _res, next) => next(new HttpError(404, "알 수 없는 API")));

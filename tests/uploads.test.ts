@@ -165,7 +165,8 @@ describe("이미지 업로드", () => {
       put: async () => void (puts++, await new Promise((r) => setTimeout(r, 60))),
     };
     const userId = appCtx.repo.db.get<{ id: string }>("SELECT user_id AS id FROM memberships WHERE team_id = ?", team)!.id;
-    const rows = await Promise.all([1, 2, 3].map(() => saveProcessed(appCtx.repo, slow, team, userId, img, { origin: "upload" })));
+    const user = appCtx.repo.getUser(userId)!;
+    const rows = await Promise.all([1, 2, 3].map(() => saveProcessed(appCtx.repo, slow, team, user, img, { origin: "upload" })));
     expect(new Set(rows.map((r) => r.id)).size).toBe(1);
     expect(puts).toBe(2); // 원본 + 썸네일 한 번씩
   });
@@ -216,7 +217,7 @@ describe("이미지 업로드", () => {
     const { c, team } = await signup("용량");
     const first = await c.upload(team, photo);
     const usage = await c.get(`/api/teams/${team}/storage`);
-    expect(usage.json).toEqual({ used: first.json.file.bytes, files: 1, limit: 5 * 1024 ** 3 });
+    expect(usage.json).toEqual({ used: first.json.file.bytes, files: 1, limit: 2 * 1024 ** 3 });
     process.env.TEAM_STORAGE_LIMIT_GB = String(first.json.file.bytes / 1024 ** 3); // 딱 지금 사용량만큼
     try {
       const full = await c.upload(team, wide, "image/png");
@@ -304,7 +305,7 @@ describe("링크 이미지 사본 저장", () => {
     const { c, team } = await signup("사본실패");
     const svg = await c.post(`/api/teams/${team}/uploads/from-url`, { url: `${imgBase}/logo.svg` });
     expect(svg.status).toBe(415);
-    expect(svg.json.error).toContain("링크로만 저장돼요");
+    expect(svg.json.error).toContain("사본으로 저장할 수 없어요");
     const gone = await c.post(`/api/teams/${team}/uploads/from-url`, { url: `${imgBase}/missing.jpg` });
     expect(gone.status).toBe(422);
     expect((await c.post(`/api/teams/${team}/uploads/from-url`, { url: "javascript:alert(1)" })).status).toBe(400);

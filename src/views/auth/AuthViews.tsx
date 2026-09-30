@@ -3,7 +3,9 @@ import { ROLE_LABEL } from "../../../shared/types";
 import { ApiError, authApi, teamApi } from "../../api";
 import { Icon } from "../../components/icons";
 import { Button, Field, Spinner } from "../../components/ui";
-import { APP_VERSION, CHANGELOG, formatUpdateDate } from "../../lib/changelog";
+import { UsagePanel } from "../../components/UsagePanel";
+import { APP_VERSION, formatUpdateDate } from "../../lib/changelog";
+import { RELEASE_NOTES } from "../../lib/releaseNotes";
 import { navigate } from "../../lib/router";
 import { useSession } from "../../store/session";
 import { toast } from "../../store/toast";
@@ -624,6 +626,7 @@ export function AccountView() {
           </div>
         </Field>
       </section>
+      <UsagePanel />
       <section className="panel">
         <h4>{user.hasPassword ? "비밀번호 변경" : "비밀번호 설정"}</h4>
         <form
@@ -710,19 +713,19 @@ export function AccountView() {
   );
 }
 
-/** 앱 정보 — 현재 버전 · 업데이트 기록 */
+/** 앱 정보 — 현재 버전 · 가장 최근 업데이트 소식 */
 function AppInfo() {
   const unseen = useUpdates((s) => s.unseen.size);
-  const current = CHANGELOG.find((e) => e.version === APP_VERSION);
+  const latest = RELEASE_NOTES[0];
   return (
     <section className="panel app-info">
       <h4>앱 정보</h4>
       <div className="app-info-row">
         <div>
           <strong className="app-info-version">RefBoard v{APP_VERSION}</strong>
-          {current && (
+          {latest && (
             <p className="muted small">
-              {formatUpdateDate(current.date)} 업데이트 · {current.title}
+              최근 소식 · {formatUpdateDate(latest.date)} · {latest.title}
             </p>
           )}
         </div>

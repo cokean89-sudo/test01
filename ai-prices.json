@@ -1,0 +1,11 @@
+{
+  "$comment": "AI 모델 단가 (USD, 100만 토큰당). 출처: https://platform.claude.com/docs/en/about-claude/pricing (2026-09-30 확인). 바꾸려면 이 파일을 고치거나 AI_PRICES_FILE(다른 파일 경로) · AI_PRICES(JSON 문자열) 환경변수를 쓰세요. 모르는 모델은 default 단가로 계산해요.",
+  "models": {
+    "claude-opus-5-5": { "input": 4, "cacheWrite5m": 5, "cacheWrite1h": 8, "cacheRead": 0.2, "output": 20 },
+    "claude-opus-5": { "input": 5, "cacheWrite5m": 6.25, "cacheWrite1h": 10, "cacheRead": 0.5, "output": 25 },
+    "claude-fable-5-1": { "input": 10, "cacheWrite5m": 12.5, "cacheWrite1h": 20, "cacheRead": 0.25, "output": 50 },
+    "claude-sonnet-5-5": { "input": 2, "cacheWrite5m": 2.5, "cacheWrite1h": 4, "cacheRead": 0.2, "output": 10 },
+    "claude-haiku-4-5": { "input": 1, "cacheWrite5m": 1.25, "cacheWrite1h": 2, "cacheRead": 0.1, "output": 5 }
+  },
+  "default": { "input": 10, "cacheWrite5m": 12.5, "cacheWrite1h": 20, "cacheRead": 1, "output": 50 }
+}

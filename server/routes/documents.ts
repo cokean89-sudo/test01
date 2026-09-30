@@ -8,6 +8,7 @@ import { hasRole, requireUser, teamRole } from "../context";
 import { publish } from "../events";
 import type { Repo } from "../repo";
 import { enforceLimit, HttpError } from "../security";
+import { recordUsage } from "../usage";
 
 const MAX_DOC_BYTES = 8 * 1024 * 1024;
 
@@ -64,6 +65,7 @@ export function documentsRouter(repo: Repo): Router {
   r.post("/documents", teamRole(repo, "editor"), (req, res) => {
     enforceLimit(`doc-create:${req.user!.id}`, 200, 60 * 60_000);
     const doc = repo.createDoc(req.teamId!, parseDoc(req.body) as DocumentData, req.user!.id);
+    recordUsage(repo.db, { userId: req.user!.id, teamId: req.teamId!, kind: "doc", detail: "create" });
     repo.log(req.teamId!, req.user!.id, "doc.create", `문서 '${doc.title}' 생성`, { type: "doc", id: doc.id });
     publish(req.teamId!, "docs", {}, req.user!.id);
     res.json(doc);
@@ -83,6 +85,7 @@ export function documentsRouter(repo: Repo): Router {
     const src = repo.getDoc(req.teamId!, String(req.params.id));
     if (!src) throw new HttpError(404, "문서를 찾을 수 없어요.");
     const copy = repo.createDoc(req.teamId!, { ...src, title: src.title + " (사본)" }, req.user!.id);
+    recordUsage(repo.db, { userId: req.user!.id, teamId: req.teamId!, kind: "doc", detail: "duplicate" });
     repo.log(req.teamId!, req.user!.id, "doc.duplicate", `문서 '${src.title}' 복제`, { type: "doc", id: copy.id });
     publish(req.teamId!, "docs", {}, req.user!.id);
     res.json(copy);

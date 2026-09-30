@@ -1,7 +1,8 @@
 // 업데이트 소식 — 메인(레퍼런스) 화면 카드 · 전체 기록 창
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { APP_VERSION, CHANGELOG, formatUpdateDate } from "../lib/changelog";
+import { APP_VERSION, formatUpdateDate } from "../lib/changelog";
+import { RELEASE_NOTES } from "../lib/releaseNotes";
 import { useUpdates } from "../store/updates";
 import { Icon } from "./icons";
 import { Button, Modal } from "./ui";
@@ -17,7 +18,7 @@ function inline(text: string): ReactNode[] {
 export function UpdatesCard() {
   const unseen = useUpdates((s) => s.unseen);
   const { openAll, markSeen } = useUpdates.getState();
-  const latest = CHANGELOG.slice(0, 3);
+  const latest = RELEASE_NOTES.slice(0, 3);
   if (!latest.length) return null;
   return (
     <section className="updates-card" aria-label="업데이트 소식">
@@ -84,7 +85,7 @@ export function UpdatesDialog() {
       }
     >
       <div className="updates-all" ref={listRef}>
-        {CHANGELOG.map((e) => (
+        {RELEASE_NOTES.map((e) => (
           <article key={e.version} data-version={e.version} className={"updates-entry" + (e.version === focus ? " focus" : "")}>
             <header>
               <span className="updates-ver">v{e.version}</span>
@@ -97,11 +98,13 @@ export function UpdatesDialog() {
               )}
             </header>
             <h3>{e.title}</h3>
-            <ul>
-              {e.items.map((it, i) => (
-                <li key={i}>{inline(it)}</li>
-              ))}
-            </ul>
+            {e.items.length > 0 && (
+              <ul>
+                {e.items.map((it, i) => (
+                  <li key={i}>{inline(it)}</li>
+                ))}
+              </ul>
+            )}
           </article>
         ))}
       </div>

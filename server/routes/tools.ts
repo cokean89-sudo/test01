@@ -3,8 +3,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { fileIdOf } from "../../shared/files";
-import { aiStatus, analyzePage, suggestTags, type ImageLoader } from "../ai";
+import { emptyAxes } from "../../shared/tags";
+import { aiStatus, analyzePage, heuristicAnalysis, suggestTags, type AiUsage, type ImageLoader } from "../ai";
 import { hasRole, requireUser } from "../context";
+import { aiBudget, assertAiAllowed, checkAiBudget, recordAiUsage } from "../limits";
 import { fetchImage } from "../net";
 import { scrapeUrl } from "../scrape";
 import type { Repo, UserRow } from "../repo";
@@ -28,9 +30,15 @@ export function toolsRouter(repo: Repo, store: FileStore): Router {
       return obj ? { data: obj.data, type: "image/webp" } : null;
     };
 
+  /** 사용량을 어느 팀에 기록할지 — 요청에 온 팀의 멤버일 때만 */
+  const teamOf = (user: UserRow, teamId?: string) => (teamId && hasRole(repo.getRole(teamId, user.id), "viewer") ? teamId : null);
+
   r.get("/status", (req, res) => {
     requireUser(req);
-    res.json(aiStatus());
+    const status = aiStatus();
+    const budget = aiBudget(repo);
+    // 이번 달 예산을 다 쓰면 모든 AI 가 쉰다 (화면에는 'AI 쉬는 중')
+    res.json(status.ai && budget.paused ? { ...status, ai: false, aiPaused: true, aiReason: budget.reason } : status);
   });
 
   r.post("/scrape", async (req, res) => {
@@ -77,12 +85,24 @@ export function toolsRouter(repo: Repo, store: FileStore): Router {
       )
       .max(40),
     instruction: z.string().max(2000).optional(),
+    teamId: z.string().max(40).optional(),
   });
 
   r.post("/ai/analyze", async (req, res) => {
     const user = requireUser(req);
     enforceLimit(`ai:${user.id}`, 60, 60 * MIN, "AI 사용 한도(시간당 60회)를 넘었어요.");
-    res.json(await analyzePage(AnalyzeInput.parse(req.body), loaderFor(user)));
+    const { teamId, ...input } = AnalyzeInput.parse(req.body);
+    if (aiStatus().ai) {
+      // 서비스 예산을 다 썼으면 AI 없이 기본 초안만 (다음 달 1일에 다시 켜짐)
+      const budget = checkAiBudget(repo);
+      if (budget.paused) {
+        res.json({ ...heuristicAnalysis(input), fields: input.fields, notice: budget.reason });
+        return;
+      }
+      assertAiAllowed(repo, user, "write");
+    }
+    const onUsage = (u: AiUsage) => recordAiUsage(repo, user, teamOf(user, teamId), "write", u.model, u.tokens);
+    res.json(await analyzePage(input, { load: loaderFor(user), onUsage }));
   });
 
   r.post("/ai/tags", async (req, res) => {
@@ -96,9 +116,20 @@ export function toolsRouter(repo: Repo, store: FileStore): Router {
         existingTags: z.array(z.string().max(60)).max(50).optional(),
         vocabulary: z.array(z.string().max(60)).max(300).optional(),
         language: z.enum(["ko", "en"]).default("ko"),
+        teamId: z.string().max(40).optional(),
       })
       .parse(req.body);
-    res.json(await suggestTags(body, loaderFor(user)));
+    const { teamId, ...input } = body;
+    if (aiStatus().ai) {
+      const budget = checkAiBudget(repo);
+      if (budget.paused) {
+        res.json({ axes: emptyAxes(), tags: [], engine: "off", notice: budget.reason });
+        return;
+      }
+      assertAiAllowed(repo, user, "tag");
+    }
+    const onUsage = (u: AiUsage) => recordAiUsage(repo, user, teamOf(user, teamId), "tag", u.model, u.tokens);
+    res.json(await suggestTags(input, { load: loaderFor(user), onUsage }));
   });
 
   return r;

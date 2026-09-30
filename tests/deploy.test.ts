@@ -51,6 +51,32 @@ describe("render.yaml", () => {
     }
   });
 
+  it("사용 한도는 서버 기본값과 같게 적어 둔다 (팀 저장 공간 2GB)", async () => {
+    const want: Record<string, string> = {
+      TEAM_STORAGE_LIMIT_GB: "2",
+      USER_STORAGE_LIMIT_MB: "500",
+      TOTAL_STORAGE_LIMIT_GB: "8",
+      AI_WRITE_MONTHLY: "50",
+      AI_WRITE_DAILY: "15",
+      AI_TAG_MONTHLY: "300",
+      AI_TAG_DAILY: "80",
+      AI_MONTHLY_BUDGET_USD: "20",
+    };
+    for (const [k, v] of Object.entries(want)) expect(vars.get(k)?.value, k).toBe(v);
+    // 환경변수가 없을 때의 서버 기본값도 같은지
+    const saved = { ...process.env };
+    for (const k of Object.keys(want)) delete process.env[k];
+    try {
+      const { PLANS, serviceLimits } = await import("../server/limits");
+      const l = PLANS.beta.limits();
+      const s = serviceLimits();
+      expect([l.aiWriteMonthly, l.aiWriteDaily, l.aiTagMonthly, l.aiTagDaily, l.userStorageBytes / 1024 ** 2]).toEqual([50, 15, 300, 80, 500]);
+      expect([s.teamStorageBytes / 1024 ** 3, s.totalStorageBytes / 1024 ** 3, s.aiBudgetUsd]).toEqual([2, 8, 20]);
+    } finally {
+      process.env = saved;
+    }
+  });
+
   it("NODE_ENV 는 넣지 않는다 (npm ci 가 빌드 도구를 빼먹음)", () => {
     expect(vars.has("NODE_ENV")).toBe(false);
   });

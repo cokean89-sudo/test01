@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { usageApi } from "../../api";
 import { Icon, type IconName } from "../../components/icons";
 import { Button, Menu, MenuItem, Spinner } from "../../components/ui";
 import { navigate } from "../../lib/router";
@@ -167,7 +168,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
         >
           {(close) => (
             <>
-              <MenuItem icon="printer" hint="인쇄 → PDF로 저장" onClick={() => (close(), open("print/" + doc.id))}>
+              <MenuItem icon="printer" hint="인쇄 → PDF로 저장" onClick={() => (close(), usageApi.recordExport("pdf", doc.id), open("print/" + doc.id))}>
                 PDF (인쇄)
               </MenuItem>
               <MenuItem
@@ -179,6 +180,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
                   try {
                     const { exportPptx } = await import("../../export/pptx");
                     await exportPptx(doc);
+                    usageApi.recordExport("pptx", doc.id);
                     toast.success("PPTX 를 내려받았어요");
                   } catch (err) {
                     toast.error("PPTX 내보내기 실패: " + (err as Error).message);
@@ -194,6 +196,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
                   close();
                   const { exportHtml } = await import("../../export/html");
                   await exportHtml(doc);
+                  usageApi.recordExport("html", doc.id);
                 }}
               >
                 HTML 웹 문서
@@ -209,6 +212,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
                   a.download = `${doc.title || "document"}.json`;
                   a.click();
                   URL.revokeObjectURL(a.href);
+                  usageApi.recordExport("json", doc.id);
                 }}
               >
                 문서 데이터 (JSON)

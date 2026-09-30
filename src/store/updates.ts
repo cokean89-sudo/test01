@@ -1,7 +1,8 @@
-// 업데이트 소식 — 어떤 소식을 봤는지는 사용자별로 이 브라우저에 기억한다 (버전 번호만 저장)
+// 업데이트 소식(RELEASE_NOTES.md) — 어떤 소식을 봤는지는 사용자별로 이 브라우저에 기억한다 (버전 번호만 저장)
 
 import { create } from "zustand";
-import { CHANGELOG, unseenVersions } from "../lib/changelog";
+import { unseenVersions } from "../lib/changelog";
+import { RELEASE_NOTES } from "../lib/releaseNotes";
 
 const key = (userId: string) => `rb.updatesSeen.${userId}`;
 
@@ -33,7 +34,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
   focus: null,
   init(user) {
     if (!user) return set({ userId: null, unseen: new Set(), open: false });
-    set({ userId: user.id, unseen: unseenVersions(CHANGELOG, readSeen(user.id), user.createdAt) });
+    set({ userId: user.id, unseen: unseenVersions(RELEASE_NOTES, readSeen(user.id), user.createdAt) });
   },
   markSeen(versions) {
     const { userId, unseen } = get();
@@ -42,7 +43,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
     set({ unseen: next });
     try {
       // 본 것 = 전체 - 안 본 것. 다음 버전이 나오면 그 버전만 새 소식이 된다
-      localStorage.setItem(key(userId), JSON.stringify(CHANGELOG.map((e) => e.version).filter((v) => !next.has(v))));
+      localStorage.setItem(key(userId), JSON.stringify(RELEASE_NOTES.map((e) => e.version).filter((v) => !next.has(v))));
     } catch {
       /* 저장 못 해도 이번 화면에서는 읽음으로 보인다 */
     }
@@ -52,7 +53,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
   },
   close() {
     // 전체 기록을 열어 봤으면 모두 읽음
-    get().markSeen(CHANGELOG.map((e) => e.version));
+    get().markSeen(RELEASE_NOTES.map((e) => e.version));
     set({ open: false, focus: null });
   },
 }));

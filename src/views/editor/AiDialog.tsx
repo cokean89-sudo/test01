@@ -44,7 +44,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
     setLoading(true);
     setError(null);
     try {
-      setResult(await api.analyze(request()));
+      setResult(await api.analyze(request(), doc.teamId));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -57,7 +57,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
     setBusyField(field);
     setError(null);
     try {
-      const r = await api.analyze(request([field]));
+      const r = await api.analyze(request([field]), doc.teamId);
       setResult((prev) => (prev ? (field === "captions" ? { ...prev, captions: r.captions } : { ...prev, [field]: r[field] }) : r));
     } catch (err) {
       setError((err as Error).message);

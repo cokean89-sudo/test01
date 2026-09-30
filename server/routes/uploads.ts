@@ -18,9 +18,11 @@ import { newId } from "../db";
 import { publish } from "../events";
 import { processImage, UPLOAD_MAX_BYTES, UPLOAD_TYPES, type ProcessedImage } from "../images";
 import { fetchImage } from "../net";
-import type { FileRow, Repo } from "../repo";
+import { assertStorageAllowed, assertStorageNotFull } from "../limits";
+import type { FileRow, Repo, UserRow } from "../repo";
 import { enforceLimit, HttpError } from "../security";
 import type { FileStore } from "../storage";
+import { recordUsage } from "../usage";
 
 const HOUR = 60 * 60_000;
 /** 올려 두고 레퍼런스로 저장하지 않은 파일은 이 시간이 지나면 정리 */
@@ -45,10 +47,6 @@ export function usageOf(repo: Repo, teamId: string): StorageUsage {
   return { ...repo.storageUsage(teamId), limit: teamStorageLimit() };
 }
 
-function storageFull(limit: number) {
-  return new HttpError(413, `팀 저장 공간(${gb(limit)})이 가득 찼어요. 쓰지 않는 레퍼런스를 지우면 공간이 생겨요.`, "storage_full");
-}
-
 /** 저장소에서 지운다 — 실패해도 요청은 끝낸다 (기록은 이미 지웠으니 나중에 다시 지울 필요 없음) */
 export function removeKeys(store: FileStore, keys: string[]) {
   for (const k of keys) store.delete(k).catch((err) => console.error("저장소 파일 삭제 실패", k, (err as Error).message));
@@ -62,14 +60,14 @@ export async function saveProcessed(
   repo: Repo,
   store: FileStore,
   teamId: string,
-  userId: string,
+  user: UserRow,
   img: ProcessedImage,
   meta: { origin: "upload" | "copy"; name?: string; originalUrl?: string },
 ): Promise<FileRow> {
   const key = `${teamId}:${img.hash}`;
   const pending = inflight.get(key);
   if (pending) await pending.catch(() => undefined);
-  const job = storeOnce(repo, store, teamId, userId, img, meta);
+  const job = storeOnce(repo, store, teamId, user, img, meta);
   inflight.set(key, job);
   try {
     return await job;
@@ -82,7 +80,7 @@ async function storeOnce(
   repo: Repo,
   store: FileStore,
   teamId: string,
-  userId: string,
+  user: UserRow,
   img: ProcessedImage,
   meta: { origin: "upload" | "copy"; name?: string; originalUrl?: string },
 ): Promise<FileRow> {
@@ -92,8 +90,8 @@ async function storeOnce(
     return same;
   }
   const bytes = img.full.length + img.thumb.length;
-  const limit = teamStorageLimit();
-  if (repo.storageUsage(teamId).used + bytes > limit) throw storageFull(limit);
+  // 팀 → 내(올린 사람) → 서비스 전체 저장 공간 (한도 확인은 limits.ts 한 곳에서)
+  assertStorageAllowed(repo, user, teamId, bytes);
   const free = await store.freeBytes();
   if (free !== null && free - bytes < storageReserve()) {
     throw new HttpError(507, "서버 저장 공간이 부족해요. 관리자에게 디스크 용량을 늘려 달라고 알려 주세요.", "disk_full");
@@ -108,6 +106,7 @@ async function storeOnce(
     await store.delete(key).catch(() => undefined);
     throw err;
   }
+  recordUsage(repo.db, { userId: user.id, teamId, kind: "upload", detail: meta.origin === "copy" ? "copy" : "file", bytes });
   return repo.insertFile({
     id,
     team_id: teamId,
@@ -120,20 +119,20 @@ async function storeOnce(
     origin: meta.origin,
     original_url: meta.originalUrl ?? null,
     name: meta.name?.slice(0, 200) ?? null,
-    created_by: userId,
+    created_by: user.id,
   });
 }
 
 /** 링크 이미지를 받아 사본으로 저장 (사설망 차단 등 기존 안전장치를 그대로 쓴다) */
-async function copyFromUrl(repo: Repo, store: FileStore, teamId: string, userId: string, url: string): Promise<FileRow> {
+async function copyFromUrl(repo: Repo, store: FileStore, teamId: string, user: UserRow, url: string): Promise<FileRow> {
   const { data } = await fetchImage(url, UPLOAD_MAX_BYTES).catch((err: Error & { status?: number }) => {
     throw new HttpError(err.status === 413 ? 413 : 422, err.status === 413 ? "원본 이미지가 20MB 보다 커서 사본을 저장할 수 없어요." : `원본 이미지를 가져오지 못했어요: ${err.message}`, "copy_failed");
   });
   const img = await processImage(data, [...UPLOAD_TYPES, "image/avif"]).catch((err: HttpError) => {
-    if (err.status === 415) throw new HttpError(415, "이 형식(SVG 등)은 사본으로 저장할 수 없어요. 링크로만 저장돼요.", "unsupported_file");
+    if (err.status === 415) throw new HttpError(415, "이 형식(SVG 등)은 사본으로 저장할 수 없어요.", "unsupported_file");
     throw err;
   });
-  return saveProcessed(repo, store, teamId, userId, img, { origin: "copy", originalUrl: url });
+  return saveProcessed(repo, store, teamId, user, img, { origin: "copy", originalUrl: url });
 }
 
 export function uploadsRouter(repo: Repo, store: FileStore): Router {
@@ -148,8 +147,7 @@ export function uploadsRouter(repo: Repo, store: FileStore): Router {
     const user = requireUser(req);
     enforceLimit(`upload:${user.id}`, 600, HOUR, "업로드가 너무 많아요. 잠시 후 다시 시도해 주세요.");
     if (Number(req.get("content-length") ?? 0) > UPLOAD_MAX_BYTES) throw new HttpError(413, "파일당 20MB까지 올릴 수 있어요.", "file_too_large");
-    const limit = teamStorageLimit();
-    if (repo.storageUsage(req.teamId!).used >= limit) throw storageFull(limit);
+    assertStorageNotFull(repo, user, req.teamId!);
     next();
   };
   const raw = express.raw({ type: () => true, limit: UPLOAD_MAX_BYTES });
@@ -170,7 +168,7 @@ export function uploadsRouter(repo: Repo, store: FileStore): Router {
       name = undefined;
     }
     const img = await processImage(body);
-    const file = await saveProcessed(repo, store, req.teamId!, user.id, img, { origin: "upload", name });
+    const file = await saveProcessed(repo, store, req.teamId!, user, img, { origin: "upload", name });
     res.json({ file: fileView(file), usage: usageOf(repo, req.teamId!) });
   });
 
@@ -179,9 +177,8 @@ export function uploadsRouter(repo: Repo, store: FileStore): Router {
     enforceLimit(`upload:${user.id}`, 600, HOUR, "업로드가 너무 많아요. 잠시 후 다시 시도해 주세요.");
     const { url } = z.object({ url: z.string().trim().min(1).max(4000) }).parse(req.body);
     if (!/^https?:\/\//i.test(url)) throw new HttpError(400, "http(s) 링크만 사본으로 저장할 수 있어요.", "invalid_input");
-    const limit = teamStorageLimit();
-    if (repo.storageUsage(req.teamId!).used >= limit) throw storageFull(limit);
-    const file = await copyFromUrl(repo, store, req.teamId!, user.id, url);
+    assertStorageNotFull(repo, user, req.teamId!);
+    const file = await copyFromUrl(repo, store, req.teamId!, user, url);
     res.json({ file: fileView(file), usage: usageOf(repo, req.teamId!) });
   });
 
@@ -204,9 +201,8 @@ export function uploadsRouter(repo: Repo, store: FileStore): Router {
       return;
     }
     if (!/^https?:\/\//i.test(ref.imageUrl)) throw new HttpError(400, "링크 이미지만 사본으로 저장할 수 있어요.", "invalid_input");
-    const limit = teamStorageLimit();
-    if (repo.storageUsage(teamId).used >= limit) throw storageFull(limit);
-    const file = await copyFromUrl(repo, store, teamId, user.id, ref.imageUrl);
+    assertStorageNotFull(repo, user, teamId);
+    const file = await copyFromUrl(repo, store, teamId, user, ref.imageUrl);
     const updated = repo.updateRef(
       teamId,
       ref.id,

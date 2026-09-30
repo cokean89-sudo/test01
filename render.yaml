@@ -38,9 +38,27 @@ services:
       # 넣고 npm run storage:migrate (DEPLOY.md '5-B'). 키 값은 이 파일에 적지 않는다.
       - key: STORAGE_DRIVER
         value: disk
-      # 팀별 저장 공간(GB) — 디스크 용량을 늘리면 함께 올리세요
+
+      # ── 사용 한도 (베타 기간) — 바꾸면 재시작 없이 다음 요청부터 적용돼요. 자세한 설명은 DEPLOY.md '2-E' ──
+      # 저장 공간: 팀별(GB) · 개인별(MB, 올린 사람 기준) · 서비스 전체(GB). 디스크 용량을 늘리면 함께 올리세요
       - key: TEAM_STORAGE_LIMIT_GB
-        value: "5"
+        value: "2"
+      - key: USER_STORAGE_LIMIT_MB
+        value: "500"
+      - key: TOTAL_STORAGE_LIMIT_GB
+        value: "8"
+      # AI 개인 한도(회) — 관리자(ADMIN_EMAILS)는 빠져요. 사용자별 조정은 관리자 화면 '사용량'에서
+      - key: AI_WRITE_MONTHLY
+        value: "50"
+      - key: AI_WRITE_DAILY
+        value: "15"
+      - key: AI_TAG_MONTHLY
+        value: "300"
+      - key: AI_TAG_DAILY
+        value: "80"
+      # 서비스 전체 월 AI 예산(USD) — 넘으면 이달 말까지 AI 기능이 쉬고 관리자에게 메일이 가요
+      - key: AI_MONTHLY_BUDGET_USD
+        value: "20"
 
       # ── 공개 주소 (선택: 비우면 https://<서비스이름>.onrender.com 을 자동 사용) ──
       - key: APP_URL

@@ -20,6 +20,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
   const [busy, setBusy] = useState(false);
   const [suggest, setSuggest] = useState<TagSuggestResult | null>(null);
   const aiOn = !!useLibrary((st) => st.status?.ai);
+  const aiPaused = useLibrary((st) => (st.status?.aiPaused ? st.status.aiReason : undefined));
 
   useEffect(() => {
     setTitle(ref.title ?? "");
@@ -131,7 +132,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
             AI 태그 제안 받기
           </Button>
         ) : (
-          <div className="note-box">AI 태그 제안은 AI 연결 후 사용할 수 있어요.</div>
+          <div className="note-box">{aiPaused ?? "AI 태그 제안은 AI 연결 후 사용할 수 있어요."}</div>
         )}
         {(busy || suggest) && (
           <TagSuggestions

@@ -47,7 +47,10 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 | `DATA_DIR` | `/var/data` | 데이터베이스 저장 폴더 = 영구 디스크 경로. 바꾸면 데이터가 재배포 때 사라져요 |
 | `TRUST_PROXY` | `1` | Render 로드밸런서 1단계 뒤에서 실행 — 사용자 실제 IP 로 요청 제한·보안 로그를 남기기 위해 필요 |
 | `STORAGE_DRIVER` | `disk` | 올린 이미지 저장 위치. `disk` = 영구 디스크의 `/var/data/uploads`. R2 · S3 로 옮길 때 `s3` ([5-B](#5-b-cloudflare-r2--aws-s3-로-옮기기)) |
-| `TEAM_STORAGE_LIMIT_GB` | `5` | 팀별 저장 공간 (올린 이미지 + 링크 사본). 팀 설정 화면에 '사용 중 1.2GB / 5GB'로 보이고, 가득 차면 올리기가 막히며 안내가 나와요 |
+| `TEAM_STORAGE_LIMIT_GB` | `2` | 팀별 저장 공간 (올린 이미지 + 링크 사본). 팀 설정 화면에 '사용 중 1.2GB / 2GB'로 보이고, 가득 차면 올리기가 막히며 안내가 나와요 |
+| `USER_STORAGE_LIMIT_MB` · `TOTAL_STORAGE_LIMIT_GB` | `500` · `8` | 개인별(올린 사람 기준) · 서비스 전체 저장 공간 ([2-E](#2-e-사용-한도와-ai-예산)) |
+| `AI_WRITE_MONTHLY` · `AI_WRITE_DAILY` · `AI_TAG_MONTHLY` · `AI_TAG_DAILY` | `50` · `15` · `300` · `80` | 한 사람의 AI 글쓰기 · 태그 제안 횟수 한도 (월 · 하루) ([2-E](#2-e-사용-한도와-ai-예산)) |
+| `AI_MONTHLY_BUDGET_USD` | `20` | 서비스 전체 월 AI 예산(달러). 넘으면 이달 말까지 AI 기능이 쉬어요 ([2-E](#2-e-사용-한도와-ai-예산)) |
 | `PORT` | Render 가 지정 | 서버 포트. Render 가 자동으로 넣어 줍니다 (직접 넣지 마세요) |
 | `RENDER_EXTERNAL_URL` | Render 가 지정 | 서비스 기본 주소. `APP_URL` 을 비우면 이 주소를 씁니다 |
 
@@ -66,7 +69,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 | `NAVER_CLIENT_ID` | 선택 | 네이버 로그인 — NAVER Developers → 내 애플리케이션 → **Client ID** | |
 | `NAVER_CLIENT_SECRET` | 선택 | 같은 화면의 **Client Secret** | |
 | `FEEDBACK_EMAIL` | 선택 | '의견 보내기' 내용을 받을 메일. 비우면 `cokean89@gmail.com` | `cokean89@gmail.com` |
-| `ADMIN_EMAILS` | 선택 | 받은 의견 목록(`#/admin/feedback`)을 볼 수 있는 계정 메일, 쉼표로 여러 개. 비우면 `FEEDBACK_EMAIL`. 메일 인증을 마친 계정만 관리자로 인정돼요 | `a@team.com,b@team.com` |
+| `ADMIN_EMAILS` | 선택 | 관리자(서비스 운영자) 계정 메일, 쉼표로 여러 개. 받은 의견(`#/admin/feedback`)과 사용량 대시보드(`#/admin/usage`)를 보고, 개인 사용 한도에서 빠지며, AI 예산 도달 알림 메일을 받아요. 비우면 `FEEDBACK_EMAIL`. 메일 인증을 마친 계정만 관리자로 인정돼요 | `a@team.com,b@team.com` |
 
 ### 2-C. 필요할 때만 Environment 탭에서 추가하는 값
 
@@ -86,6 +89,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 | `S3_BUCKET` · `S3_ENDPOINT` · `S3_REGION` | — | `STORAGE_DRIVER=s3` 일 때 버킷 · 주소 · 리전. R2 는 `S3_ENDPOINT=https://<계정ID>.r2.cloudflarestorage.com`, `S3_REGION=auto`. AWS 는 `S3_ENDPOINT` 를 비우고 `S3_REGION=ap-northeast-2` 처럼 |
 | `S3_ACCESS_KEY_ID` · `S3_SECRET_ACCESS_KEY` | — | 버킷 읽기 · 쓰기 권한 키 (**비밀값 — render.yaml 에 적지 말고 Environment 탭에만**) |
 | `S3_FORCE_PATH_STYLE` | R2 · MinIO 는 켜짐 | `https://주소/버킷/파일` 형식으로 부를지. 보통 그대로 |
+| `AI_PRICES_FILE` · `AI_PRICES` | `ai-prices.json` | AI 예상 비용을 계산할 모델별 단가 — 다른 파일 경로 · JSON 문자열로 바꿀 때 ([2-E](#2-e-사용-한도와-ai-예산)) |
 
 ### 2-D. 넣으면 안 되는 값
 
@@ -94,6 +98,26 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 | `NODE_ENV=production` | `npm ci` 가 빌드 도구(vite)를 설치하지 않아 **빌드가 실패**해요. 운영 모드는 `npm start`(`--prod`)로 이미 켜집니다 |
 | `ALLOW_PRIVATE_FETCH` | 켜면 링크 스크랩으로 서버 내부망에 접근할 수 있게 돼요 (SSRF). 공개 서버에서는 절대 켜지 마세요 |
 | `PORT` | Render 가 정한 포트와 달라지면 헬스 체크가 실패해요 |
+
+### 2-E. 사용 한도와 AI 예산
+
+베타 기간 동안 한 사람 · 팀 · 서비스 전체가 쓸 수 있는 양을 정해 둡니다. 값은 `render.yaml` 에 기본값으로 적혀 있고, Render **Environment 탭에서 바꾸면 재시작 없이 다음 요청부터** 적용돼요.
+
+| 한도 | 변수 (기본값) | 누구에게 | 넘으면 |
+| --- | --- | --- | --- |
+| AI 글쓰기 | `AI_WRITE_MONTHLY` (50) · `AI_WRITE_DAILY` (15) | 한 사람 | "이번 달 AI 글쓰기를 모두 사용했어요 … 10월 1일에 다시 채워져요" 안내 |
+| AI 태그 제안 | `AI_TAG_MONTHLY` (300) · `AI_TAG_DAILY` (80) | 한 사람 | 같은 방식 안내 |
+| 개인 저장 공간 | `USER_STORAGE_LIMIT_MB` (500) | 올린 사람 기준 (팀이 달라도 합산) | 올리기 · 사본 저장이 막히고 안내 |
+| 팀 저장 공간 | `TEAM_STORAGE_LIMIT_GB` (2) | 팀 | 같은 방식 |
+| 서비스 전체 저장 공간 | `TOTAL_STORAGE_LIMIT_GB` (8) | 모두 (관리자 포함) | 같은 방식. 영구 디스크(5GB)에 저장하는 동안은 디스크가 먼저 차므로 `STORAGE_RESERVE_MB` 가 디스크를 지켜요 — 디스크를 늘리거나 R2 · S3 로 옮기면 이 값이 전체 상한이 돼요 |
+| 월 AI 예산 | `AI_MONTHLY_BUDGET_USD` (20) | 모두 (관리자 포함) | 이달 말까지 모든 AI 기능이 쉬어요 — 글쓰기는 규칙 기반 초안, 태그 제안은 안내만, 상단에 'AI 쉬는 중'. 관리자(`ADMIN_EMAILS`)에게 한 달에 한 번 메일 |
+
+- **월간 사용량은 한국 시간 매월 1일 0시에 새로 시작**해요. 하루 한도는 한국 시간 자정에 초기화돼요.
+- **관리자(`ADMIN_EMAILS`)는 개인 한도(AI 글쓰기 · 태그 제안 · 개인 저장 공간)에서 빠져요.** 팀 · 전체 저장 공간과 월 예산은 관리자에게도 적용돼요.
+- **특정 사용자만 올리거나 내리려면** 프로필 메뉴 → `사용량 (관리자)`(`#/admin/usage`) → 사용자별 표의 `조정`. 비워 두면 기본값, 0 이면 그 기능을 막아요. 바꾼 기록은 보안 기록에 남아요.
+- **AI 예상 비용**은 모델이 알려 준 토큰 수 × 모델별 단가(`ai-prices.json`, [공식 가격표](https://platform.claude.com/docs/en/about-claude/pricing) 기준)로 계산해 저장해요. 실제 청구서와 조금 다를 수 있어요. 단가를 바꾸려면 `ai-prices.json` 을 고치거나, `AI_PRICES_FILE`(다른 파일 경로) 또는 `AI_PRICES`(예: `{"claude-opus-5-5":{"input":4,"cacheWrite5m":5,"cacheWrite1h":8,"cacheRead":0.2,"output":20}}`)를 넣으세요. 표에 없는 모델은 비싼 기본 단가로 계산해요.
+- 사용량 기록에는 **횟수와 수치만** 남아요 (사람 · 팀 · 기능 · 모델 · 토큰 수 · 예상 비용 · 파일 크기). 쓴 글이나 이미지 내용은 저장하지 않아요.
+- 한도 확인은 `server/limits.ts` 한 곳에서 해요. 나중에 요금제별 한도를 만들려면 `PLANS` 에 요금제를 추가하고 `planOf()` 가 사용자 정보를 보고 고르게 바꾸면 돼요.
 
 ---
 
@@ -133,7 +157,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 ### 5-A. 이미지 저장 공간 늘리기
 
 올린 이미지는 서버에서 긴 변 2000px WebP 로 줄여서 저장해요 (보통 한 장 150KB ~ 1MB, 목록용 썸네일 포함). 5GB 면 대략 5천 ~ 3만 장입니다.
-팀 설정 → **팀 설정** 탭에서 팀별 사용량('사용 중 1.2GB / 5GB')을 볼 수 있고, 90% 를 넘으면 경고, 가득 차면 업로드가 막히며 안내가 나와요.
+팀 설정 → **팀 설정** 탭에서 팀별 사용량('사용 중 1.2GB / 2GB')을 볼 수 있고, 90% 를 넘으면 경고, 가득 차면 업로드가 막히며 안내가 나와요. 개인 · 서비스 전체 한도는 [2-E](#2-e-사용-한도와-ai-예산), 전체 사용량은 관리자 화면 `사용량`에서 볼 수 있어요.
 
 1. Render 대시보드 → 서비스 → **Disks** → 크기(Size)를 늘리고 저장합니다. (또는 `render.yaml` 의 `sizeGB` 를 올려 push — Blueprint 가 반영)
    - **늘리기만 되고 줄일 수는 없어요.** 디스크 요금은 GB 단위로 붙으니 Render 요금표를 확인하세요.

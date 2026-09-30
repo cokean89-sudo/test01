@@ -11,6 +11,8 @@ import type {
   DocumentSummary,
   DuplicateInfo,
   InviteInfo,
+  LimitOverrides,
+  MyUsage,
   Reference,
   Role,
   ScrapeResult,
@@ -21,6 +23,8 @@ import type {
   TagSuggestResult,
   TeamDetail,
   TeamSummary,
+  UsageDashboard,
+  UsageLimits,
   VersionInfo,
 } from "../shared/types";
 
@@ -159,8 +163,9 @@ export const api = {
   version: (teamId: string, id: string, v: number) => request<DocumentData>("GET", `${T(teamId)}/documents/${id}/versions/${v}`),
   restoreVersion: (teamId: string, id: string, v: number) => request<DocumentData>("POST", `${T(teamId)}/documents/${id}/versions/${v}/restore`, {}),
   scrape: (url: string) => request<ScrapeResult>("POST", "/api/scrape", { url }),
-  analyze: (req: AnalyzeRequest) => request<AnalyzeResult>("POST", "/api/ai/analyze", req),
-  suggestTags: (req: TagSuggestRequest) => request<TagSuggestResult>("POST", "/api/ai/tags", req),
+  // 팀 id 는 사용량을 팀별로 모으는 데만 쓴다
+  analyze: (req: AnalyzeRequest, teamId = currentTeam) => request<AnalyzeResult>("POST", "/api/ai/analyze", { ...req, teamId: teamId || undefined }),
+  suggestTags: (req: TagSuggestRequest) => request<TagSuggestResult>("POST", "/api/ai/tags", { ...req, teamId: currentTeam || undefined }),
   importBackup: (data: unknown) => request<{ references: number; cases: number; documents: number; skipped?: number }>("POST", `${T()}/backup`, { data }),
   backupUrl: () => `${T()}/backup`,
   // ── 이미지 파일 · 사본 · 저장 공간 ──
@@ -196,6 +201,18 @@ function uploadRequest(url: string, file: Blob, name: string, onProgress?: (rati
     xhr.send(file);
   });
 }
+
+export type ExportKind = "pdf" | "pptx" | "html" | "json";
+export type LimitPatch = { [K in keyof LimitOverrides]?: number | null };
+
+export const usageApi = {
+  me: () => request<MyUsage>("GET", "/api/usage/me"),
+  /** 내보내기 한 번 기록 — 실패해도 내보내기는 그대로 (사용량 집계용) */
+  recordExport: (kind: ExportKind, docId: string) => void request("POST", "/api/usage/export", { kind, docId }).catch(() => undefined),
+  dashboard: (month?: string) => request<UsageDashboard>("GET", `/api/admin/usage${month ? `?month=${encodeURIComponent(month)}` : ""}`),
+  setUserLimits: (userId: string, patch: LimitPatch) =>
+    request<{ overrides: LimitOverrides | null; limits: UsageLimits }>("PUT", `/api/admin/users/${encodeURIComponent(userId)}/limits`, patch),
+};
 
 export const feedbackApi = {
   send: (b: FeedbackInput) => request<{ ok: true; id: string }>("POST", "/api/feedback", b),

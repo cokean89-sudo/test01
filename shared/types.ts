@@ -425,6 +425,8 @@ export interface AppStatus {
   /** 태그 제안 모델 */
   tagModel?: string;
   aiReason?: string;
+  /** 이번 달 서비스 AI 예산을 다 써서 쉬는 중 (다음 달 1일에 다시 켜짐) */
+  aiPaused?: boolean;
 }
 
 // ─── 계정 · 팀 (웹 버전) ─────────────────────────────────────
@@ -551,4 +553,93 @@ export interface StorageUsage {
   used: number;
   limit: number;
   files: number;
+}
+
+// ─── 사용량 · 한도 ───────────────────────────────────────────
+
+/** 요금제 한도 — 저장 공간은 바이트 */
+export interface UsageLimits {
+  aiWriteMonthly: number;
+  aiWriteDaily: number;
+  aiTagMonthly: number;
+  aiTagDaily: number;
+  userStorageBytes: number;
+}
+
+/** 관리자가 사용자별로 바꾼 한도 (없는 값은 요금제 기본값) */
+export interface LimitOverrides {
+  aiWriteMonthly?: number;
+  aiWriteDaily?: number;
+  aiTagMonthly?: number;
+  aiTagDaily?: number;
+  userStorageMb?: number;
+}
+
+export interface UsageMeter {
+  key: "aiWrite" | "aiTag" | "storage";
+  label: string;
+  used: number;
+  /** 한도 없음(관리자) = null */
+  limit: number | null;
+  /** 하루 한도가 있는 항목 */
+  daily?: { used: number; limit: number | null };
+}
+
+/** 내 계정 — 이번 달 사용량 */
+export interface MyUsage {
+  planLabel: string;
+  exempt: boolean;
+  /** YYYY-MM (한국 시간) */
+  month: string;
+  /** 다음 초기화 날짜 YYYY-MM-DD (한국 시간 매월 1일) */
+  resetDate: string;
+  meters: UsageMeter[];
+  aiPaused: boolean;
+}
+
+export interface UsageUserRow {
+  id: string;
+  name: string;
+  email: string | null;
+  isAdmin: boolean;
+  aiWrite: number;
+  aiTag: number;
+  aiOther: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  uploads: number;
+  uploadBytes: number;
+  storageBytes: number;
+  exports: number;
+  docsCreated: number;
+  limits: UsageLimits;
+  overrides: LimitOverrides | null;
+}
+
+export interface UsageTeamRow {
+  id: string;
+  name: string;
+  members: number;
+  aiCalls: number;
+  costUsd: number;
+  uploads: number;
+  uploadBytes: number;
+  storageBytes: number;
+  docsTotal: number;
+  docsCreated: number;
+  exports: number;
+}
+
+/** 관리자 사용량 대시보드 */
+export interface UsageDashboard {
+  month: string;
+  months: string[];
+  budget: { spentUsd: number; budgetUsd: number; paused: boolean };
+  features: { key: string; label: string; count: number; costUsd: number }[];
+  models: { model: string; calls: number; inputTokens: number; outputTokens: number; cacheTokens: number; costUsd: number }[];
+  storage: { usedBytes: number; limitBytes: number; teamLimitBytes: number };
+  users: UsageUserRow[];
+  teams: UsageTeamRow[];
+  defaults: UsageLimits;
 }

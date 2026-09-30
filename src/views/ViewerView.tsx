@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DocumentData } from "../../shared/types";
-import { api } from "../api";
+import { api, usageApi } from "../api";
 import { Icon } from "../components/icons";
 import { PageView, pageSize } from "../components/PageView";
 import { Button, Spinner } from "../components/ui";
@@ -39,7 +39,7 @@ export function ViewerView({ id }: { id: string }) {
         <Button icon="play" onClick={() => setPresent(0)}>
           발표 모드
         </Button>
-        <Button icon="printer" onClick={() => window.open("#/print/" + doc.id, "_blank")}>
+        <Button icon="printer" onClick={() => (usageApi.recordExport("pdf", doc.id), window.open("#/print/" + doc.id, "_blank"))}>
           PDF 인쇄
         </Button>
         <Button icon="file" variant="primary" onClick={() => (location.hash = "#/edit/" + doc.id)}>

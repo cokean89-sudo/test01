@@ -193,7 +193,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
                 onClick={async () => {
                   close();
                   const { exportHtml } = await import("../../export/html");
-                  exportHtml(doc);
+                  await exportHtml(doc);
                 }}
               >
                 HTML 웹 문서

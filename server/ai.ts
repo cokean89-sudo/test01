@@ -52,8 +52,17 @@ export function aiStatus(): AppStatus {
 
 type ImageBlock = Anthropic.Beta.BetaImageBlockParam;
 
+/**
+ * 앱에 저장한 이미지(/api/files/…)를 저장소에서 직접 읽는 함수 — 라우터가 권한을 확인해 넘겨준다.
+ * undefined = 저장한 이미지가 아님(링크로 가져온다), null = 볼 수 없음
+ */
+export type ImageLoader = (url: string) => Promise<{ data: Buffer; type: string } | null | undefined>;
+
 /** 서버에서 직접 받아 base64 로 전달 (핫링크 차단 회피). 실패하면 URL 소스로 넘긴다. */
-async function imageBlock(url: string): Promise<ImageBlock | null> {
+async function imageBlock(url: string, load?: ImageLoader): Promise<ImageBlock | null> {
+  const own = load ? await load(url).catch(() => null) : undefined;
+  if (own === null) return null;
+  if (own) return { type: "image", source: { type: "base64", media_type: own.type as "image/webp", data: own.data.toString("base64") } };
   try {
     const { data, type } = await fetchImage(url, 4.5 * 1024 * 1024);
     if (IMAGE_TYPES.has(type)) {
@@ -210,9 +219,9 @@ function pageContext(req: AnalyzeRequest): string {
 
 // ─── calls ──────────────────────────────────────────────────
 
-async function withImages(images: AnalyzeRequest["images"]): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
+async function withImages(images: AnalyzeRequest["images"], load?: ImageLoader): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
   const list = images.slice(0, MAX_IMAGES);
-  const blocks = await Promise.all(list.map((img) => imageBlock(img.url)));
+  const blocks = await Promise.all(list.map((img) => imageBlock(img.url, load)));
   const content: Anthropic.Beta.BetaContentBlockParam[] = [];
   list.forEach((img, i) => {
     const meta = [img.title && `제목: ${img.title}`, img.tags?.length && `태그: ${img.tags.join(", ")}`, img.note && `메모: ${img.note}`]
@@ -278,11 +287,11 @@ function isMissingCredentials(err: unknown): boolean {
   );
 }
 
-export async function analyzePage(req: AnalyzeRequest): Promise<AnalyzeResult> {
+export async function analyzePage(req: AnalyzeRequest, load?: ImageLoader): Promise<AnalyzeResult> {
   const status = aiStatus();
   if (!status.ai) return { ...heuristicAnalysis(req), fields: req.fields, notice: status.aiReason };
   try {
-    const content = [{ type: "text" as const, text: pageContext(req) }, ...(await withImages(req.images))];
+    const content = [{ type: "text" as const, text: pageContext(req) }, ...(await withImages(req.images, load))];
     const out = (await callStructured(
       MODELS.writing,
       analysisSchema(req.fields),
@@ -311,7 +320,7 @@ export async function analyzePage(req: AnalyzeRequest): Promise<AnalyzeResult> {
 }
 
 /** 태그 제안 — 축별 1~2개. AI 가 없으면 제안하지 않는다 (단어 쪼개기 같은 추측 태깅은 하지 않음) */
-export async function suggestTags(req: TagSuggestRequest): Promise<TagSuggestResult> {
+export async function suggestTags(req: TagSuggestRequest, load?: ImageLoader): Promise<TagSuggestResult> {
   const status = aiStatus();
   const off = (notice?: string): TagSuggestResult => ({ axes: emptyAxes(), tags: [], engine: "off", notice: notice ?? "AI 연결 후 사용할 수 있어요." });
   if (!status.ai) return off("AI 연결 후 사용할 수 있어요. (ANTHROPIC_API_KEY 설정 필요)");
@@ -326,7 +335,7 @@ export async function suggestTags(req: TagSuggestRequest): Promise<TagSuggestRes
     ]
       .filter(Boolean)
       .join("\n");
-    const content = [...(await withImages([{ url: req.imageUrl }])), { type: "text" as const, text: context }];
+    const content = [...(await withImages([{ url: req.imageUrl }], load)), { type: "text" as const, text: context }];
     const out = await callStructured(MODELS.tags, TagSuggestion, tagSystemPrompt(req.language), content, "low");
     const axes = refineAxes(out, vocabulary, req.existingTags ?? []);
     return { axes, tags: flattenAxes(axes), title: out.title, engine: "ai", model: MODELS.tags };

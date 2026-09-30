@@ -88,7 +88,7 @@ export function ImagePicker({ mode, targetId }: { mode: "add" | "replace"; targe
             const idx = picked.indexOf(ref.id);
             return (
               <button key={ref.id} className={"picker-item" + (idx >= 0 ? " on" : "")} onClick={() => pick(ref)} title={ref.title}>
-                <SmartImage src={ref.imageUrl} fit={ref.kind === "logo" ? "contain" : "cover"} />
+                <SmartImage src={ref.thumbUrl ?? ref.imageUrl} fit={ref.kind === "logo" ? "contain" : "cover"} />
                 {idx >= 0 && <span className="pick-num">{idx + 1}</span>}
                 <span className="picker-cap ellipsis">{ref.title || ref.tags.join(", ")}</span>
               </button>

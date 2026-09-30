@@ -201,6 +201,31 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX feedback_files_fb ON feedback_files(feedback_id);
   `,
+  // v4: 올린 이미지 · 링크 사본 — 파일 자체는 저장소(디스크 · R2 · S3)에, 여기에는 목록과 용량만
+  `
+  CREATE TABLE files (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    thumb_key TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    hash TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    original_url TEXT,
+    name TEXT,
+    created_by TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX files_team ON files(team_id);
+  CREATE INDEX files_hash ON files(team_id, hash);
+  ALTER TABLE refs ADD COLUMN file_id TEXT;
+  ALTER TABLE refs ADD COLUMN original_url TEXT;
+  ALTER TABLE refs ADD COLUMN original_key TEXT;
+  CREATE INDEX refs_file ON refs(file_id);
+  CREATE INDEX refs_original_key ON refs(team_id, original_key);
+  `,
 ];
 
 export class Database {

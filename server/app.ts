@@ -2,7 +2,7 @@
 
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { TRUST_PROXY } from "./config";
+import { DATA_DIR, TRUST_PROXY } from "./config";
 import { authRequired, sessionMiddleware } from "./context";
 import type { Database } from "./db";
 import { FetchError } from "./net";
@@ -13,10 +13,14 @@ import { adminRouter, feedbackRouter } from "./routes/feedback";
 import { libraryRouter } from "./routes/library";
 import { invitesRouter, teamsRouter } from "./routes/teams";
 import { toolsRouter } from "./routes/tools";
+import { cleanupStaleUploads, filesRouter, uploadsRouter } from "./routes/uploads";
 import { csrfGuard, HttpError, noStore, permissionsPolicy, rateLimit, securityHeaders } from "./security";
+import { createStore, type FileStore } from "./storage";
 
-export function createApp(db: Database) {
+export function createApp(db: Database, opts: { store?: FileStore } = {}) {
   const repo = new Repo(db);
+  // 올린 이미지 저장소 — 환경변수(STORAGE_DRIVER 등)로 디스크 · R2 · S3 중에서 고른다
+  const store = opts.store ?? createStore(process.env, DATA_DIR);
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", TRUST_PROXY);
@@ -39,20 +43,25 @@ export function createApp(db: Database) {
 
   api.use("/auth", authRouter(repo));
   api.use("/invites", authRequired, invitesRouter(repo));
-  api.use("/teams", authRequired, teamsRouter(repo));
-  api.use("/teams/:teamId", authRequired, libraryRouter(repo));
+  api.use("/teams", authRequired, teamsRouter(repo, store));
+  api.use("/teams/:teamId", authRequired, uploadsRouter(repo, store));
+  api.use("/teams/:teamId", authRequired, libraryRouter(repo, store));
   api.use("/teams/:teamId", authRequired, documentsRouter(repo));
   api.use("/documents", authRequired, documentLookupRouter(repo));
   api.use("/feedback", authRequired, feedbackRouter(repo));
   api.use("/admin", authRequired, adminRouter(repo));
-  api.use("/", toolsRouter());
+  api.use("/files", authRequired, filesRouter(repo, store));
+  api.use("/", toolsRouter(repo, store));
   api.use((_req, _res, next) => next(new HttpError(404, "알 수 없는 API")));
   api.use(errorHandler);
 
   app.use("/api", api);
-  // 오래된 세션 정리
-  setInterval(() => repo.purgeExpired(), 60 * 60_000).unref();
-  return { app, repo };
+  // 오래된 세션 · 올려 두고 저장하지 않은 이미지 정리
+  setInterval(() => {
+    repo.purgeExpired();
+    cleanupStaleUploads(repo, store);
+  }, 60 * 60_000).unref();
+  return { app, repo, store };
 }
 
 function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {

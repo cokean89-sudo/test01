@@ -2,6 +2,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
+import { SAFE_IMAGE_SRC } from "../../shared/files";
 import type { DocumentData } from "../../shared/types";
 import { hasRole, requireUser, teamRole } from "../context";
 import { publish } from "../events";
@@ -41,15 +42,15 @@ const DocBody = z
 function parseDoc(body: unknown): Pick<DocumentData, "title" | "query" | "settings" | "pages" | "tray"> {
   if (JSON.stringify(body ?? {}).length > MAX_DOC_BYTES) throw new HttpError(413, "문서가 너무 커요.");
   const d = DocBody.parse(body) as unknown as DocumentData;
-  // 이미지 주소에 javascript: 등 위험한 스킴이 들어오지 않게 한다
+  // 이미지 주소에 javascript: 등 위험한 스킴이 들어오지 않게 한다 (http(s) · 앱 샘플 · 앱에 저장한 이미지만)
   for (const p of d.pages) {
     for (const e of p.elements ?? []) {
-      if (e.type === "image" && e.src && !/^(https?:\/\/|\/samples\/)/i.test(e.src)) e.src = "";
+      if (e.type === "image" && e.src && !SAFE_IMAGE_SRC.test(e.src)) e.src = "";
       if (e.type === "image" && e.sourceUrl && !/^https?:\/\//i.test(e.sourceUrl)) e.sourceUrl = undefined;
     }
   }
-  // 보관함 이미지도 같은 기준 — http(s) 만
-  const tray = d.tray?.filter((t) => /^https?:\/\//i.test(t.src)).map((t) => (t.sourceUrl && !/^https?:\/\//i.test(t.sourceUrl) ? { ...t, sourceUrl: undefined } : t));
+  // 보관함 이미지도 같은 기준
+  const tray = d.tray?.filter((t) => SAFE_IMAGE_SRC.test(t.src) && !t.src.startsWith("/samples/")).map((t) => (t.sourceUrl && !/^https?:\/\//i.test(t.sourceUrl) ? { ...t, sourceUrl: undefined } : t));
   return { title: d.title, query: d.query, settings: d.settings, pages: d.pages, tray };
 }
 

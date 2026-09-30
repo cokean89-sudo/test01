@@ -15,6 +15,8 @@ import type {
   Role,
   ScrapeResult,
   SessionInfo,
+  StorageUsage,
+  StoredFile,
   TagSuggestRequest,
   TagSuggestResult,
   TeamDetail,
@@ -159,9 +161,41 @@ export const api = {
   scrape: (url: string) => request<ScrapeResult>("POST", "/api/scrape", { url }),
   analyze: (req: AnalyzeRequest) => request<AnalyzeResult>("POST", "/api/ai/analyze", req),
   suggestTags: (req: TagSuggestRequest) => request<TagSuggestResult>("POST", "/api/ai/tags", req),
-  importBackup: (data: unknown) => request<{ references: number; cases: number; documents: number }>("POST", `${T()}/backup`, { data }),
+  importBackup: (data: unknown) => request<{ references: number; cases: number; documents: number; skipped?: number }>("POST", `${T()}/backup`, { data }),
   backupUrl: () => `${T()}/backup`,
+  // ── 이미지 파일 · 사본 · 저장 공간 ──
+  uploadFile: (file: Blob, name: string, onProgress?: (ratio: number) => void, teamId = currentTeam) => uploadRequest(`${T(teamId)}/uploads`, file, name, onProgress),
+  copyFromUrl: (url: string) => request<{ file: StoredFile; usage: StorageUsage }>("POST", `${T()}/uploads/from-url`, { url }),
+  deleteUpload: (fileId: string) => request<{ ok: true; usage: StorageUsage }>("DELETE", `${T()}/uploads/${encodeURIComponent(fileId)}`, {}),
+  storage: (teamId = currentTeam) => request<StorageUsage>("GET", `${T(teamId)}/storage`),
+  copyRef: (id: string) => request<Reference>("POST", `${T()}/references/${encodeURIComponent(id)}/copy`, {}),
+  deleteCheck: (ids: string[]) => request<{ files: number; docs: { id: string; title: string }[] }>("POST", `${T()}/references/delete-check`, { ids }),
 };
+
+/** 파일 올리기 — 진행률을 보려고 XMLHttpRequest 로 보낸다 (본문 = 파일 그대로) */
+function uploadRequest(url: string, file: Blob, name: string, onProgress?: (ratio: number) => void): Promise<{ file: StoredFile; usage: StorageUsage }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("x-refboard", "1");
+    xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+    xhr.setRequestHeader("x-file-name", encodeURIComponent(name));
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => {
+      let data: { error?: string; code?: string } | null = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        data = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data as unknown as { file: StoredFile; usage: StorageUsage });
+      if (xhr.status === 401) onUnauthorized?.();
+      reject(new ApiError(data?.error ?? (xhr.status === 413 ? "파일당 20MB까지 올릴 수 있어요." : `올리지 못했어요 (HTTP ${xhr.status})`), xhr.status, data?.code));
+    };
+    xhr.onerror = () => reject(new ApiError("네트워크 오류로 올리지 못했어요.", 0));
+    xhr.send(file);
+  });
+}
 
 export const feedbackApi = {
   send: (b: FeedbackInput) => request<{ ok: true; id: string }>("POST", "/api/feedback", b),

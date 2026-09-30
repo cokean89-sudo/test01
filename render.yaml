@@ -15,11 +15,12 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
-    # SQLite 데이터가 재배포 후에도 남도록 영구 디스크에 저장
+    # SQLite 데이터와 올린 이미지(/var/data/uploads)가 재배포 후에도 남도록 영구 디스크에 저장
+    # 용량은 늘릴 수만 있고 줄일 수는 없어요 — 늘리는 방법은 DEPLOY.md '5-A'
     disk:
       name: refboard-data
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 5
     envVars:
       # ── 실행 환경 (값 고정) ──
       - key: NODE_VERSION
@@ -30,6 +31,16 @@ services:
         value: /var/data
       - key: TRUST_PROXY
         value: "1"
+
+      # ── 올린 이미지 저장소 ──
+      # disk = 위 영구 디스크(/var/data/uploads). 나중에 Cloudflare R2 · AWS S3 로 옮기려면
+      # Environment 탭에서 STORAGE_DRIVER=s3 와 S3_BUCKET · S3_ENDPOINT · S3_REGION · S3_ACCESS_KEY_ID · S3_SECRET_ACCESS_KEY 를
+      # 넣고 npm run storage:migrate (DEPLOY.md '5-B'). 키 값은 이 파일에 적지 않는다.
+      - key: STORAGE_DRIVER
+        value: disk
+      # 팀별 저장 공간(GB) — 디스크 용량을 늘리면 함께 올리세요
+      - key: TEAM_STORAGE_LIMIT_GB
+        value: "5"
 
       # ── 공개 주소 (선택: 비우면 https://<서비스이름>.onrender.com 을 자동 사용) ──
       - key: APP_URL

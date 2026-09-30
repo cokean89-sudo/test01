@@ -13,9 +13,11 @@ import {
   type PageSizeKey,
   type Role,
   type TeamDetail,
+  type StorageUsage,
 } from "../../../shared/types";
-import { teamApi } from "../../api";
+import { api, teamApi } from "../../api";
 import { PageView } from "../../components/PageView";
+import { StorageMeter } from "../../components/StorageMeter";
 import { Button, ColorInput, Empty, Field, Modal, NumberInput, Segmented, Select, Spinner, Toggle } from "../../components/ui";
 import { settingsWithTemplate, TemplatePicker } from "../../components/TemplatePicker";
 import { setThemeAccent } from "../../layout/themes";
@@ -630,9 +632,14 @@ function ActivityTab({ teamId }: { teamId: string }) {
 function SettingsTab({ team, onChange }: { team: TeamDetail; onChange: (t: TeamDetail) => void }) {
   const refreshTeams = useSession((s) => s.refreshTeams);
   const [name, setName] = useState(team.name);
+  const [usage, setUsage] = useState<StorageUsage | null>(null);
   const isAdmin = ROLE_RANK[team.role] >= ROLE_RANK.admin;
+  useEffect(() => {
+    api.storage(team.id).then(setUsage, () => setUsage(null));
+  }, [team.id]);
   return (
     <div className="panel narrow">
+      <StorageMeter usage={usage} />
       <Field label="팀 이름">
         <div className="row">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} disabled={!isAdmin} />

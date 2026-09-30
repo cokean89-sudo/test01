@@ -164,7 +164,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
         <div className="thumb-row">
           {logos.map((r) => (
             <div key={r.id} className="thumb thumb-logo" title={r.logoLabel}>
-              <SmartImage src={r.imageUrl} fit="contain" />
+              <SmartImage src={r.thumbUrl ?? r.imageUrl} fit="contain" />
               <span>{r.logoLabel || r.title}</span>
             </div>
           ))}
@@ -176,7 +176,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
         <div className="thumb-row">
           {images.map((r) => (
             <div key={r.id} className="thumb" title={r.title}>
-              <SmartImage src={r.imageUrl} />
+              <SmartImage src={r.thumbUrl ?? r.imageUrl} />
             </div>
           ))}
         </div>

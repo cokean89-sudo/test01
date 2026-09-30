@@ -141,7 +141,7 @@ export function App() {
           <LibraryView />
         )}
       </main>
-      {collect.open && <CollectDialog initialUrls={collect.urls} />}
+      {collect.open && <CollectDialog initialUrls={collect.urls} initialFiles={collect.files} />}
       {build.open && <BuildDialog preset={build.preset} />}
       {section !== "edit" && (
         <button className="feedback-fab" onClick={() => setFeedback(true)} title="오류 신고 · 개선 요청">

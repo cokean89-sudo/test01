@@ -8,12 +8,14 @@ import { UpdatesCard } from "../components/Updates";
 import { Button, Empty, Menu, MenuItem, Modal, Segmented, Select, TagInput } from "../components/ui";
 import { groupHits } from "../layout/autobuild";
 import { navigate } from "../lib/router";
+import { imageFilesFrom } from "../lib/uploads";
 import { matchSummary, noMatchHint, noMatchMessage, norm, parseQuery, searchRefs, tagCounts, type MatchMode, type SortKey } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { useCurrentTeam } from "../store/session";
 import { toast } from "../store/toast";
 import { useUI } from "../store/ui";
 import { extractUrls } from "./CollectDialog";
+import { confirmRefDelete } from "./confirmRefDelete";
 import { RefDetail } from "./RefDetail";
 
 const SORTS: { value: SortKey; label: string }[] = [
@@ -47,12 +49,19 @@ export function LibraryView() {
   const caseName = useMemo(() => new Map(cases.map((c) => [c.id, c.name])), [cases]);
   const activeTerms = useMemo(() => new Set(parseQuery(query).map((t) => t.text)), [query]);
 
-  // 페이지 아무 곳에서나 링크 붙여넣기 → 추가 창
+  // 페이지 아무 곳에서나 링크 · 스크린샷 붙여넣기 → 추가 창
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const t = e.target as HTMLElement;
       // 입력 칸이나 다른 창(의견 보내기 등)이 열려 있으면 그쪽 붙여넣기에 맡긴다
-      if (t.closest("input, textarea, [contenteditable]") || document.querySelector(".modal-backdrop")) return;
+      if (t?.closest?.("input, textarea, [contenteditable]") || document.querySelector(".modal-backdrop")) return;
+      if (!canEdit) return;
+      const files = imageFilesFrom(e.clipboardData);
+      if (files.length) {
+        e.preventDefault();
+        openCollect(undefined, files);
+        return;
+      }
       const text = e.clipboardData?.getData("text/plain") ?? "";
       if (extractUrls(text).length) {
         e.preventDefault();
@@ -61,7 +70,7 @@ export function LibraryView() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [openCollect]);
+  }, [openCollect, canEdit]);
 
   const toggleTerm = (tag: string) => {
     const terms = parseQuery(query);
@@ -197,6 +206,7 @@ export function LibraryView() {
                   const r = await api.importBackup(data);
                   await useLibrary.getState().load();
                   toast.success(`가져오기 완료 — 레퍼런스 ${r.references} · 케이스 ${r.cases} · 문서 ${r.documents}`);
+                  if (r.skipped) toast.error(`다른 팀에 올린 이미지 ${r.skipped}개는 파일이 없어 가져오지 않았어요`);
                 } catch (err) {
                   toast.error("가져오기 실패: " + (err as Error).message);
                 }
@@ -278,7 +288,7 @@ export function LibraryView() {
               icon="trash"
               variant="danger"
               onClick={async () => {
-                if (!confirm(`${selected.size}개 레퍼런스를 삭제할까요? (문서에 이미 배치된 이미지는 유지돼요)`)) return;
+                if (!(await confirmRefDelete(selIds, `레퍼런스 ${selected.size}개`))) return;
                 await bulk({ ids: selIds, delete: true });
                 setSelected(new Set());
               }}
@@ -409,7 +419,12 @@ function RefCard({
         style={{ aspectRatio: ratio ? `${1} / ${ratio}` : undefined, background: ref.kind === "logo" ? "var(--color-white)" : undefined }}
         onClick={(e) => (e.metaKey || e.ctrlKey || e.shiftKey ? onToggle(e.shiftKey) : onOpen())}
       >
-        <SmartImage src={ref.imageUrl} fit={ref.kind === "logo" ? "contain" : "cover"} onNatural={onNatural} />
+        <SmartImage src={ref.thumbUrl ?? ref.imageUrl} fit={ref.kind === "logo" ? "contain" : "cover"} onNatural={ref.thumbUrl ? undefined : onNatural} />
+        {ref.fileId && (
+          <span className="stored-badge" title={ref.originalUrl ? "링크 이미지의 사본을 서버에 저장했어요" : "서버에 올린 이미지"}>
+            <Icon name={ref.originalUrl ? "copy" : "upload"} size={11} />
+          </span>
+        )}
         <button
           className="ref-check"
           onClick={(e) => {

@@ -1,9 +1,9 @@
 // 서버·클라이언트가 함께 쓰는 데이터 모델.
 // 모든 페이지 좌표/크기 단위는 pt(1/72 inch) — 인쇄·PPTX 변환 시 그대로 쓸 수 있다.
 
-export type RefSource = "pinterest" | "web" | "image" | "manual" | "sample";
+export type RefSource = "pinterest" | "web" | "image" | "manual" | "sample" | "upload";
 
-/** 레퍼런스 1장. 이미지는 저장하지 않고 원본 URL을 그대로 참조한다. */
+/** 레퍼런스 1장. 링크 이미지는 원본 URL 을 그대로 참조하고, 올린 이미지 · 사본은 서버 저장소(/api/files/…)를 참조한다. */
 export interface Reference {
   id: string;
   imageUrl: string;
@@ -18,6 +18,11 @@ export interface Reference {
   width?: number;
   height?: number;
   source: RefSource;
+  /** 서버에 저장한 이미지(업로드 · 링크 사본)면 그 파일 — 목록에는 thumbUrl, 상세 · 문서에는 imageUrl */
+  fileId?: string;
+  thumbUrl?: string;
+  /** 링크를 사본으로 저장했다면 원래 이미지 링크 */
+  originalUrl?: string;
   createdAt: number;
   /** 기록: 누가 언제 추가/수정했는지 (웹 버전) */
   createdBy?: string;
@@ -527,4 +532,23 @@ export interface VersionInfo {
   updatedByName: string;
   updatedAt: number;
   pageCount: number;
+}
+
+/** 서버에 올린(또는 링크에서 사본으로 저장한) 이미지 */
+export interface StoredFile {
+  id: string;
+  url: string;
+  thumbUrl: string;
+  width: number;
+  height: number;
+  bytes: number;
+  name?: string;
+  originalUrl?: string;
+}
+
+/** 팀 저장 공간 */
+export interface StorageUsage {
+  used: number;
+  limit: number;
+  files: number;
 }

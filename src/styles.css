@@ -5161,3 +5161,210 @@ select.sm {
 .app-info-row p {
   margin: var(--space-2) 0 0;
 }
+
+/* ─── 이미지 파일 올리기 ─────────────────────────────── */
+.collect {
+  position: relative;
+}
+.collect-drop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-drop-overlay);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  border: 2px dashed var(--color-blue-500);
+  border-radius: var(--radius-16);
+  background: var(--color-white-alpha-94);
+  color: var(--color-blue-600);
+  pointer-events: none;
+}
+.collect-drop strong {
+  font-size: var(--font-size-18);
+}
+.collect-drop span {
+  font-size: var(--font-size-13);
+  color: var(--color-text-muted);
+}
+.candidate.upload {
+  position: relative;
+}
+.candidate.upload .candidate-thumb:disabled {
+  cursor: default;
+}
+.candidate.upload:not(.on):not(.failed) .candidate-thumb:disabled {
+  opacity: 1;
+}
+.candidate.failed {
+  opacity: 1;
+}
+.candidate.failed .candidate-thumb {
+  border-color: var(--color-red-100);
+  background: var(--color-red-50);
+}
+.upload-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  opacity: 0.6;
+}
+.upload-icon {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-red-500);
+}
+.upload-progress {
+  position: absolute;
+  left: var(--space-8);
+  right: var(--space-8);
+  bottom: var(--space-8);
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-white-alpha-85);
+  overflow: hidden;
+}
+.upload-progress i {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-blue-500);
+  transition: width 0.2s;
+}
+.upload-remove {
+  position: absolute;
+  top: 96px;
+  right: var(--space-6);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  border-radius: var(--radius-circle);
+  background: var(--color-overlay-70);
+  color: var(--color-white);
+  cursor: pointer;
+}
+.upload-remove:hover {
+  background: var(--color-grey-900);
+}
+.upload-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-12);
+  line-height: var(--line-height-140);
+  color: var(--color-red-600);
+}
+.upload-error strong {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+.upload-status {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+}
+.copy-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.copy-option p {
+  margin: 0;
+}
+
+/* 팀 저장 공간 */
+.storage-meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+.storage-meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  font-size: var(--font-size-12-5);
+  color: var(--color-text-muted);
+}
+.storage-meter-head strong {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+.storage-bar {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-grey-200);
+  overflow: hidden;
+}
+.storage-bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-blue-500);
+}
+.storage-meter.warn .storage-bar i {
+  background: var(--color-orange-500);
+}
+.storage-meter.full .storage-bar i {
+  background: var(--color-red-500);
+}
+.storage-meter p {
+  margin: 0;
+}
+.storage-note {
+  font-size: var(--font-size-12-5);
+  line-height: var(--line-height-155);
+  color: var(--color-orange-800);
+  background: var(--color-orange-50);
+  border-radius: var(--radius-10);
+  padding: var(--space-8) var(--space-10);
+}
+.storage-meter.full .storage-note {
+  color: var(--color-red-600);
+  background: var(--color-red-50);
+}
+
+/* 서버에 저장한 이미지 표시 */
+.stored-badge {
+  position: absolute;
+  left: var(--space-8);
+  bottom: var(--space-8);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-circle);
+  background: var(--color-overlay-60);
+  color: var(--color-white);
+  pointer-events: none;
+}
+.stored-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+  font-size: var(--font-size-12-5);
+  line-height: var(--line-height-150);
+  color: var(--color-text-secondary);
+  background: var(--color-green-50);
+  border-radius: var(--radius-10);
+  padding: var(--space-8) var(--space-10);
+}
+.stored-note strong {
+  color: var(--color-green-500);
+}
+.stored-note.link {
+  background: var(--color-grey-100);
+  justify-content: space-between;
+}

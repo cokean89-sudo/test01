@@ -1,7 +1,7 @@
 # Render 배포 가이드
 
 GitHub 저장소를 Render 에 연결하면 `render.yaml`(Blueprint) 설정대로 RefBoard 웹 서비스가 만들어집니다.
-Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)는 영구 디스크에 저장되어 재배포해도 남습니다.
+Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 이미지는 영구 디스크에 저장되어 재배포해도 남습니다.
 
 | 항목 | 값 |
 | --- | --- |
@@ -10,7 +10,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)는 영구 
 | 리전 | Singapore (한국에서 가장 가까운 리전 — 서비스를 만든 뒤에는 바꿀 수 없어요) |
 | 빌드 / 시작 | `npm ci && npm run build` / `npm start` |
 | 헬스 체크 | `/api/health` |
-| 영구 디스크 | `/var/data` 1GB → `DATA_DIR=/var/data` (나중에 늘릴 수는 있지만 줄일 수는 없어요) |
+| 영구 디스크 | `/var/data` 5GB → `DATA_DIR=/var/data` (데이터베이스 + 올린 이미지 `/var/data/uploads`. 나중에 늘릴 수는 있지만 줄일 수는 없어요) |
 
 > 요금은 Render 요금표를 확인하세요. Starter 인스턴스 요금에 디스크 용량(GB)당 요금이 더해집니다.
 
@@ -21,7 +21,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)는 영구 
 1. **코드를 배포할 브랜치에 올리기** — Blueprint 는 한 브랜치를 따라갑니다. 보통 `main` 에 합친 뒤 연결하세요.
 2. [Render 대시보드](https://dashboard.render.com) → **New +** → **Blueprint** 를 누릅니다.
 3. GitHub 계정을 연결하고 이 저장소를 고릅니다. 저장소 루트의 `render.yaml` 을 자동으로 읽어요.
-4. 만들어질 서비스(`refboard`, Starter, 디스크 1GB)를 확인합니다.
+4. 만들어질 서비스(`refboard`, Starter, 디스크 5GB)를 확인합니다.
 5. **환경변수 입력 칸**이 나옵니다 (`render.yaml` 에서 `sync: false` 로 둔 비밀값). 아래 [2-B 표](#2-b-render-화면에서-입력할-값-sync-false)를 보고 채우세요.
    필요 없는 항목(예: 소셜 로그인을 안 쓰면 카카오·네이버 키)은 비워 두면 됩니다.
 6. **Apply** → 첫 빌드와 배포에 몇 분 걸립니다. 완료되면 `https://refboard.onrender.com` 같은 주소가 생겨요.
@@ -46,6 +46,8 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)는 영구 
 | `HOST` | `0.0.0.0` | 외부(Render 로드밸런서)에서 접속할 수 있도록 모든 주소에서 대기 |
 | `DATA_DIR` | `/var/data` | 데이터베이스 저장 폴더 = 영구 디스크 경로. 바꾸면 데이터가 재배포 때 사라져요 |
 | `TRUST_PROXY` | `1` | Render 로드밸런서 1단계 뒤에서 실행 — 사용자 실제 IP 로 요청 제한·보안 로그를 남기기 위해 필요 |
+| `STORAGE_DRIVER` | `disk` | 올린 이미지 저장 위치. `disk` = 영구 디스크의 `/var/data/uploads`. R2 · S3 로 옮길 때 `s3` ([5-B](#5-b-cloudflare-r2--aws-s3-로-옮기기)) |
+| `TEAM_STORAGE_LIMIT_GB` | `5` | 팀별 저장 공간 (올린 이미지 + 링크 사본). 팀 설정 화면에 '사용 중 1.2GB / 5GB'로 보이고, 가득 차면 올리기가 막히며 안내가 나와요 |
 | `PORT` | Render 가 지정 | 서버 포트. Render 가 자동으로 넣어 줍니다 (직접 넣지 마세요) |
 | `RENDER_EXTERNAL_URL` | Render 가 지정 | 서비스 기본 주소. `APP_URL` 을 비우면 이 주소를 씁니다 |
 
@@ -79,6 +81,11 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)는 영구 
 | `CLAUDE_WRITING_MODEL` | `claude-opus-5-5` | AI 글쓰기(타이틀·설명·캡션)에 쓸 모델 |
 | `CLAUDE_TAG_MODEL` | `claude-haiku-4-5` | AI 태그 제안처럼 가벼운 작업에 쓸 모델 |
 | `DISABLE_AI` | 꺼짐 | `1` 이면 API 키가 있어도 AI 기능을 끔 |
+| `STORAGE_RESERVE_MB` | `300` | 디스크 저장 시 늘 비워 둘 공간(MB). 디스크 남은 공간이 이보다 적어지면 업로드를 막고 "서버 저장 공간이 부족해요"라고 안내 — 데이터베이스가 쓸 자리를 지켜요 |
+| `UPLOADS_DIR` | `DATA_DIR/uploads` | 디스크 저장 폴더를 따로 정할 때 (보통 그대로 두세요) |
+| `S3_BUCKET` · `S3_ENDPOINT` · `S3_REGION` | — | `STORAGE_DRIVER=s3` 일 때 버킷 · 주소 · 리전. R2 는 `S3_ENDPOINT=https://<계정ID>.r2.cloudflarestorage.com`, `S3_REGION=auto`. AWS 는 `S3_ENDPOINT` 를 비우고 `S3_REGION=ap-northeast-2` 처럼 |
+| `S3_ACCESS_KEY_ID` · `S3_SECRET_ACCESS_KEY` | — | 버킷 읽기 · 쓰기 권한 키 (**비밀값 — render.yaml 에 적지 말고 Environment 탭에만**) |
+| `S3_FORCE_PATH_STYLE` | R2 · MinIO 는 켜짐 | `https://주소/버킷/파일` 형식으로 부를지. 보통 그대로 |
 
 ### 2-D. 넣으면 안 되는 값
 
@@ -114,13 +121,43 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)는 영구 
 
 ## 5. 데이터와 백업
 
-- 데이터는 `/var/data/refboard.sqlite` 파일 하나입니다. 영구 디스크에 있어서 재배포·재시작해도 그대로 남아요.
-- Render 는 디스크 스냅샷을 자동으로 만들어 둡니다 (서비스 → **Disks** 에서 복원).
-- 직접 백업: 서비스 → **Shell** 탭에서 `npm run backup` → `/var/data/backups/` 에 스냅샷 파일이 생겨요.
-  서버 밖에 보관하려면 Render SSH(`scp`)로 내려받으세요.
+- 데이터베이스는 `/var/data/refboard.sqlite` 파일 하나, 올린 이미지는 `/var/data/uploads/<팀>/` 폴더입니다. 영구 디스크에 있어서 재배포·재시작해도 그대로 남아요.
+- Render 는 디스크 스냅샷을 자동으로 만들어 둡니다 (서비스 → **Disks** 에서 복원) — 데이터베이스와 올린 이미지가 함께 들어가요.
+- 직접 백업: 서비스 → **Shell** 탭에서 `npm run backup` → `/var/data/backups/` 에 데이터베이스 스냅샷 파일이 생겨요.
+  서버 밖에 보관하려면 Render SSH(`scp`)로 내려받으세요. 올린 이미지까지 받으려면 `/var/data/uploads` 폴더도 함께.
+- 팀 설정의 **JSON 백업**에는 레퍼런스 · 문서 내용만 들어가고 이미지 파일은 들어가지 않아요. 같은 팀에 다시 가져오면 이미지도 그대로 연결되지만, 다른 팀으로 가져오면 올린 이미지는 빠져요.
 - **영구 디스크를 붙인 서비스의 특성**
   - 인스턴스는 1대만 쓸 수 있어요 (SQLite 는 한 서버에서만 씁니다).
   - 재배포할 때 이전 서버를 먼저 끄고 새 서버를 켜서, 수십 초 정도 접속이 끊길 수 있어요.
+
+### 5-A. 이미지 저장 공간 늘리기
+
+올린 이미지는 서버에서 긴 변 2000px WebP 로 줄여서 저장해요 (보통 한 장 150KB ~ 1MB, 목록용 썸네일 포함). 5GB 면 대략 5천 ~ 3만 장입니다.
+팀 설정 → **팀 설정** 탭에서 팀별 사용량('사용 중 1.2GB / 5GB')을 볼 수 있고, 90% 를 넘으면 경고, 가득 차면 업로드가 막히며 안내가 나와요.
+
+1. Render 대시보드 → 서비스 → **Disks** → 크기(Size)를 늘리고 저장합니다. (또는 `render.yaml` 의 `sizeGB` 를 올려 push — Blueprint 가 반영)
+   - **늘리기만 되고 줄일 수는 없어요.** 디스크 요금은 GB 단위로 붙으니 Render 요금표를 확인하세요.
+2. 서비스 → **Environment** 에서 `TEAM_STORAGE_LIMIT_GB` 를 새 한도로 바꿉니다 (예: 디스크 20GB → `18`). 팀이 여러 개면 팀 한도 × 팀 수가 디스크보다 클 수 있으니, 디스크가 먼저 차면 "서버 저장 공간이 부족해요" 안내가 나와요.
+3. 쓰지 않는 레퍼런스를 지우면 그 이미지 파일도 함께 지워져 공간이 생겨요. 올려 두고 저장하지 않은 파일은 6시간 뒤 자동으로 정리돼요.
+
+### 5-B. Cloudflare R2 · AWS S3 로 옮기기
+
+이미지가 많아지면 디스크 대신 R2(내보내기 요금 없음) · S3 에 저장할 수 있어요. 앱 안의 이미지 주소(`/api/files/…`)는 저장소와 상관없이 같아서 **문서 · 레퍼런스를 고칠 필요가 없고**, 팀원만 볼 수 있는 권한 확인도 그대로예요.
+
+1. 버킷 만들기 — **공개(public) 접근은 끈 채로** 둡니다. 서버가 키로 읽어서 전달해요.
+   - R2: Cloudflare 대시보드 → R2 → Create bucket → R2 API 토큰 관리에서 그 버킷의 *Object Read & Write* 토큰 발급 (Access Key ID · Secret Access Key, 계정 ID 확인 — 메뉴 이름은 Cloudflare 개편에 따라 조금 다를 수 있어요)
+   - S3: 버킷 생성(서울 `ap-northeast-2`) → IAM 사용자에게 그 버킷의 `s3:GetObject` · `s3:PutObject` · `s3:DeleteObject` 권한 → 액세스 키 발급
+2. 서비스 → **Environment** 에 추가 (아직 `STORAGE_DRIVER` 는 `disk` 그대로):
+   `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`(R2 는 `auto`), R2 는 `S3_ENDPOINT=https://<계정ID>.r2.cloudflarestorage.com`
+3. 서비스 → **Shell** 에서 기존 파일 복사:
+   ```
+   STORAGE_DRIVER=s3 npm run storage:migrate -- --dry-run   # 옮길 파일 수 확인
+   STORAGE_DRIVER=s3 npm run storage:migrate                # 복사 (디스크 파일은 지우지 않음)
+   ```
+4. **Environment** 에서 `STORAGE_DRIVER=s3` 로 바꾸고 저장 → 재시작 후 이미지가 잘 보이는지 확인.
+5. 문제가 없으면 Shell 에서 `/var/data/uploads` 를 지워 디스크를 비웁니다. (데이터베이스는 계속 디스크에 있어요 — 디스크는 줄일 수 없으니 그대로 둡니다.)
+
+되돌릴 때는 `STORAGE_DRIVER=disk` 로 바꾸면 돼요 (그 사이 R2 · S3 에만 올라간 파일은 직접 내려받아 `/var/data/uploads` 에 넣어야 해요).
 
 ## 6. 문제 해결
 
@@ -131,4 +168,6 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)는 영구 
 | 가입 인증 메일이 안 옴 | `SMTP_*` 값 확인. Gmail 은 앱 비밀번호 필요. 서비스 → **Logs** 에 발송 오류나 (메일 미설정 시) 인증 링크가 찍혀요 |
 | 소셜 로그인 후 오류 | 콘솔에 등록한 콜백 주소가 `APP_URL` 기준 주소와 한 글자라도 다른지 확인 |
 | 상단에 'AI 꺼짐' | `ANTHROPIC_API_KEY` 확인. 마우스를 올리면 이유가 보여요 |
-| 헬스 체크 실패로 배포가 멈춤 | **Logs** 에서 시작 오류 확인. `DATA_DIR` 과 디스크 경로(`/var/data`)가 같은지 확인 |
+| 헬스 체크 실패로 배포가 멈춤 | **Logs** 에서 시작 오류 확인. `DATA_DIR` 과 디스크 경로(`/var/data`)가 같은지 확인. `STORAGE_DRIVER=s3` 인데 `S3_*` 값이 빠지면 시작하지 않고 어떤 값이 없는지 알려 줘요 |
+| 이미지 올리기가 "팀 저장 공간이 가득 찼어요" | 팀 설정에서 사용량 확인 → 안 쓰는 레퍼런스 정리 또는 [5-A](#5-a-이미지-저장-공간-늘리기) |
+| 이미지 올리기가 "서버 저장 공간이 부족해요" | 디스크 자체가 거의 찼어요 → 디스크 늘리기([5-A](#5-a-이미지-저장-공간-늘리기)) 또는 R2 · S3 로 옮기기([5-B](#5-b-cloudflare-r2--aws-s3-로-옮기기)) |

@@ -2,11 +2,14 @@
 
 import { Router } from "express";
 import { z } from "zod";
+import { fileIdOf, fileUrl } from "../../shared/files";
 import type { DuplicateInfo, Reference } from "../../shared/types";
 import { teamRole } from "../context";
 import { publish } from "../events";
 import type { Repo } from "../repo";
 import { enforceLimit, HttpError } from "../security";
+import type { FileStore } from "../storage";
+import { removeKeys } from "./uploads";
 
 const tagList = z.array(z.string().trim().min(1).max(60)).max(50);
 
@@ -23,7 +26,9 @@ const RefFields = z.object({
   logoLabel: z.string().max(100).optional(),
   width: z.number().positive().max(100000).optional(),
   height: z.number().positive().max(100000).optional(),
-  source: z.enum(["pinterest", "web", "image", "manual", "sample"]),
+  source: z.enum(["pinterest", "web", "image", "manual", "sample", "upload"]),
+  /** 링크를 사본으로 저장했을 때 원래 링크 */
+  originalUrl: z.string().max(4000).optional(),
 });
 
 const RefInput = RefFields.extend({
@@ -45,9 +50,19 @@ const CaseFields = z.object({
 const CaseInput = CaseFields.extend({ tags: tagList.default([]) });
 const CasePatch = CaseFields.partial();
 
-/** 이미지 주소가 http(s) 또는 앱 내부 경로(/samples/…)인지 — javascript: 등 차단 */
-function safeImageUrl(url: string) {
-  if (/^https?:\/\//i.test(url) || /^\/samples\/[\w.-]+$/.test(url)) return url;
+/**
+ * 이미지 주소 확인 — http(s) 링크, 앱 샘플(/samples/…), 이 팀이 저장한 파일(/api/files/…)만. javascript: 등 차단.
+ * 저장한 파일이면 파일 id · 원래 링크를 함께 돌려준다 (다른 팀 파일은 거부).
+ */
+function resolveImage(repo: Repo, teamId: string, imageUrl: string, originalUrl?: string): { imageUrl: string; fileId?: string; originalUrl?: string } {
+  const fid = fileIdOf(imageUrl);
+  if (fid) {
+    const f = repo.getFile(fid);
+    if (!f || f.team_id !== teamId) throw new HttpError(400, "이 팀에 없는 이미지 파일이에요.");
+    const orig = originalUrl && /^https?:\/\//i.test(originalUrl) ? originalUrl : (f.original_url ?? undefined);
+    return { imageUrl: fileUrl(fid), fileId: fid, originalUrl: orig };
+  }
+  if (/^https?:\/\//i.test(imageUrl) || /^\/samples\/[\w.-]+$/.test(imageUrl)) return { imageUrl, fileId: undefined, originalUrl: undefined };
   throw new HttpError(400, "이미지 주소는 http(s) 링크여야 해요.");
 }
 
@@ -57,7 +72,7 @@ function mergeTags(a: string[], b: string[]) {
   return out;
 }
 
-export function libraryRouter(repo: Repo): Router {
+export function libraryRouter(repo: Repo, store: FileStore): Router {
   const r = Router({ mergeParams: true });
   const changed = (teamId: string, userId: string, kind: string) => publish(teamId, "library", { kind }, userId);
 
@@ -80,11 +95,15 @@ export function libraryRouter(repo: Repo): Router {
     const list = z.array(RefInput).max(500).parse(Array.isArray(req.body) ? req.body : [req.body]);
     const created: Reference[] = [];
     const duplicates: DuplicateInfo[] = [];
+    const unused: string[] = [];
     repo.db.tx(() => {
-      for (const input of list) {
-        safeImageUrl(input.imageUrl);
-        const existing = repo.findDuplicates(teamId, [input.imageUrl]).get(input.imageUrl);
+      for (const raw of list) {
+        const input = { ...raw, ...resolveImage(repo, teamId, raw.imageUrl, raw.originalUrl) };
+        const dups = repo.findDuplicates(teamId, [input.imageUrl, input.originalUrl].filter((u): u is string => !!u));
+        const existing = dups.get(input.imageUrl) ?? (input.originalUrl ? dups.get(input.originalUrl) : undefined);
         if (existing) {
+          // 이미 있는 이미지면 방금 올린 사본은 쓰지 않는다
+          if (input.fileId && input.fileId !== existing.fileId) unused.push(input.fileId);
           // 중복은 새로 만들지 않고, 새 태그만 기존 항목에 더한다
           const tags = mergeTags(existing.tags, input.tags);
           const updated = tags.length !== existing.tags.length ? repo.updateRef(teamId, existing.id, { tags }, user.id)! : existing;
@@ -95,16 +114,21 @@ export function libraryRouter(repo: Repo): Router {
       }
       if (created.length) repo.log(teamId, user.id, "ref.add", `레퍼런스 ${created.length}개 추가${duplicates.length ? ` (중복 ${duplicates.length}개)` : ""}`);
     });
+    removeKeys(store, repo.releaseFiles(unused));
     changed(teamId, user.id, "refs");
     res.json({ created, duplicates });
   });
 
   r.patch("/references/:id", teamRole(repo, "editor"), (req, res) => {
-    const patch = RefPatch.parse(req.body);
-    if (patch.imageUrl) safeImageUrl(patch.imageUrl);
-    const ref = repo.updateRef(req.teamId!, String(req.params.id), patch, req.user!.id);
-    if (!ref) throw new HttpError(404, "레퍼런스를 찾을 수 없어요.");
-    changed(req.teamId!, req.user!.id, "refs");
+    const teamId = req.teamId!;
+    const { originalUrl, ...patch } = RefPatch.parse(req.body);
+    const before = repo.getRef(teamId, String(req.params.id));
+    if (!before) throw new HttpError(404, "레퍼런스를 찾을 수 없어요.");
+    // 이미지를 바꾸면 파일 연결도 새 주소 기준으로 (예전 파일은 더 쓰는 곳이 없으면 지운다)
+    const next = patch.imageUrl && patch.imageUrl !== before.imageUrl ? { ...patch, ...resolveImage(repo, teamId, patch.imageUrl, originalUrl) } : patch;
+    const ref = repo.updateRef(teamId, before.id, next, req.user!.id)!;
+    if (before.fileId && before.fileId !== ref.fileId) removeKeys(store, repo.releaseFiles([before.fileId]));
+    changed(teamId, req.user!.id, "refs");
     res.json(ref);
   });
 
@@ -123,8 +147,11 @@ export function libraryRouter(repo: Repo): Router {
       .parse(req.body);
     repo.db.tx(() => {
       if (body.delete) {
-        const n = repo.deleteRefs(teamId, body.ids);
-        repo.log(teamId, user.id, "ref.delete", `레퍼런스 ${n}개 삭제`);
+        // 올린 이미지 · 사본은 레퍼런스와 함께 지운다
+        const { count, fileIds } = repo.deleteRefs(teamId, body.ids);
+        const keys = repo.releaseFiles(fileIds);
+        removeKeys(store, keys);
+        repo.log(teamId, user.id, "ref.delete", `레퍼런스 ${count}개 삭제${keys.length ? ` (저장한 이미지 ${keys.length / 2}개 포함)` : ""}`);
         return;
       }
       const remove = new Set((body.removeTags ?? []).map((t) => t.toLowerCase()));
@@ -207,12 +234,27 @@ export function libraryRouter(repo: Repo): Router {
         documents: z.array(z.record(z.string(), z.unknown())).max(2000).default([]),
       })
       .parse(req.body?.data ?? req.body);
-    const refs = z.array(RefInput.extend({ id: z.string().optional() }).passthrough()).parse(body.references.filter((x) => typeof x.imageUrl === "string"));
-    for (const x of refs) safeImageUrl(x.imageUrl);
+    const parsed = z.array(RefInput.extend({ id: z.string().optional() }).passthrough()).parse(body.references.filter((x) => typeof x.imageUrl === "string"));
+    // 저장한 이미지는 이 팀 파일일 때만 (다른 팀 백업의 업로드 이미지는 파일이 없어서 건너뛴다)
+    let skipped = 0;
+    const refs = parsed.flatMap((x) => {
+      try {
+        const { fileId: _f, thumbUrl: _t, ...rest } = x as typeof x & { fileId?: string; thumbUrl?: string };
+        return [{ ...rest, ...resolveImage(repo, req.teamId!, x.imageUrl, x.originalUrl) }];
+      } catch {
+        skipped++;
+        return [];
+      }
+    });
     const counts = repo.importData(req.teamId!, req.user!.id, { ...body, references: refs } as never);
-    repo.log(req.teamId!, req.user!.id, "backup.import", `백업 가져오기: 레퍼런스 ${counts.references} · 케이스 ${counts.cases} · 문서 ${counts.documents}`);
+    repo.log(
+      req.teamId!,
+      req.user!.id,
+      "backup.import",
+      `백업 가져오기: 레퍼런스 ${counts.references} · 케이스 ${counts.cases} · 문서 ${counts.documents}${skipped ? ` (이 팀에 파일이 없는 업로드 이미지 ${skipped}개 제외)` : ""}`,
+    );
     changed(req.teamId!, req.user!.id, "refs");
-    res.json(counts);
+    res.json({ ...counts, skipped });
   });
 
   return r;

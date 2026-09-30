@@ -16,6 +16,8 @@ interface LibraryState {
   addRefs: (inputs: RefInput[]) => Promise<{ created: Reference[]; duplicates: DuplicateInfo[] }>;
   updateRef: (id: string, patch: RefPatch) => Promise<void>;
   bulk: (op: BulkOp) => Promise<void>;
+  /** 링크 레퍼런스를 서버 사본으로 */
+  copyRef: (id: string) => Promise<void>;
   renameTag: (from: string, to: string) => Promise<void>;
   mergeTags: (from: string[], to: string) => Promise<void>;
   deleteTags: (tags: string[]) => Promise<void>;
@@ -74,6 +76,11 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   async bulk(op) {
     const { references } = await api.bulk(op);
     set({ refs: references });
+  },
+
+  async copyRef(id) {
+    const saved = await api.copyRef(id);
+    set({ refs: get().refs.map((r) => (r.id === id ? saved : r)) });
   },
 
   async mergeTags(from, to) {

@@ -3,13 +3,15 @@ import type { Reference, TagSuggestResult } from "../../shared/types";
 import { api } from "../api";
 import { SmartImage } from "../components/SmartImage";
 import { TagSuggestions } from "../components/TagSuggestions";
-import { Button, Field, Segmented, TagInput } from "../components/ui";
+import { Button, Field, Segmented, Spinner, TagInput } from "../components/ui";
 import { normalizeTags } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { toast } from "../store/toast";
+import { confirmRefDelete } from "./confirmRefDelete";
 
 export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; onClose: () => void; readOnly?: boolean }) {
-  const { refs, cases, updateRef, bulk } = useLibrary();
+  const { refs, cases, updateRef, bulk, copyRef } = useLibrary();
+  const [copying, setCopying] = useState(false);
   const vocab = useMemo(() => tagVocabulary(refs), [refs]);
   const [title, setTitle] = useState(ref.title ?? "");
   const [note, setNote] = useState(ref.note ?? "");
@@ -25,7 +27,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
     setLogoLabel(ref.logoLabel ?? "");
     setImageUrl(ref.imageUrl);
     setSuggest(null);
-  }, [ref.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ref.id, ref.imageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -70,7 +72,43 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
           <a href={ref.imageUrl} target="_blank" rel="noreferrer">
             이미지 ↗
           </a>
+          {ref.originalUrl && (
+            <a href={ref.originalUrl} target="_blank" rel="noreferrer">
+              원래 링크 ↗
+            </a>
+          )}
         </div>
+        {ref.fileId ? (
+          <div className="stored-note">
+            <strong>{ref.originalUrl ? "사본 저장됨" : "서버에 올린 이미지"}</strong>
+            <span>{ref.originalUrl ? "원본 사이트에서 이미지가 지워져도 이 사본으로 보여요." : "레퍼런스를 지우면 파일도 함께 지워져요."}</span>
+          </div>
+        ) : (
+          !readOnly &&
+          /^https?:\/\//i.test(ref.imageUrl) && (
+            <div className="stored-note link">
+              <span>링크로만 연결된 이미지예요. 원본이 사라지면 깨질 수 있어요.</span>
+              <Button
+                size="sm"
+                icon="copy"
+                disabled={copying}
+                onClick={async () => {
+                  setCopying(true);
+                  try {
+                    await copyRef(ref.id);
+                    toast.success("사본을 저장했어요 — 원본이 사라져도 보여요");
+                  } catch (err) {
+                    toast.error((err as Error).message);
+                  } finally {
+                    setCopying(false);
+                  }
+                }}
+              >
+                {copying ? <Spinner size={12} /> : null} 사본 저장
+              </Button>
+            </div>
+          )
+        )}
         <div className="attribution">
           <span>
             추가 <strong>{ref.createdByName ?? "—"}</strong> · {new Date(ref.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}
@@ -135,7 +173,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
         <Field label="메모">
           <textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => note !== (ref.note ?? "") && updateRef(ref.id, { note })} />
         </Field>
-        <Field label="이미지 URL" hint="링크가 깨졌을 때 새 주소로 교체">
+        <Field label="이미지 URL" hint={ref.fileId ? "다른 링크로 바꾸면 서버에 저장한 이미지는 지워져요" : "링크가 깨졌을 때 새 주소로 교체"}>
           <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} onBlur={() => imageUrl !== ref.imageUrl && imageUrl.trim() && updateRef(ref.id, { imageUrl: imageUrl.trim() })} />
         </Field>
         </fieldset>
@@ -143,7 +181,7 @@ export function RefDetail({ ref_: ref, onClose, readOnly }: { ref_: Reference; o
           variant="danger"
           icon="trash"
           onClick={async () => {
-            if (!confirm("이 레퍼런스를 삭제할까요?")) return;
+            if (!(await confirmRefDelete([ref.id], "이 레퍼런스"))) return;
             await bulk({ ids: [ref.id], delete: true });
             onClose();
           }}

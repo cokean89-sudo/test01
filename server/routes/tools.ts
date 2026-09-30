@@ -2,16 +2,31 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { aiStatus, analyzePage, suggestTags } from "../ai";
-import { requireUser } from "../context";
+import { fileIdOf } from "../../shared/files";
+import { aiStatus, analyzePage, suggestTags, type ImageLoader } from "../ai";
+import { hasRole, requireUser } from "../context";
 import { fetchImage } from "../net";
 import { scrapeUrl } from "../scrape";
+import type { Repo, UserRow } from "../repo";
 import { enforceLimit } from "../security";
+import type { FileStore } from "../storage";
 
 const MIN = 60_000;
 
-export function toolsRouter(): Router {
+export function toolsRouter(repo: Repo, store: FileStore): Router {
   const r = Router();
+
+  /** AI 가 앱에 저장한 이미지를 볼 때: 요청한 사람이 그 팀 멤버인지 확인하고 저장소에서 바로 읽는다 */
+  const loaderFor =
+    (user: UserRow): ImageLoader =>
+    async (url) => {
+      const id = fileIdOf(url);
+      if (!id) return undefined;
+      const f = repo.getFile(id);
+      if (!f || !hasRole(repo.getRole(f.team_id, user.id), "viewer")) return null;
+      const obj = await store.get(f.key);
+      return obj ? { data: obj.data, type: "image/webp" } : null;
+    };
 
   r.get("/status", (req, res) => {
     requireUser(req);
@@ -67,7 +82,7 @@ export function toolsRouter(): Router {
   r.post("/ai/analyze", async (req, res) => {
     const user = requireUser(req);
     enforceLimit(`ai:${user.id}`, 60, 60 * MIN, "AI 사용 한도(시간당 60회)를 넘었어요.");
-    res.json(await analyzePage(AnalyzeInput.parse(req.body)));
+    res.json(await analyzePage(AnalyzeInput.parse(req.body), loaderFor(user)));
   });
 
   r.post("/ai/tags", async (req, res) => {
@@ -83,7 +98,7 @@ export function toolsRouter(): Router {
         language: z.enum(["ko", "en"]).default("ko"),
       })
       .parse(req.body);
-    res.json(await suggestTags(body));
+    res.json(await suggestTags(body, loaderFor(user)));
   });
 
   return r;

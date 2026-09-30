@@ -19,6 +19,7 @@ import type {
   UserInfo,
   VersionInfo,
 } from "../shared/types";
+import { fileThumbUrl } from "../shared/files";
 import { urlKey } from "../shared/urlKey";
 import { defaultSettings } from "../src/lib/defaults";
 import { ADMIN_EMAILS, auth, DATA_DIR } from "./config";
@@ -447,10 +448,12 @@ export class Repo {
     return r ? rowToRef(r) : undefined;
   }
 
+  /** 같은 이미지가 이미 있는지 — 링크 그대로 저장한 것과 사본으로 저장한 것(원래 링크) 모두 본다 */
   findDuplicates(teamId: string, urls: string[]): Map<string, Reference> {
     const out = new Map<string, Reference>();
     for (const url of urls) {
-      const r = this.db.get<RefRow>(`${this.refSelect} WHERE r.team_id = ? AND r.url_key = ? ORDER BY r.created_at LIMIT 1`, teamId, urlKey(url));
+      const k = urlKey(url);
+      const r = this.db.get<RefRow>(`${this.refSelect} WHERE r.team_id = ? AND (r.url_key = ? OR r.original_key = ?) ORDER BY r.created_at LIMIT 1`, teamId, k, k);
       if (r) out.set(url, rowToRef(r));
     }
     return out;
@@ -461,7 +464,7 @@ export class Repo {
     const t = now();
     this.db.run(
       `INSERT INTO refs (id, team_id, image_url, url_key, source_url, title, note, tags_json, case_id, kind, logo_label, width, height, source,
-        created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        created_by, created_at, updated_by, updated_at, file_id, original_url, original_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       teamId,
       input.imageUrl,
@@ -480,6 +483,9 @@ export class Repo {
       t,
       userId,
       t,
+      input.fileId ?? null,
+      input.originalUrl ?? null,
+      input.originalUrl ? urlKey(input.originalUrl) : null,
     );
     return this.getRef(teamId, id)!;
   }
@@ -491,7 +497,7 @@ export class Repo {
     if (patch.caseId !== undefined && patch.caseId !== null && !this.caseExists(teamId, patch.caseId)) next.caseId = undefined;
     this.db.run(
       `UPDATE refs SET image_url = ?, url_key = ?, source_url = ?, title = ?, note = ?, tags_json = ?, case_id = ?, kind = ?, logo_label = ?,
-        width = ?, height = ?, updated_by = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
+        width = ?, height = ?, file_id = ?, original_url = ?, original_key = ?, source = ?, updated_by = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
       next.imageUrl,
       urlKey(next.imageUrl),
       next.sourceUrl,
@@ -503,6 +509,10 @@ export class Repo {
       next.logoLabel,
       next.width ? Math.round(next.width) : null,
       next.height ? Math.round(next.height) : null,
+      next.fileId ?? null,
+      next.originalUrl ?? null,
+      next.originalUrl ? urlKey(next.originalUrl) : null,
+      next.source,
       userId,
       now(),
       id,
@@ -511,10 +521,99 @@ export class Repo {
     return this.getRef(teamId, id);
   }
 
-  deleteRefs(teamId: string, ids: string[]): number {
-    let n = 0;
-    for (const id of ids) n += this.db.run("DELETE FROM refs WHERE id = ? AND team_id = ?", id, teamId).changes;
-    return n;
+  /** 지운 레퍼런스가 쓰던 저장 파일 id 도 돌려준다 (더 쓰는 곳이 없으면 releaseFiles 로 지운다) */
+  deleteRefs(teamId: string, ids: string[]): { count: number; fileIds: string[] } {
+    let count = 0;
+    const fileIds = new Set<string>();
+    for (const id of ids) {
+      const row = this.db.get<{ file_id: string | null }>("SELECT file_id FROM refs WHERE id = ? AND team_id = ?", id, teamId);
+      if (!row) continue;
+      count += this.db.run("DELETE FROM refs WHERE id = ? AND team_id = ?", id, teamId).changes;
+      if (row.file_id) fileIds.add(row.file_id);
+    }
+    return { count, fileIds: [...fileIds] };
+  }
+
+  // ─── files (올린 이미지 · 링크 사본) ─────────────────────────
+
+  insertFile(f: Omit<FileRow, "created_at">): FileRow {
+    const row: FileRow = { ...f, created_at: now() };
+    this.db.run(
+      `INSERT INTO files (id, team_id, key, thumb_key, bytes, width, height, hash, origin, original_url, name, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      row.id,
+      row.team_id,
+      row.key,
+      row.thumb_key,
+      row.bytes,
+      row.width,
+      row.height,
+      row.hash,
+      row.origin,
+      row.original_url,
+      row.name,
+      row.created_by,
+      row.created_at,
+    );
+    return row;
+  }
+
+  getFile(id: string): FileRow | undefined {
+    return this.db.get<FileRow>("SELECT * FROM files WHERE id = ?", id);
+  }
+
+  /** 같은 팀에 똑같은 파일(원본 해시)이 이미 있으면 다시 저장하지 않는다 */
+  findFileByHash(teamId: string, hash: string): FileRow | undefined {
+    return this.db.get<FileRow>("SELECT * FROM files WHERE team_id = ? AND hash = ? ORDER BY created_at LIMIT 1", teamId, hash);
+  }
+
+  /** 레퍼런스에 아직 안 붙은 파일을 다시 쓰면 정리 대상에서 빠지도록 시각을 새로 한다 */
+  touchFile(id: string) {
+    this.db.run("UPDATE files SET created_at = ? WHERE id = ?", now(), id);
+  }
+
+  storageUsage(teamId: string): { used: number; files: number } {
+    const r = this.db.get<{ used: number | null; files: number }>("SELECT SUM(bytes) AS used, COUNT(*) AS files FROM files WHERE team_id = ?", teamId);
+    return { used: r?.used ?? 0, files: r?.files ?? 0 };
+  }
+
+  fileInUse(fileId: string): boolean {
+    return !!this.db.get("SELECT 1 FROM refs WHERE file_id = ? LIMIT 1", fileId);
+  }
+
+  /** 어떤 레퍼런스도 쓰지 않는 파일의 기록을 지우고, 저장소에서 지울 키를 돌려준다 */
+  releaseFiles(fileIds: string[]): string[] {
+    const keys: string[] = [];
+    for (const id of fileIds) {
+      if (this.fileInUse(id)) continue;
+      const f = this.getFile(id);
+      if (!f) continue;
+      this.db.run("DELETE FROM files WHERE id = ?", id);
+      keys.push(f.key, f.thumb_key);
+    }
+    return keys;
+  }
+
+  /** 올려 두고 레퍼런스로 저장하지 않은 채 오래된 파일 */
+  staleFileIds(olderThanMs: number): string[] {
+    return this.db
+      .all<{ id: string }>("SELECT f.id FROM files f WHERE f.created_at < ? AND NOT EXISTS (SELECT 1 FROM refs r WHERE r.file_id = f.id)", now() - olderThanMs)
+      .map((r) => r.id);
+  }
+
+  /** 이 파일들을 쓰는 문서 (페이지 · 임시 보관함) — 레퍼런스를 지우기 전에 알려 준다 */
+  docsUsingFiles(teamId: string, fileIds: string[]): { id: string; title: string }[] {
+    if (!fileIds.length) return [];
+    const docs = this.db.all<{ id: string; title: string; data_json: string }>("SELECT id, title, data_json FROM documents WHERE team_id = ?", teamId);
+    return docs.filter((d) => fileIds.some((f) => d.data_json.includes(`/api/files/${f}.`))).map((d) => ({ id: d.id, title: d.title }));
+  }
+
+  teamFileKeys(teamId: string): string[] {
+    return this.db.all<{ key: string; thumb_key: string }>("SELECT key, thumb_key FROM files WHERE team_id = ?", teamId).flatMap((r) => [r.key, r.thumb_key]);
+  }
+
+  allFileKeys(): string[] {
+    return this.db.all<{ key: string; thumb_key: string }>("SELECT key, thumb_key FROM files").flatMap((r) => [r.key, r.thumb_key]);
   }
 
   // ─── cases ────────────────────────────────────────────────
@@ -918,7 +1017,26 @@ export class Repo {
 
 // ─── row mapping ────────────────────────────────────────────
 
+export interface FileRow {
+  id: string;
+  team_id: string;
+  key: string;
+  thumb_key: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+  hash: string;
+  origin: "upload" | "copy";
+  original_url: string | null;
+  name: string | null;
+  created_by: string | null;
+  created_at: number;
+}
+
 export interface RefInput {
+  /** 서버에 저장한 이미지면 그 파일 (라우터가 이 팀 파일인지 확인한 뒤 채운다) */
+  fileId?: string;
+  originalUrl?: string;
   imageUrl: string;
   sourceUrl?: string;
   title?: string;
@@ -983,6 +1101,8 @@ interface RefRow {
   width: number | null;
   height: number | null;
   source: Reference["source"];
+  file_id: string | null;
+  original_url: string | null;
   created_by: string | null;
   created_at: number;
   updated_at: number;
@@ -1004,6 +1124,9 @@ function rowToRef(r: RefRow): Reference {
     width: r.width ?? undefined,
     height: r.height ?? undefined,
     source: r.source,
+    fileId: r.file_id ?? undefined,
+    thumbUrl: r.file_id ? fileThumbUrl(r.file_id) : undefined,
+    originalUrl: r.original_url ?? undefined,
     createdAt: r.created_at,
     createdBy: r.created_by ?? undefined,
     createdByName: r.created_by_name ?? undefined,

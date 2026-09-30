@@ -1,7 +1,9 @@
-// 단일 HTML 파일로 내보내기 — 서버 없이도 열리는 웹 문서 (이미지는 원본 링크 그대로)
+// 단일 HTML 파일로 내보내기 — 서버 없이도 열리는 웹 문서
+// (링크 이미지는 원본 링크 그대로, 앱에 올린 이미지는 로그인 없이도 보이게 파일 안에 넣는다)
 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { isStoredImage } from "../../shared/files";
 import type { DocumentData } from "../../shared/types";
 import { PAGE_CSS, PageView, pageSize } from "../components/PageView";
 
@@ -79,8 +81,40 @@ pgs.forEach(function(p,k){p.addEventListener('click',function(){if(cur>=0)show(c
 </html>`;
 }
 
-export function exportHtml(doc: DocumentData) {
-  const blob = new Blob([buildHtml(doc)], { type: "text/html" });
+/** 앱에 올린 이미지(/api/files/…)는 팀원만 볼 수 있으니, 받은 사람도 보이도록 data: 로 바꿔 넣는다 */
+export async function inlineStoredImages(doc: DocumentData): Promise<DocumentData> {
+  const copy = structuredClone(doc);
+  const cache = new Map<string, Promise<string | null>>();
+  const toData = (src: string) => {
+    if (!cache.has(src))
+      cache.set(
+        src,
+        fetch(src, { credentials: "same-origin" })
+          .then((r) => (r.ok ? r.blob() : null))
+          .then(
+            (b) =>
+              b &&
+              new Promise<string>((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(String(fr.result));
+                fr.onerror = () => reject(fr.error);
+                fr.readAsDataURL(b);
+              }),
+          )
+          .catch(() => null),
+      );
+    return cache.get(src)!;
+  };
+  for (const p of copy.pages) {
+    for (const el of p.elements) {
+      if (el.type === "image" && isStoredImage(el.src)) el.src = (await toData(el.src)) ?? el.src;
+    }
+  }
+  return copy;
+}
+
+export async function exportHtml(doc: DocumentData) {
+  const blob = new Blob([buildHtml(await inlineStoredImages(doc))], { type: "text/html" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${doc.title || "document"}.html`;

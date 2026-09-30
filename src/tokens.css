@@ -271,6 +271,7 @@
 
   /* 쌓임 순서 (작을수록 아래) */
   --z-drop-zones: 4;
+  --z-drop-overlay: 6;
   --z-print-bar: 5;
   --z-viewer-bar: 10;
   --z-topbar: 20;

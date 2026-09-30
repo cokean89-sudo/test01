@@ -69,3 +69,8 @@ export const oauth = {
     clientSecret: env.NAVER_CLIENT_SECRET || "",
   },
 };
+
+/** 팀별 저장 공간 (올린 이미지 · 링크 사본 합계). TEAM_STORAGE_LIMIT_GB, 기본 5 — 요청마다 읽는다 */
+export const teamStorageLimit = () => Math.round((Number(process.env.TEAM_STORAGE_LIMIT_GB) || 5) * 1024 ** 3);
+/** 디스크에 저장할 때 늘 비워 둘 공간 (데이터베이스 · 백업용). STORAGE_RESERVE_MB, 기본 300 */
+export const storageReserve = () => (Number(process.env.STORAGE_RESERVE_MB) || 300) * 1024 ** 2;

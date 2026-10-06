@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "RefBoard — 케이스 스터디 & 레퍼런스",
+  "short_name": "RefBoard",
+  "description": "이미지 · 링크를 키워드와 함께 모아 케이스 스터디 문서로 만들어요.",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "/#/library",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f2f4f6",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [{ "name": "images", "accept": ["image/jpeg", "image/png", "image/webp", "image/gif", ".jpg", ".jpeg", ".png", ".webp", ".gif"] }]
+    }
+  }
+}

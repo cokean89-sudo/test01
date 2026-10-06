@@ -1,5 +1,6 @@
 // 키워드 → 검색 → 태그/케이스별 그룹핑 → 페이지 자동 생성
 
+import { realTags } from "../../shared/tags";
 import type { CaseStudy, DocSettings, DocumentData, Page, PageLayout, Reference } from "../../shared/types";
 import { uid } from "../lib/id";
 import { norm, parseQuery, searchRefs, type MatchMode, type SearchHit } from "../lib/search";
@@ -112,13 +113,14 @@ function groupByTag(hits: SearchHit[], query: string, minGroupSize: number): Ref
   // 2) 나머지는 결과 안에서 가장 많이 쓰인 태그 기준으로 묶는다 (모든 결과에 공통인 태그와 검색어 태그는 제외)
   if (remaining.length) {
     const freq = new Map<string, number>();
-    for (const h of remaining) for (const t of new Set(h.ref.tags.map(norm))) freq.set(t, (freq.get(t) ?? 0) + 1);
+    // '미분류'는 그룹 이름으로 쓰지 않는다 (태그가 없는 것과 같다 → '기타')
+    for (const h of remaining) for (const t of new Set(realTags(h.ref.tags).map(norm))) freq.set(t, (freq.get(t) ?? 0) + 1);
     const queryTags = new Set(terms.map((t) => t.text));
     const eligible = (t: string) => !queryTags.has(t) && (remaining.length === 1 || freq.get(t)! < remaining.length);
     for (const h of remaining) {
-      const own = [...new Set(h.ref.tags.map(norm))].filter(eligible);
+      const own = [...new Set(realTags(h.ref.tags).map(norm))].filter(eligible);
       own.sort((a, b) => freq.get(b)! - freq.get(a)! || a.localeCompare(b, "ko"));
-      const fallback = h.tagTerms[0] ?? h.ref.tags.map(norm)[0] ?? ETC_LABEL;
+      const fallback = h.tagTerms[0] ?? realTags(h.ref.tags).map(norm)[0] ?? ETC_LABEL;
       put(own[0] ?? fallback, h.ref);
     }
   }

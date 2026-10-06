@@ -216,6 +216,11 @@
   --size-input: 36px;
   --size-control-md: 38px;
   --size-control-lg: 52px;
+  --size-switch-width: 40px;
+  --size-switch-height: 24px;
+  --size-switch-thumb: 20px;
+  --size-touch: 44px;
+  --size-bottom-nav: 60px;
 }
 /* ─── 생성 끝 ─── */
 

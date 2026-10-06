@@ -336,6 +336,46 @@ describe("라이브러리 · 문서", () => {
     expect(d.json.references.flatMap((r: { tags: string[] }) => r.tags)).not.toContain("pinterest");
   });
 
+  it("'미분류' 태그: 태그 없이 저장하면 붙고, 다른 태그가 생기면 빠지고, 다 지우면 다시 붙는다", async () => {
+    const { c, personalTeam } = await signup("미분류");
+    const T = `/api/teams/${personalTeam.id}`;
+    const add = await c.post(`${T}/references`, [{ imageUrl: "https://example.com/u1.jpg" }, { imageUrl: "https://example.com/u2.jpg", tags: [] }, { imageUrl: "https://example.com/u3.jpg", tags: ["패키지"] }]);
+    const [u1, u2, u3] = add.json.created;
+    expect([u1.tags, u2.tags, u3.tags]).toEqual([["미분류"], ["미분류"], ["패키지"]]);
+    // 직접 태그를 붙이면 '미분류'는 빠진다 (PATCH · 일괄 추가 · 중복 저장으로 태그 더하기)
+    expect((await c.patch(`${T}/references/${u1.id}`, { tags: ["미분류", "팝업스토어"] })).json.tags).toEqual(["팝업스토어"]);
+    const b = await c.post(`${T}/references/bulk`, { ids: [u2.id], addTags: ["레드"] });
+    expect(b.json.references.find((r: { id: string }) => r.id === u2.id).tags).toEqual(["레드"]);
+    // 태그를 모두 빼면 다시 '미분류'
+    const rm = await c.post(`${T}/references/bulk`, { ids: [u2.id], removeTags: ["레드"] });
+    expect(rm.json.references.find((r: { id: string }) => r.id === u2.id).tags).toEqual(["미분류"]);
+    const del = await c.post(`${T}/tags/delete`, { tags: ["패키지"] });
+    expect(del.json.references.find((r: { id: string }) => r.id === u3.id).tags).toEqual(["미분류"]);
+    // 중복 이미지로 태그만 더할 때도
+    const dup = await c.post(`${T}/references`, [{ imageUrl: "https://example.com/u3.jpg", tags: ["경쟁사"] }]);
+    expect(dup.json.duplicates[0].existing.tags).toEqual(["경쟁사"]);
+    // '미분류' 이름을 바꾸면 그 이미지들이 한 번에 새 태그로 정리된다
+    const ren = await c.post(`${T}/tags/rename`, { from: "미분류", to: "정리중" });
+    expect(ren.json.references.find((r: { id: string }) => r.id === u2.id).tags).toEqual(["정리중"]);
+  });
+
+  it("예전에 태그 없이 저장된 레퍼런스는 업데이트 때 '미분류'가 붙는다 (DB v6)", async () => {
+    const { Database } = await import("../server/db");
+    const db = new Database(":memory:");
+    db.raw.exec("PRAGMA user_version = 5");
+    db.raw.exec("INSERT INTO teams (id, name, created_by, created_at) VALUES ('t1', 'T', 'u', 0)");
+    const cols = "id, team_id, image_url, url_key, tags_json, kind, source, created_by, created_at, updated_by, updated_at";
+    db.raw.exec(`INSERT INTO refs (${cols}) VALUES ('r1', 't1', 'https://e.com/1.jpg', 'k1', '[]', 'image', 'web', 'u', 0, 'u', 0)`);
+    db.raw.exec(`INSERT INTO refs (${cols}) VALUES ('r2', 't1', 'https://e.com/2.jpg', 'k2', '["패키지"]', 'image', 'web', 'u', 0, 'u', 0)`);
+    db.raw.exec("PRAGMA user_version = 5");
+    const reopened = db as unknown as { migrate: () => void };
+    reopened.migrate();
+    expect(db.all<{ id: string; tags_json: string }>("SELECT id, tags_json FROM refs ORDER BY id")).toEqual([
+      { id: "r1", tags_json: '["미분류"]' },
+      { id: "r2", tags_json: '["패키지"]' },
+    ]);
+  });
+
   it("일부만 수정(PATCH)해도 태그·유형은 그대로 (이미지 크기 기록 등)", async () => {
     const { c, personalTeam } = await signup("부분수정");
     const T = `/api/teams/${personalTeam.id}`;

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isUnclassified, withUnclassified } from "../../shared/tags";
 import type { AppStatus, CaseStudy, DuplicateInfo, Reference } from "../../shared/types";
 import { api, type BulkOp, type CaseInput, type RefInput, type RefPatch } from "../api";
 import { useSession } from "./session";
@@ -60,6 +61,7 @@ export const useLibrary = create<LibraryState>((set, get) => ({
       refs: prev.map((r) => {
         if (r.id !== id) return r;
         const next = { ...r, ...patch } as Reference;
+        if (patch.tags) next.tags = withUnclassified(patch.tags);
         if (patch.caseId === null) delete next.caseId;
         return next;
       }),
@@ -123,9 +125,10 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   },
 }));
 
+/** 자주 쓰는 태그 (추천 · 자동완성용) — '미분류'는 직접 붙이는 태그가 아니라서 뺀다 */
 export function tagVocabulary(refs: Reference[], limit = 120): string[] {
   const freq = new Map<string, number>();
-  for (const r of refs) for (const t of r.tags) freq.set(t, (freq.get(t) ?? 0) + 1);
+  for (const r of refs) for (const t of r.tags) if (!isUnclassified(t)) freq.set(t, (freq.get(t) ?? 0) + 1);
   return [...freq.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)

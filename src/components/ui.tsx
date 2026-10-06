@@ -201,11 +201,18 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
   );
 }
 
-export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
+/**
+ * 토글 스위치 — 알약형 트랙 + 동그란 손잡이 (크기는 --size-switch-* 토큰).
+ * 손잡이는 입력 칸의 ::after 가 아니라 별도 요소로 그린다 (Safari · Firefox 는 input 의 가상 요소를 그리지 않아 네모로 보였다).
+ */
+export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; disabled?: boolean }) {
   return (
-    <label className="toggle">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span>{label}</span>
+    <label className={"toggle" + (disabled ? " disabled" : "")}>
+      <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span className="switch" aria-hidden="true">
+        <span className="switch-thumb" />
+      </span>
+      <span className="toggle-label">{label}</span>
     </label>
   );
 }

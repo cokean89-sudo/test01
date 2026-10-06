@@ -1,7 +1,7 @@
 // 태그 관리 — 사용 횟수를 보고 이름 변경 · 삭제 · 동의어 병합. 비슷한 태그와 쓸모없는 태그는 정리 추천으로 모아 준다.
 
 import { useMemo, useState } from "react";
-import { isBannedTag, similarGroups, tagKey } from "../../shared/tags";
+import { isBannedTag, isUnclassified, similarGroups, tagKey } from "../../shared/tags";
 import { ROLE_RANK } from "../../shared/types";
 import { Icon } from "../components/icons";
 import { Button, Empty, Field, Modal } from "../components/ui";
@@ -35,7 +35,8 @@ export function TagsView() {
     };
     for (const r of refs) for (const t of r.tags) bump(t, "refs");
     for (const c of cases) for (const t of c.tags) bump(t, "cases");
-    return [...map.values()].sort((a, b) => b.refs + b.cases - (a.refs + a.cases) || a.tag.localeCompare(b.tag, "ko"));
+    // '미분류'는 맨 위에 고정 (정리할 이미지)
+    return [...map.values()].sort((a, b) => Number(isUnclassified(b.tag)) - Number(isUnclassified(a.tag)) || b.refs + b.cases - (a.refs + a.cases) || a.tag.localeCompare(b.tag, "ko"));
   }, [refs, cases]);
 
   const usage = (t: string) => {
@@ -163,7 +164,7 @@ export function TagsView() {
               <tr key={r.tag} className={selected.has(r.tag) ? "on" : ""}>
                 {canEdit && (
                   <td>
-                    <input type="checkbox" checked={selected.has(r.tag)} onChange={() => toggle(r.tag)} aria-label={`${r.tag} 선택`} />
+                    {!isUnclassified(r.tag) && <input type="checkbox" checked={selected.has(r.tag)} onChange={() => toggle(r.tag)} aria-label={`${r.tag} 선택`} />}
                   </td>
                 )}
                 <td>
@@ -186,6 +187,11 @@ export function TagsView() {
                         취소
                       </Button>
                     </form>
+                  ) : isUnclassified(r.tag) ? (
+                    <span className="row">
+                      <span className="tag tag-unclassified">{r.tag}</span>
+                      <span className="muted small">태그 없이 저장한 이미지예요. 태그를 붙이면 자동으로 빠져요.</span>
+                    </span>
                   ) : (
                     <span className="tag">{r.tag}</span>
                   )}
@@ -194,7 +200,18 @@ export function TagsView() {
                 <td className="right">{r.cases || "—"}</td>
                 {canEdit && (
                   <td className="right">
-                    {editing?.tag !== r.tag && (
+                    {isUnclassified(r.tag) ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          sessionStorage.setItem("rb.query", `#${r.tag}`);
+                          navigate("library");
+                        }}
+                      >
+                        정리하러 가기
+                      </Button>
+                    ) : editing?.tag !== r.tag && (
                       <span className="row" style={{ justifyContent: "flex-end" }}>
                         <Button size="sm" variant="ghost" onClick={() => setEditing({ tag: r.tag, value: r.tag })}>
                           이름 변경

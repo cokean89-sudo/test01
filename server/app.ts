@@ -59,6 +59,10 @@ export function createApp(db: Database, opts: { store?: FileStore } = {}) {
   api.use(errorHandler);
 
   app.use("/api", api);
+  // 휴대폰 공유 메뉴(Web Share Target)는 서비스 워커가 받는다. 서비스 워커가 아직 없을 때만 여기로 온다 → 안내 화면으로
+  app.post("/share-target", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store").redirect(303, "/#/share/nosw");
+  });
   // 오래된 세션 · 올려 두고 저장하지 않은 이미지 정리
   setInterval(() => {
     repo.purgeExpired();

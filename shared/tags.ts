@@ -1,5 +1,19 @@
 // 태그 규칙 — 서버(AI 제안 후처리)와 화면(태그 관리)이 같은 기준을 쓴다.
 
+/** 태그 없이 저장한 이미지에 자동으로 붙는 태그 — 다른 태그가 생기면 자동으로 빠진다 */
+export const UNCLASSIFIED = "미분류";
+
+export const isUnclassified = (tag: string) => tagKey(tag) === tagKey(UNCLASSIFIED);
+
+/** 저장할 때의 태그 규칙: 태그가 없으면 ['미분류'], 다른 태그가 있으면 '미분류'를 뺀다 */
+export function withUnclassified(tags: string[]): string[] {
+  const real = tags.filter((t) => !isUnclassified(t));
+  return real.length ? real : [UNCLASSIFIED];
+}
+
+/** 화면 · 문서에 보여 줄 '진짜' 태그 (미분류 제외) */
+export const realTags = (tags: string[]) => tags.filter((t) => !isUnclassified(t));
+
 /** 태그 축: AI 가 축별로 1~2개씩 제안한다 */
 export type TagAxis = "field" | "subject" | "element" | "material" | "color" | "mood";
 
@@ -63,7 +77,7 @@ export function refineAxes(raw: Partial<Record<TagAxis, string[]>>, vocabulary: 
   const seen = new Set(existing.map(tagKey));
   for (const { key } of TAG_AXES) {
     for (const t of raw[key] ?? []) {
-      if (typeof t !== "string" || isBannedTag(t)) continue;
+      if (typeof t !== "string" || isBannedTag(t) || isUnclassified(t)) continue;
       const tag = canonicalTag(t, vocabulary);
       const k = tagKey(tag);
       if (seen.has(k)) continue;

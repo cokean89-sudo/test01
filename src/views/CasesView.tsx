@@ -117,7 +117,7 @@ function CaseEditor({ c, onBuild }: { c: CaseStudy; onBuild: (refIds: string[]) 
   return (
     <div className="case-editor">
       <div className="case-form">
-        <div className="row">
+        <div className="row case-form-head">
           <h2 style={{ flex: 1 }}>{form.name}</h2>
           <Button icon="sparkle" variant="accent" onClick={aiFill} disabled={busy} title={status?.ai ? "" : status?.aiPaused ? status.aiReason : "API 키가 없으면 규칙 기반으로 채워요"}>
             {busy ? <Spinner size={12} /> : null} AI 로 설명 채우기

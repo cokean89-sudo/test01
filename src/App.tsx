@@ -4,6 +4,7 @@ import { Icon } from "./components/icons";
 import { UpdatesDialog, VersionLink } from "./components/Updates";
 import { Button, Menu, MenuItem, Spinner, Toasts } from "./components/ui";
 import { navigate, useRoute } from "./lib/router";
+import { takeShared } from "./lib/share";
 import { useLibrary } from "./store/library";
 import { connectTeamEvents, useCurrentTeam, useSession } from "./store/session";
 import { toast } from "./store/toast";
@@ -14,7 +15,7 @@ import { AdminUsageView } from "./views/AdminUsageView";
 import { AccountView, ForgotView, InviteView, LoginView, ResetView, SignupView, VerifyView } from "./views/auth/AuthViews";
 import { BuildDialog } from "./views/BuildDialog";
 import { CasesView } from "./views/CasesView";
-import { CollectDialog } from "./views/CollectDialog";
+import { CollectDialog, extractUrls } from "./views/CollectDialog";
 import { DocsView } from "./views/DocsView";
 import { EditorView } from "./views/editor/EditorView";
 import { FeedbackDialog } from "./views/FeedbackDialog";
@@ -58,6 +59,28 @@ export function App() {
     sessionStorage.removeItem("rb.after");
     if (after.startsWith("#/") && ["", "#", "#/", "#/library", "#/login"].includes(location.hash)) location.hash = after;
   }, [status]);
+
+  // 휴대폰 공유 메뉴로 받은 이미지 · 링크 → 레퍼런스 추가 창 (로그인 전이면 로그인 뒤에 여기로 돌아온다)
+  useEffect(() => {
+    if (status !== "ready" || section !== "share" || !id) return;
+    navigate("library");
+    if (id === "nosw" || id === "failed") {
+      toast.error("공유한 내용을 받지 못했어요. RefBoard 를 한 번 연 뒤 다시 공유해 주세요.");
+      return;
+    }
+    void takeShared(id).then((shared) => {
+      if (!shared || (!shared.files.length && !extractUrls(shared.text).length)) {
+        toast.error(shared ? "공유한 내용에 이미지나 링크가 없어요." : "공유한 내용을 찾지 못했어요. 다시 공유해 주세요.");
+        return;
+      }
+      const team = useSession.getState().teams.find((t) => t.id === useSession.getState().teamId);
+      if (!team || ROLE_RANK[team.role] < ROLE_RANK.editor) {
+        toast.error("이 팀에서는 레퍼런스를 추가할 수 없어요 (보기 전용). 팀을 바꾼 뒤 다시 공유해 주세요.");
+        return;
+      }
+      useUI.getState().openCollect(extractUrls(shared.text).length ? shared.text : undefined, shared.files);
+    });
+  }, [status, section, id]);
 
   // 팀이 바뀌면 라이브러리를 새로 불러오고, 팀 실시간 이벤트를 구독한다
   useEffect(() => {
@@ -119,7 +142,7 @@ export function App() {
   if (section === "print" && id) return <PrintView id={id} />;
 
   return (
-    <div className="app">
+    <div className={"app" + (section === "edit" ? " no-nav" : "")}>
       <TopBar section={section} />
       <main className="app-main">
         {section === "edit" && id ? (
@@ -144,6 +167,7 @@ export function App() {
           <LibraryView />
         )}
       </main>
+      {section !== "edit" && <MobileNav section={section} />}
       {collect.open && <CollectDialog initialUrls={collect.urls} initialFiles={collect.files} />}
       {build.open && <BuildDialog preset={build.preset} />}
       {section !== "edit" && (
@@ -206,7 +230,17 @@ function TopBar({ section }: { section: string }) {
   const active = section === "edit" ? "docs" : section === "tags" ? "library" : section;
   return (
     <header className="topbar">
-      <a className="brand" href="#/library">
+      <a
+        className="brand"
+        href="#/library"
+        title="첫 화면으로 (검색 · 태그 초기화)"
+        onClick={(e) => {
+          // 로고 = 첫 화면: 태그 · 검색 조건을 모두 풀고 전체 이미지
+          e.preventDefault();
+          useUI.getState().resetLibrary();
+          navigate("library");
+        }}
+      >
         <span className="brand-mark" />
         RefBoard
       </a>
@@ -313,5 +347,32 @@ function TopBar({ section }: { section: string }) {
         </Menu>
       </div>
     </header>
+  );
+}
+
+/** 휴대폰 하단 탭 — 레퍼런스 · 케이스 · ＋추가 · 문서 · 팀 (PC 에서는 숨김, 위쪽 탭을 쓴다) */
+function MobileNav({ section }: { section: string }) {
+  const team = useCurrentTeam();
+  const openCollect = useUI((s) => s.openCollect);
+  const canEdit = !!team && ROLE_RANK[team.role] >= ROLE_RANK.editor;
+  const active = section === "tags" ? "library" : section;
+  const item = (key: string, label: string, icon: "grid" | "folder" | "file" | "layers") => (
+    <button key={key} className={"mobile-nav-item" + (active === key ? " on" : "")} onClick={() => (key === "library" && active === "library" ? useUI.getState().resetLibrary() : navigate(key))} aria-current={active === key ? "page" : undefined}>
+      <Icon name={icon} size={20} />
+      <span>{label}</span>
+    </button>
+  );
+  return (
+    <nav className="mobile-nav" aria-label="메뉴">
+      {item("library", "레퍼런스", "grid")}
+      {item("cases", "케이스", "folder")}
+      {canEdit && (
+        <button className="mobile-nav-add" onClick={() => openCollect()} aria-label="레퍼런스 추가">
+          <Icon name="plus" size={22} />
+        </button>
+      )}
+      {item("docs", "문서", "file")}
+      {item("team", "팀", "layers")}
+    </nav>
   );
 }

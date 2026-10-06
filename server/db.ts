@@ -256,6 +256,10 @@ const MIGRATIONS: string[] = [
     updated_at INTEGER NOT NULL
   );
   `,
+  // v6: 태그 없이 저장돼 있던 레퍼런스에 '미분류' 태그 (이후에는 저장할 때 자동으로 붙고 빠진다)
+  `
+  UPDATE refs SET tags_json = '["미분류"]' WHERE tags_json IS NULL OR tags_json IN ('', '[]');
+  `,
 ];
 
 export class Database {

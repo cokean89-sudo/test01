@@ -4,7 +4,7 @@ import { api } from "../../api";
 import { Icon } from "../../components/icons";
 import { PageView } from "../../components/PageView";
 import { SmartImage } from "../../components/SmartImage";
-import { Button, Modal, Segmented, Select, Spinner } from "../../components/ui";
+import { Button, Modal, Segmented, Select, Spinner, Toggle } from "../../components/ui";
 import { useEditor } from "../../store/editor";
 import { toast } from "../../store/toast";
 import { AI_FIELDS, analyzeRequestFor, applyAnalysis, contentImages, getPage, updatePage, type AiField } from "./actions";
@@ -156,10 +156,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
               {result.engine === "heuristic" && <div className="notice">{result.notice ?? "AI 가 연결되지 않아 규칙 기반으로 채웠어요."}</div>}
               {AI_FIELDS.filter((f) => f.key !== "captions").map((f) => (
                 <div key={f.key} className={"ai-field" + (hasRole(f.role) ? "" : " disabled")}>
-                  <label className="toggle">
-                    <input type="checkbox" checked={fields.has(f.key) && hasRole(f.role)} disabled={!hasRole(f.role)} onChange={() => toggle(f.key)} />
-                    <span>{f.label}</span>
-                  </label>
+                  <Toggle checked={fields.has(f.key) && hasRole(f.role)} disabled={!hasRole(f.role)} onChange={() => toggle(f.key)} label={f.label} />
                   {f.key === "description" ? (
                     <textarea rows={4} value={result.description} onChange={(e) => setResult({ ...result, description: e.target.value })} />
                   ) : (
@@ -169,10 +166,7 @@ export function AiDialog({ pageId }: { pageId: string }) {
                 </div>
               ))}
               <div className="ai-field">
-                <label className="toggle">
-                  <input type="checkbox" checked={fields.has("captions")} onChange={() => toggle("captions")} />
-                  <span>이미지 캡션</span>
-                </label>
+                <Toggle checked={fields.has("captions")} onChange={() => toggle("captions")} label="이미지 캡션" />
                 <Select<CaptionPos | "">
                   value={capPos}
                   onChange={setCapPos}

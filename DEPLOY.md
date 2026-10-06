@@ -183,6 +183,15 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 
 되돌릴 때는 `STORAGE_DRIVER=disk` 로 바꾸면 돼요 (그 사이 R2 · S3 에만 올라간 파일은 직접 내려받아 `/var/data/uploads` 에 넣어야 해요).
 
+## 5-C. 휴대폰 홈 화면 앱 · 공유 메뉴
+
+따로 설정할 것은 없어요. 빌드에 `manifest.webmanifest` · `sw.js` · `icons/` 가 함께 들어가고, Render 주소는 HTTPS 라서 바로 동작해요.
+
+- 휴대폰 브라우저로 접속 → 메뉴의 **홈 화면에 추가**(안드로이드는 '앱 설치'). 아이폰은 사파리 공유 → 홈 화면에 추가.
+- 안드로이드에서 홈 화면에 추가한 뒤에는 사진 · 링크의 **공유 → RefBoard** 로 바로 레퍼런스를 모을 수 있어요. 아이폰은 이 기능(Web Share Target)을 지원하지 않아요.
+- 서비스 워커(`/sw.js`)는 공유 받기만 처리하고 화면 · API 를 캐시하지 않아요. 서버는 `sw.js` · `manifest.webmanifest` 를 `Cache-Control: no-cache` 로 보내서 새로 배포하면 바로 바뀌어요.
+- 아이콘을 바꾸려면 `tokens.json` 의 파란색을 고친 뒤 `npm run icons` → 커밋.
+
 ## 6. 문제 해결
 
 | 증상 | 확인할 것 |

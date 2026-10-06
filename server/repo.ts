@@ -20,6 +20,7 @@ import type {
   VersionInfo,
 } from "../shared/types";
 import { fileThumbUrl } from "../shared/files";
+import { withUnclassified } from "../shared/tags";
 import { urlKey } from "../shared/urlKey";
 import { defaultSettings } from "../src/lib/defaults";
 import { ADMIN_EMAILS, auth, DATA_DIR } from "./config";
@@ -472,7 +473,7 @@ export class Repo {
       input.sourceUrl,
       input.title,
       input.note,
-      JSON.stringify(input.tags ?? []),
+      JSON.stringify(withUnclassified(input.tags ?? [])),
       input.caseId && this.caseExists(teamId, input.caseId) ? input.caseId : null,
       input.kind ?? "image",
       input.logoLabel,
@@ -503,7 +504,7 @@ export class Repo {
       next.sourceUrl,
       next.title,
       next.note,
-      JSON.stringify(next.tags),
+      JSON.stringify(withUnclassified(next.tags)),
       next.caseId ?? null,
       next.kind,
       next.logoLabel,
@@ -701,7 +702,8 @@ export class Repo {
       const t = now();
       for (const r of this.db.all<{ id: string; tags_json: string }>("SELECT id, tags_json FROM refs WHERE team_id = ?", teamId)) {
         const next = apply(parseJson<string[]>(r.tags_json, []));
-        if (next) this.db.run("UPDATE refs SET tags_json = ?, updated_by = ?, updated_at = ? WHERE id = ?", JSON.stringify(next), userId, t, r.id);
+        // 태그를 지워서 하나도 안 남으면 '미분류', 새 이름을 받으면 '미분류'는 빠진다
+        if (next) this.db.run("UPDATE refs SET tags_json = ?, updated_by = ?, updated_at = ? WHERE id = ?", JSON.stringify(withUnclassified(next)), userId, t, r.id);
       }
       for (const c of this.db.all<{ id: string; tags_json: string }>("SELECT id, tags_json FROM cases WHERE team_id = ?", teamId)) {
         const next = apply(parseJson<string[]>(c.tags_json, []));

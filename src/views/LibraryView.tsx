@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { isUnclassified, UNCLASSIFIED } from "../../shared/tags";
 import { ROLE_RANK, type Reference } from "../../shared/types";
 import { api } from "../api";
 import { Icon } from "../components/icons";
 import { MatchAllCheck } from "../components/MatchAllCheck";
 import { SmartImage } from "../components/SmartImage";
 import { UpdatesCard } from "../components/Updates";
+import { UploadHero } from "../components/UploadHero";
 import { Button, Empty, Menu, MenuItem, Modal, Segmented, Select, TagInput } from "../components/ui";
 import { groupHits } from "../layout/autobuild";
-import { navigate } from "../lib/router";
 import { imageFilesFrom } from "../lib/uploads";
-import { matchSummary, noMatchHint, noMatchMessage, norm, parseQuery, searchRefs, tagCounts, type MatchMode, type SortKey } from "../lib/search";
+import { matchSummary, noMatchHint, noMatchMessage, norm, parseQuery, searchRefs, tagCounts, type MatchMode, type SortKey, type Term } from "../lib/search";
 import { tagVocabulary, useLibrary } from "../store/library";
 import { useCurrentTeam } from "../store/session";
 import { toast } from "../store/toast";
@@ -39,8 +40,28 @@ export function LibraryView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [bulkTag, setBulkTag] = useState<"add" | "remove" | null>(null);
+  const libraryReset = useUI((s) => s.library.reset);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /** Shift+클릭 범위 선택의 기준점 */
+  const anchor = useRef<string | null>(null);
 
   useEffect(() => sessionStorage.setItem("rb.query", query), [query]);
+
+  // 로고를 누르면 첫 화면으로 — 검색어 · 태그 · 정렬 · 선택 초기화. 방금 저장한 이미지가 있으면 그것들을 선택해서 보여 준다
+  const mountedReset = useRef(libraryReset);
+  useEffect(() => {
+    const showIds = useUI.getState().library.showIds;
+    // 다른 화면에서 돌아올 때는 저장해 둔 검색어를 살린다 (로고 · '라이브러리에서 보기'로 온 경우만 초기화)
+    if (libraryReset === mountedReset.current && !showIds) return;
+    setQuery("");
+    setMode("or");
+    setView("grid");
+    setSort(showIds ? "newest" : "relevance");
+    setSelected(new Set(showIds ?? []));
+    anchor.current = null;
+    scrollRef.current?.scrollTo({ top: 0 });
+    if (showIds) useUI.setState((s) => ({ library: { ...s.library, showIds: null } }));
+  }, [libraryReset]);
 
   const hits = useMemo(() => searchRefs(refs, cases, query, mode, sort), [refs, cases, query, mode, sort]);
   const tags = useMemo(() => tagCounts(refs), [refs]);
@@ -79,19 +100,55 @@ export function LibraryView() {
     setQuery(exists ? terms.filter((t) => t.text !== norm(tag)).map((t) => (t.exclude ? "-" : "") + (t.exact ? "#" : "") + t.text).join(" ") : (query.trim() + " " + token).trim());
   };
 
+  /** 고른 태그 · 케이스 이름 (검색어 중 태그 · 케이스와 같은 것) */
+  const tagNames = useMemo(() => new Set([norm(UNCLASSIFIED), ...tags.map((t) => norm(t.tag)), ...cases.map((c) => norm(c.name))]), [tags, cases]);
+  const activeTags = useMemo(
+    () => [UNCLASSIFIED, ...tags.map((t) => t.tag), ...cases.map((c) => c.name)].filter((name, i, all) => activeTerms.has(norm(name)) && all.findIndex((x) => norm(x) === norm(name)) === i),
+    [tags, cases, activeTerms],
+  );
+  /** 태그 · 케이스 선택만 모두 풀고, 직접 입력한 검색어는 남긴다 */
+  const clearTags = () => setQuery(parseQuery(query).filter((t) => t.exclude || !tagNames.has(t.text)).map(termToken).join(" "));
+
+  /** 화면에 보이는 순서 (Shift 범위 선택 기준) */
+  const visibleIds = useMemo(
+    () => (view === "grid" ? hits.map((h) => h.ref.id) : groups.flatMap((g) => [...g.logos, ...g.refs].map((r) => r.id))),
+    [view, hits, groups],
+  );
+
+  /** ⌘/Ctrl+클릭 = 하나씩 추가 · 빼기, Shift+클릭 = 기준점부터 범위 */
   const toggleSelect = (id: string, range?: boolean) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (range && prev.size) {
-        const ids = hits.map((h) => h.ref.id);
-        const last = [...prev].pop()!;
-        const [a, b] = [ids.indexOf(last), ids.indexOf(id)].sort((x, y) => x - y);
-        ids.slice(a, b + 1).forEach((x) => next.add(x));
-      } else if (next.has(id)) next.delete(id);
+    const next = new Set(selected);
+    const a = range && anchor.current ? visibleIds.indexOf(anchor.current) : -1;
+    const b = visibleIds.indexOf(id);
+    if (a >= 0 && b >= 0) {
+      const [from, to] = a < b ? [a, b] : [b, a];
+      visibleIds.slice(from, to + 1).forEach((x) => next.add(x));
+    } else {
+      if (next.has(id)) next.delete(id);
       else next.add(id);
-      return next;
-    });
+      anchor.current = id;
+    }
+    setSelected(next);
   };
+  const clearSelection = useCallback(() => {
+    setSelected(new Set());
+    anchor.current = null;
+  }, []);
+
+  // Esc = 선택 해제 (열린 창 · 상세 · 메뉴가 있으면 그쪽 Esc 에 맡긴다)
+  useEffect(() => {
+    if (!selected.size) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector(".modal-backdrop, .drawer, .menu")) return;
+      if ((e.target as HTMLElement)?.closest?.("input, textarea, select, [contenteditable]")) return;
+      clearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected.size, clearSelection]);
+
+  const marquee = useMarquee(scrollRef, canEdit, selected, setSelected);
 
   const selIds = [...selected];
   const openRef = refs.find((r) => r.id === openId) ?? null;
@@ -110,9 +167,10 @@ export function LibraryView() {
       ref_={ref}
       caseName={ref.caseId ? caseName.get(ref.caseId) : undefined}
       selected={selected.has(ref.id)}
+      selectable={canEdit}
       activeTerms={activeTerms}
-      onToggle={(range) => toggleSelect(ref.id, range)}
-      onOpen={() => setOpenId(ref.id)}
+      onToggle={(range) => !marquee.justDragged() && toggleSelect(ref.id, range)}
+      onOpen={() => !marquee.justDragged() && setOpenId(ref.id)}
       onNatural={(w, h) => {
         if (!ref.width || !ref.height) void updateRef(ref.id, { width: w, height: h });
       }}
@@ -125,19 +183,26 @@ export function LibraryView() {
         <section>
           <h4 className="sidebar-title">
             태그
-            <a className="link-btn blue" href="#/tags">
-              관리
-            </a>
+            <span className="sidebar-title-actions">
+              {activeTags.length > 0 && (
+                <button className="link-btn" onClick={clearTags}>
+                  모두 해제
+                </button>
+              )}
+              <a className="link-btn blue" href="#/tags">
+                관리
+              </a>
+            </span>
           </h4>
           {tags.length === 0 && <p className="muted small">아직 태그가 없어요.</p>}
           <ul className="tag-list">
             {tags.map(({ tag, count }) => (
-              <li key={tag} className={activeTerms.has(norm(tag)) ? "on" : ""}>
-                <button className="tag-list-name" onClick={() => toggleTerm(tag)}>
-                  <Icon name="tag" size={13} /> {tag}
+              <li key={tag} className={(activeTerms.has(norm(tag)) ? "on" : "") + (isUnclassified(tag) ? " unclassified" : "")}>
+                <button className="tag-list-name" onClick={() => toggleTerm(tag)} title={isUnclassified(tag) ? "태그 없이 저장한 이미지 — 태그를 붙이면 자동으로 빠져요" : undefined}>
+                  <Icon name={isUnclassified(tag) ? "flag" : "tag"} size={13} /> {tag}
                 </button>
                 <span className="count">{count}</span>
-                {canEdit && <Menu
+                {canEdit && !isUnclassified(tag) && <Menu
                   align="right"
                   trigger={(open) => (
                     <button className="icon-mini" onClick={open} aria-label="태그 메뉴">
@@ -247,103 +312,40 @@ export function LibraryView() {
           </Button>
         </div>
 
-        {selected.size > 0 && canEdit && (
-          <div className="bulk-bar">
-            <strong>{selected.size}개 선택</strong>
-            <Button size="sm" icon="tag" onClick={() => setBulkTag("add")}>
-              태그 추가
-            </Button>
-            <Button size="sm" onClick={() => setBulkTag("remove")}>
-              태그 제거
-            </Button>
-            <select
-              className="sm"
-              value=""
-              onChange={async (e) => {
-                const v = e.target.value;
-                if (!v) return;
-                await bulk({ ids: selIds, caseId: v === "__none" ? null : v });
-                toast.success("케이스 지정 완료");
-              }}
-            >
-              <option value="">케이스 지정…</option>
-              <option value="__none">(케이스 해제)</option>
-              {cases.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+        <div
+          className={"library-scroll" + (marquee.box ? " marquee-active" : "")}
+          ref={scrollRef}
+          onPointerDown={marquee.onPointerDown}
+          onPointerMove={marquee.onPointerMove}
+          onPointerUp={marquee.onPointerUp}
+          onPointerCancel={marquee.onPointerUp}
+        >
+          {marquee.box && <div className="marquee" style={{ left: marquee.box.x, top: marquee.box.y, width: marquee.box.w, height: marquee.box.h }} />}
+          {tags.length > 0 && (
+            <div className="tag-strip" aria-label="태그">
+              {tags.slice(0, 40).map(({ tag, count }) => (
+                <button key={tag} className={"tag" + (activeTerms.has(norm(tag)) ? " tag-hit" : "") + (isUnclassified(tag) ? " tag-unclassified" : "")} onClick={() => toggleTerm(tag)}>
+                  {tag} <small>{count}</small>
+                </button>
               ))}
-            </select>
-            <Button size="sm" onClick={() => bulk({ ids: selIds, kind: "logo" })}>
-              로고로
-            </Button>
-            <Button size="sm" onClick={() => bulk({ ids: selIds, kind: "image" })}>
-              이미지로
-            </Button>
-            <Button size="sm" icon="sparkle" variant="accent" onClick={() => openBuild({ refIds: selIds, query: "" })}>
-              선택으로 문서 만들기
-            </Button>
-            <Button
-              size="sm"
-              icon="trash"
-              variant="danger"
-              onClick={async () => {
-                if (!(await confirmRefDelete(selIds, `레퍼런스 ${selected.size}개`))) return;
-                await bulk({ ids: selIds, delete: true });
-                setSelected(new Set());
-              }}
-            >
-              삭제
-            </Button>
-            <span className="spacer" />
-            <button className="link-btn" onClick={() => setSelected(new Set(hits.map((h) => h.ref.id)))}>
-              결과 전체 선택
-            </button>
-            <button className="link-btn" onClick={() => setSelected(new Set())}>
-              선택 해제
-            </button>
-          </div>
-        )}
-
-        <div className="library-scroll">
-          {loaded && refs.length === 0 ? (
-            <div className="onboard">
-              <div className="onboard-head">
-                <h2>
-                  첫 레퍼런스를 모아볼까요?
-                  <br />
-                  링크만 붙여넣으면 돼요
-                </h2>
-                <p>핀터레스트·웹페이지·이미지 링크를 키워드와 함께 저장해 두면, 키워드 하나로 보고서 문서까지 바로 만들 수 있어요.</p>
-              </div>
-              <div className="onboard-steps">
-                <div className="onboard-step">
-                  <span className="step-no">1</span>
-                  <strong>링크 붙여넣기</strong>
-                  <span>핀터레스트 핀의 공유 → 링크 복사, 또는 이미지 우클릭 → 이미지 주소 복사</span>
-                </div>
-                <div className="onboard-step">
-                  <span className="step-no">2</span>
-                  <strong>키워드 달기</strong>
-                  <span>#팝업스토어 #패키지 #경쟁사 처럼 나중에 찾을 말을 달아 두세요</span>
-                </div>
-                <div className="onboard-step">
-                  <span className="step-no">3</span>
-                  <strong>문서로 만들기</strong>
-                  <span>키워드를 넣으면 태그별로 묶어 A4 보고서 페이지를 만들어요</span>
-                </div>
-              </div>
-              <div className="onboard-actions">
-                {canEdit && (
-                  <Button size="lg" variant="primary" icon="plus" onClick={() => openCollect()}>
-                    레퍼런스 추가하기
-                  </Button>
-                )}
-                <Button size="lg" icon="bulb" onClick={() => navigate("guide")}>
-                  사용 가이드 보기
-                </Button>
-              </div>
             </div>
+          )}
+          {loaded && refs.length > 0 && !query.trim() && canEdit && <UploadHero compact canEdit={canEdit} />}
+          {activeTags.length > 0 && (
+            <div className="active-filters">
+              <span className="muted small">선택한 태그</span>
+              {activeTags.map((t) => (
+                <button key={t} className="tag tag-hit" onClick={() => toggleTerm(t)} aria-label={`${t} 해제`}>
+                  {t} <Icon name="x" size={11} />
+                </button>
+              ))}
+              <button className="link-btn blue" onClick={clearTags}>
+                모두 해제
+              </button>
+            </div>
+          )}
+          {loaded && refs.length === 0 ? (
+            <UploadHero compact={false} canEdit={canEdit} />
           ) : hits.length === 0 ? (
             <Empty emoji="🔍" title={noMatchMessage(query, mode)}>
               <p className="muted">{noMatchHint(query, mode)}</p>
@@ -374,6 +376,27 @@ export function LibraryView() {
             </>
           )}
         </div>
+        {selected.size > 0 && canEdit && (
+          <SelectionBar
+            count={selected.size}
+            cases={cases}
+            onAddTags={() => setBulkTag("add")}
+            onRemoveTags={() => setBulkTag("remove")}
+            onCase={async (v) => {
+              await bulk({ ids: selIds, caseId: v === "__none" ? null : v });
+              toast.success(v === "__none" ? "케이스를 해제했어요" : "케이스를 지정했어요");
+            }}
+            onKind={(kind) => bulk({ ids: selIds, kind })}
+            onBuild={() => openBuild({ refIds: selIds, query: "" })}
+            onDelete={async () => {
+              if (!(await confirmRefDelete(selIds, `레퍼런스 ${selected.size}개`))) return;
+              await bulk({ ids: selIds, delete: true });
+              clearSelection();
+            }}
+            onSelectAll={() => setSelected(new Set(visibleIds))}
+            onClear={clearSelection}
+          />
+        )}
       </section>
 
       {openRef && <RefDetail ref_={openRef} readOnly={!canEdit} onClose={() => setOpenId(null)} />}
@@ -398,6 +421,7 @@ function RefCard({
   ref_: ref,
   caseName,
   selected,
+  selectable,
   activeTerms,
   onToggle,
   onOpen,
@@ -406,6 +430,7 @@ function RefCard({
   ref_: Reference;
   caseName?: string;
   selected: boolean;
+  selectable: boolean;
   activeTerms: Set<string>;
   onToggle: (range: boolean) => void;
   onOpen: () => void;
@@ -413,11 +438,11 @@ function RefCard({
 }) {
   const ratio = ref.width && ref.height ? ref.height / ref.width : undefined;
   return (
-    <figure className={"ref-card" + (selected ? " selected" : "")}>
+    <figure className={"ref-card" + (selected ? " selected" : "")} data-id={ref.id}>
       <div
         className="ref-thumb"
         style={{ aspectRatio: ratio ? `${1} / ${ratio}` : undefined, background: ref.kind === "logo" ? "var(--color-white)" : undefined }}
-        onClick={(e) => (e.metaKey || e.ctrlKey || e.shiftKey ? onToggle(e.shiftKey) : onOpen())}
+        onClick={(e) => (selectable && (e.metaKey || e.ctrlKey || e.shiftKey) ? onToggle(e.shiftKey) : onOpen())}
       >
         <SmartImage src={ref.thumbUrl ?? ref.imageUrl} fit={ref.kind === "logo" ? "contain" : "cover"} onNatural={ref.thumbUrl ? undefined : onNatural} />
         {ref.fileId && (
@@ -425,16 +450,20 @@ function RefCard({
             <Icon name={ref.originalUrl ? "copy" : "upload"} size={11} />
           </span>
         )}
-        <button
-          className="ref-check"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle(e.shiftKey);
-          }}
-          aria-label="선택"
-        >
-          {selected ? "✓" : ""}
-        </button>
+        {selectable && (
+          <button
+            className="ref-check"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(e.shiftKey);
+            }}
+            role="checkbox"
+            aria-checked={selected}
+            aria-label="선택"
+          >
+            {selected ? "✓" : ""}
+          </button>
+        )}
         {ref.kind === "logo" && <span className="badge badge-float">LOGO</span>}
       </div>
       <figcaption>
@@ -442,7 +471,7 @@ function RefCard({
         <div className="ref-tags">
           {caseName && <span className="tag tag-case">{caseName}</span>}
           {ref.tags.slice(0, 5).map((t) => (
-            <span key={t} className={"tag tag-sm" + (activeTerms.has(norm(t)) ? " tag-hit" : "")}>
+            <span key={t} className={"tag tag-sm" + (activeTerms.has(norm(t)) ? " tag-hit" : "") + (isUnclassified(t) ? " tag-unclassified" : "")}>
               {t}
             </span>
           ))}
@@ -481,4 +510,172 @@ function BulkTagDialog({ mode, vocab, onClose, onApply }: { mode: "add" | "remov
       </div>
     </Modal>
   );
+}
+
+/** 선택했을 때 화면 아래에 뜨는 액션 바 */
+function SelectionBar({
+  count,
+  cases,
+  onAddTags,
+  onRemoveTags,
+  onCase,
+  onKind,
+  onBuild,
+  onDelete,
+  onSelectAll,
+  onClear,
+}: {
+  count: number;
+  cases: { id: string; name: string }[];
+  onAddTags: () => void;
+  onRemoveTags: () => void;
+  onCase: (caseId: string) => void;
+  onKind: (kind: "image" | "logo") => void;
+  onBuild: () => void;
+  onDelete: () => void;
+  onSelectAll: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="selection-bar" role="toolbar" aria-label="선택한 레퍼런스">
+      <strong className="selection-count">{count}개 선택</strong>
+      <Button size="sm" icon="tag" onClick={onAddTags} aria-label="태그 추가">
+        <span className="sel-label">태그 추가</span>
+      </Button>
+      <select
+        className="sm"
+        value=""
+        aria-label="케이스 지정"
+        onChange={(e) => {
+          if (e.target.value) onCase(e.target.value);
+        }}
+      >
+        <option value="">케이스 지정…</option>
+        <option value="__none">(케이스 해제)</option>
+        {cases.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <Button size="sm" icon="sparkle" variant="accent" onClick={onBuild} aria-label="문서 만들기">
+        <span className="sel-label">문서 만들기</span>
+      </Button>
+      <Button size="sm" icon="trash" variant="danger" onClick={onDelete} aria-label="삭제">
+        <span className="sel-label">삭제</span>
+      </Button>
+      <Menu align="right" trigger={(open) => <Button size="sm" icon="dots" onClick={open} aria-label="더보기" />}>
+        {(close) => (
+          <>
+            <MenuItem onClick={() => (close(), onRemoveTags())}>태그 제거</MenuItem>
+            <MenuItem onClick={() => (close(), onKind("logo"))}>로고로 바꾸기</MenuItem>
+            <MenuItem onClick={() => (close(), onKind("image"))}>이미지로 바꾸기</MenuItem>
+            <MenuItem onClick={() => (close(), onSelectAll())}>보이는 결과 전체 선택</MenuItem>
+          </>
+        )}
+      </Menu>
+      <button className="selection-clear" onClick={onClear} title="선택 해제 (Esc)" aria-label="선택 해제">
+        <Icon name="x" size={14} /> <span className="sel-label">선택 해제</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * 마우스로 끌어 영역 선택(마키). 빈 곳에서 시작해야 하고, Shift · ⌘/Ctrl 을 누른 채 시작하면 기존 선택에 더한다.
+ * 화면 끝 가까이 끌면 저절로 스크롤된다. 빈 곳을 그냥 누르면 선택이 풀린다.
+ */
+function useMarquee(
+  scrollRef: React.RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  selected: Set<string>,
+  setSelected: (s: Set<string>) => void,
+) {
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const drag = useRef<{ x0: number; y0: number; cx: number; cy: number; base: Set<string>; active: boolean; additive: boolean } | null>(null);
+  const dragged = useRef(0);
+  const raf = useRef(0);
+
+  const update = () => {
+    const d = drag.current;
+    const el = scrollRef.current;
+    if (!d || !el) return;
+    const r = el.getBoundingClientRect();
+    const x = d.cx - r.left + el.scrollLeft;
+    const y = d.cy - r.top + el.scrollTop;
+    if (!d.active && Math.hypot(x - d.x0, y - d.y0) < 6) return;
+    if (!d.active) {
+      d.active = true;
+      const tick = () => {
+        const dd = drag.current;
+        const sc = scrollRef.current;
+        if (!dd?.active || !sc) return;
+        const rr = sc.getBoundingClientRect();
+        const dy = dd.cy > rr.bottom - 40 ? 14 : dd.cy < rr.top + 40 ? -14 : 0;
+        if (dy) {
+          sc.scrollTop += dy;
+          update();
+        }
+        raf.current = requestAnimationFrame(tick);
+      };
+      raf.current = requestAnimationFrame(tick);
+    }
+    const b = { x: Math.min(x, d.x0), y: Math.min(y, d.y0), w: Math.abs(x - d.x0), h: Math.abs(y - d.y0) };
+    setBox(b);
+    const left = b.x - el.scrollLeft + r.left;
+    const top = b.y - el.scrollTop + r.top;
+    const hit = new Set(d.base);
+    el.querySelectorAll<HTMLElement>(".ref-card[data-id]").forEach((card) => {
+      const c = card.getBoundingClientRect();
+      if (c.right > left && c.left < left + b.w && c.bottom > top && c.top < top + b.h) hit.add(card.dataset.id!);
+    });
+    setSelected(hit);
+  };
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!enabled || e.button !== 0 || e.pointerType !== "mouse") return;
+    const t = e.target as HTMLElement;
+    if (t.closest(".ref-card, button, a, input, select, textarea, label, .upload-hero, .tag-strip, .active-filters, .group-section header")) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    // 스크롤 막대를 잡은 경우는 제외
+    if (e.clientX > el.getBoundingClientRect().left + el.clientWidth) return;
+    const r = el.getBoundingClientRect();
+    const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+    drag.current = { x0: e.clientX - r.left + el.scrollLeft, y0: e.clientY - r.top + el.scrollTop, cx: e.clientX, cy: e.clientY, base: additive ? new Set(selected) : new Set(), active: false, additive };
+    el.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    d.cx = e.clientX;
+    d.cy = e.clientY;
+    update();
+  };
+  const onPointerUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    cancelAnimationFrame(raf.current);
+    setBox(null);
+    if (!d) return;
+    if (d.active) dragged.current = Date.now();
+    else if (!d.additive && selected.size) setSelected(new Set());
+  };
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+
+  return {
+    box,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    /** 방금 끌기를 끝낸 경우 — 손을 뗀 자리의 클릭(상세 열기)을 무시한다 */
+    justDragged: () => Date.now() - dragged.current < 250,
+  };
+}
+
+/** 검색어 하나를 다시 문자열로 (띄어쓰기가 있으면 따옴표) */
+function termToken(t: Term): string {
+  const text = /\s/.test(t.text) ? `"${t.text}"` : t.text;
+  return (t.exclude ? "-" : "") + (t.exact ? "#" : "") + text;
 }

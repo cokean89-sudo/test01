@@ -20,7 +20,18 @@ async function start() {
       console.error("dist/ 가 없어요. 먼저 `npm run build` 를 실행하세요.");
       process.exit(1);
     }
-    app.use(express.static(dist, { index: false, maxAge: "7d", setHeaders: (res, file) => file.endsWith(".html") && res.setHeader("Cache-Control", "no-store") }));
+    // 화면(html)은 저장하지 않고, 서비스 워커 · 앱 설명 파일은 매번 확인해서 받는다 (오래 캐시되면 업데이트가 늦게 퍼진다)
+    const cacheFor = (file: string) => (file.endsWith(".html") ? "no-store" : file.endsWith("sw.js") || file.endsWith(".webmanifest") ? "no-cache" : null);
+    app.use(
+      express.static(dist, {
+        index: false,
+        maxAge: "7d",
+        setHeaders: (res, file) => {
+          const c = cacheFor(file);
+          if (c) res.setHeader("Cache-Control", c);
+        },
+      }),
+    );
     app.use((_req, res) => res.setHeader("Cache-Control", "no-store").sendFile(path.join(dist, "index.html")));
   } else {
     const { createServer } = await import("vite");

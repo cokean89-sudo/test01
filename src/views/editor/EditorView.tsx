@@ -17,11 +17,15 @@ import { Inspector } from "./Inspector";
 import { PageList } from "./PageList";
 import { Toolbar } from "./Toolbar";
 import { DragLayer, TrayShelf } from "./TrayShelf";
+import { MobileEditor } from "./MobileEditor";
+import { useIsMobile } from "../../lib/useMedia";
 
 export function EditorView({ id }: { id: string }) {
   const doc = useEditor((s) => s.doc);
   const modal = useEditor((s) => s.modal);
   const readOnly = useEditor((s) => s.readOnly);
+  // 휴대폰에서는 보기 + 글 고치기만 (배치 편집은 PC)
+  const mobile = useIsMobile();
   const [error, setError] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
 
@@ -208,6 +212,8 @@ export function EditorView({ id }: { id: string }) {
       </div>
     );
   }
+
+  if (mobile) return <MobileEditor />;
 
   return (
     <div className={"editor" + (readOnly ? " readonly" : "")}>

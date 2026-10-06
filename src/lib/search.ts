@@ -1,6 +1,7 @@
 // 키워드 검색 & 자동 정렬.
 // 문법: 공백/쉼표로 키워드 구분, "따옴표 구문", #태그(태그 정확히 일치), -제외어
 
+import { isUnclassified } from "../../shared/tags";
 import type { CaseStudy, Reference } from "../../shared/types";
 
 export interface Term {
@@ -115,10 +116,13 @@ export function searchRefs(
 }
 
 /** 태그별 개수 (많은 순) */
+/** 태그별 개수 — '미분류'는 정리할 이미지를 찾기 쉽게 맨 위에 고정 */
 export function tagCounts(refs: Reference[]): { tag: string; count: number }[] {
   const map = new Map<string, number>();
   for (const r of refs) for (const t of r.tags) map.set(t, (map.get(t) ?? 0) + 1);
-  return [...map.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, "ko"));
+  return [...map.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => Number(isUnclassified(b.tag)) - Number(isUnclassified(a.tag)) || b.count - a.count || a.tag.localeCompare(b.tag, "ko"));
 }
 
 export function normalizeTags(input: string | string[]): string[] {

@@ -43,7 +43,7 @@ export function startSession(repo: Repo, req: Request, res: Response, user: User
   return token;
 }
 
-function sessionInfo(repo: Repo, user: UserRow) {
+export function sessionInfo(repo: Repo, user: UserRow) {
   return { user: repo.userInfo(user), teams: repo.listTeams(user.id) };
 }
 

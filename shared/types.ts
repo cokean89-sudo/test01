@@ -1,6 +1,9 @@
 // 서버·클라이언트가 함께 쓰는 데이터 모델.
 // 모든 페이지 좌표/크기 단위는 pt(1/72 inch) — 인쇄·PPTX 변환 시 그대로 쓸 수 있다.
 
+import type { TeamProfile, UserProfile } from "./profile";
+export type { ProfileColor, TeamProfile, UserProfile } from "./profile";
+
 export type RefSource = "pinterest" | "web" | "image" | "manual" | "sample" | "upload";
 
 /** 레퍼런스 1장. 링크 이미지는 원본 URL 을 그대로 참조하고, 올린 이미지 · 사본은 서버 저장소(/api/files/…)를 참조한다. */
@@ -453,6 +456,8 @@ export interface UserInfo {
   isAdmin?: boolean;
   /** 가입 시각 — 가입 뒤에 나온 업데이트만 '새 소식'으로 */
   createdAt?: number;
+  /** 프로필 이미지 · 사용자 고유 색 */
+  profile: UserProfile;
 }
 
 export interface TeamSummary {
@@ -461,6 +466,8 @@ export interface TeamSummary {
   role: Role;
   personal: boolean;
   memberCount: number;
+  /** 팀 프로필 이미지 (없으면 팀 색 + 이름 첫 글자) */
+  profile: TeamProfile;
 }
 
 export interface Member {
@@ -469,6 +476,7 @@ export interface Member {
   email: string | null;
   role: Role;
   joinedAt: number;
+  profile: UserProfile;
 }
 
 export interface TeamDetail extends TeamSummary {
@@ -493,7 +501,10 @@ export interface InviteInfo {
 
 export interface ActivityItem {
   id: number;
+  userId?: string;
   userName: string;
+  /** 히스토리에 프로필 · 사용자 고유 색을 보여 줄 때 (탈퇴 등으로 사용자가 없으면 비어 있음) */
+  userProfile?: UserProfile;
   action: string;
   targetType?: string;
   targetId?: string;
@@ -525,6 +536,8 @@ export interface AuthProviders {
 export interface PresenceUser {
   userId: string;
   name: string;
+  /** 접속자 표시 — 프로필 이미지와 사용자 고유 색(테두리) */
+  profile?: UserProfile;
   pageId?: string;
 }
 

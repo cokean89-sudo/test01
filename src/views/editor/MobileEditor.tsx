@@ -8,6 +8,7 @@ import { PageView } from "../../components/PageView";
 import { Button, Modal } from "../../components/ui";
 import { navigate } from "../../lib/router";
 import { useEditor } from "../../store/editor";
+import { Presence } from "./Toolbar";
 import { toast } from "../../store/toast";
 
 const SAVE_LABEL = { saved: "저장됨", saving: "저장 중…", dirty: "저장 대기", error: "저장 실패" } as const;
@@ -46,6 +47,7 @@ export function MobileEditor() {
         </button>
         <strong className="ellipsis">{doc.title || "제목 없는 문서"}</strong>
         {!readOnly && <span className={"mobile-save " + saveState}>{SAVE_LABEL[saveState]}</span>}
+        <Presence />
         <Button size="sm" icon="play" onClick={() => navigate(`view/${doc.id}?present`)}>
           발표
         </Button>

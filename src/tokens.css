@@ -75,6 +75,30 @@
   --color-black-alpha-30: rgba(0, 0, 0, 0.3);
   --color-black-alpha-60: rgba(0, 0, 0, 0.6);
   --color-black-alpha-85: rgba(0, 0, 0, 0.85);
+  --color-profile-red: #f03e3e;
+  --color-profile-red-soft: #ffe3e3;
+  --color-profile-orange: #e8590c;
+  --color-profile-orange-soft: #ffe8cc;
+  --color-profile-yellow: #e67700;
+  --color-profile-yellow-soft: #fff3bf;
+  --color-profile-lime: #5c940d;
+  --color-profile-lime-soft: #e9fac8;
+  --color-profile-green: #2f9e44;
+  --color-profile-green-soft: #d3f9d8;
+  --color-profile-teal: #099268;
+  --color-profile-teal-soft: #c3fae8;
+  --color-profile-cyan: #0c8599;
+  --color-profile-cyan-soft: #c5f6fa;
+  --color-profile-blue: #1c7ed6;
+  --color-profile-blue-soft: #d0ebff;
+  --color-profile-indigo: #4263eb;
+  --color-profile-indigo-soft: #dbe4ff;
+  --color-profile-violet: #7048e8;
+  --color-profile-violet-soft: #e5dbff;
+  --color-profile-grape: #ae3ec9;
+  --color-profile-grape-soft: #f3d9fa;
+  --color-profile-pink: #d6336c;
+  --color-profile-pink-soft: #ffdeeb;
   --color-brand-kakao: #fee500;
   --color-brand-kakao-label: var(--color-black-alpha-85);
   --color-brand-naver: #03c75a;
@@ -221,6 +245,12 @@
   --size-switch-thumb: 20px;
   --size-touch: 44px;
   --size-bottom-nav: 60px;
+  --size-avatar-xs: 22px;
+  --size-avatar-sm: 28px;
+  --size-avatar-md: 32px;
+  --size-avatar-lg: 44px;
+  --size-avatar-xl: 96px;
+  --size-crop: 280px;
 }
 /* ─── 생성 끝 ─── */
 
@@ -253,6 +283,7 @@
   --shadow-toggle-knob: 0 1px 3px rgba(0, 0, 0, 0.2);
   --shadow-swatch: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
   --shadow-swatch-selected: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-blue-500);
+  --shadow-crop-mask: 0 0 0 999px var(--color-overlay-60);
   --shadow-template-thumb: 0 1px 3px rgba(0, 12, 30, 0.14), 0 0 0 1px rgba(0, 12, 30, 0.06);
   --shadow-page-preview: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 14px rgba(2, 32, 71, 0.06);
   --shadow-canvas: 0 1px 3px rgba(0, 0, 0, 0.06), 0 10px 30px rgba(2, 32, 71, 0.1);

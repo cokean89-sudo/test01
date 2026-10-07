@@ -14,7 +14,8 @@ const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
 
 export type Param = SQLInputValue | undefined | boolean;
 
-const MIGRATIONS: string[] = [
+/** 번호순 스키마 변경 (PRAGMA user_version) — 테스트가 옛 버전 DB 를 만들 때도 쓴다 */
+export const MIGRATIONS: string[] = [
   // 1: 초기 스키마
   `
   CREATE TABLE users (
@@ -259,6 +260,19 @@ const MIGRATIONS: string[] = [
   // v6: 태그 없이 저장돼 있던 레퍼런스에 '미분류' 태그 (이후에는 저장할 때 자동으로 붙고 빠진다)
   `
   UPDATE refs SET tags_json = '["미분류"]' WHERE tags_json IS NULL OR tags_json IN ('', '[]');
+  `,
+  // v7: 프로필 — 개인(사진 · 기본 이모지 · 이모지 배경색 · 사용자 고유 색), 팀(사진 · 팀 색).
+  //     사진 파일은 저장소의 avatars/<id>.webp 에 두고 files 표에는 넣지 않는다 → 저장 용량 한도 계산에서 빠진다.
+  //     비어 있는 값은 서버가 시작할 때 무작위로 채운다 (Repo.fillProfiles)
+  `
+  ALTER TABLE users ADD COLUMN avatar_id TEXT;
+  ALTER TABLE users ADD COLUMN avatar_emoji TEXT;
+  ALTER TABLE users ADD COLUMN avatar_bg TEXT;
+  ALTER TABLE users ADD COLUMN color TEXT;
+  ALTER TABLE teams ADD COLUMN avatar_id TEXT;
+  ALTER TABLE teams ADD COLUMN color TEXT;
+  CREATE UNIQUE INDEX users_avatar ON users(avatar_id) WHERE avatar_id IS NOT NULL;
+  CREATE UNIQUE INDEX teams_avatar ON teams(avatar_id) WHERE avatar_id IS NOT NULL;
   `,
 ];
 

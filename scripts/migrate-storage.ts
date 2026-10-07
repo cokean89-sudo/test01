@@ -23,7 +23,8 @@ if (target.kind === "disk") {
 }
 
 const repo = new Repo(openDatabase());
-const keys = repo.allFileKeys();
+// 올린 이미지 + 프로필 사진(avatars/…)
+const keys = [...repo.allFileKeys(), ...repo.allAvatarKeys()];
 console.log(`${source.where} → ${target.where} · 파일 ${keys.length}개${dry ? " (확인만)" : ""}`);
 if (dry) process.exit(0);
 

@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ROLE_LABEL } from "../../../shared/types";
-import { ApiError, authApi, teamApi } from "../../api";
+import { ApiError, authApi, profileApi, teamApi } from "../../api";
+import { ColorPalette, EmojiPicker, UserAvatar } from "../../components/Avatar";
 import { Icon } from "../../components/icons";
-import { Button, Field, Spinner } from "../../components/ui";
+import { AvatarUploadButton } from "../../components/ImageCropDialog";
+import { Button, Field, FieldGroup, Spinner } from "../../components/ui";
 import { UsagePanel } from "../../components/UsagePanel";
 import { APP_VERSION, formatUpdateDate } from "../../lib/changelog";
 import { RELEASE_NOTES } from "../../lib/releaseNotes";
@@ -599,8 +601,9 @@ export function AccountView() {
     <div className="account">
       <h2>내 계정</h2>
       {linked && <div className="notice">{linked === "kakao" ? "카카오" : "네이버"} 계정을 연결했어요.</div>}
+      <ProfilePanel />
       <section className="panel">
-        <h4>프로필</h4>
+        <h4>기본 정보</h4>
         <Field label="이름">
           <div className="row">
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} />
@@ -710,6 +713,79 @@ export function AccountView() {
       </section>
       <AppInfo />
     </div>
+  );
+}
+
+/** 프로필 — 사진(원형 크롭) · 기본 이모지 · 배경색 · 내 색. 고르면 바로 저장된다 */
+function ProfilePanel() {
+  const { user, apply } = useSession();
+  const [busy, setBusy] = useState(false);
+  if (!user) return null;
+  const p = user.profile;
+  const save = async (patch: Parameters<typeof profileApi.update>[0]) => {
+    setBusy(true);
+    try {
+      apply(await profileApi.update(patch));
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel profile-panel">
+      <h4>프로필</h4>
+      <div className="profile-head">
+        <UserAvatar profile={p} name={user.name} size="xl" />
+        <div className="profile-head-actions">
+          <div className="row wrap">
+            <AvatarUploadButton
+              label={p.image ? "사진 바꾸기" : "사진 올리기"}
+              title="프로필 사진"
+              onSave={async (image) => {
+                apply(await profileApi.uploadAvatar(image));
+                toast.success("프로필 사진을 바꿨어요");
+              }}
+            />
+            {p.image && (
+              <Button
+                variant="ghost"
+                icon="trash"
+                disabled={busy}
+                onClick={async () => {
+                  if (!confirm("프로필 사진을 지울까요? 아래에서 고른 이모지로 돌아가요.")) return;
+                  try {
+                    apply(await profileApi.removeAvatar());
+                    toast.success("프로필 사진을 지웠어요");
+                  } catch (err) {
+                    toast.error((err as Error).message);
+                  }
+                }}
+              >
+                사진 지우기
+              </Button>
+            )}
+          </div>
+          <p className="muted small">{p.image ? "사진을 지우면 아래에서 고른 이모지가 보여요." : "사진이 없으면 아래에서 고른 이모지가 보여요."}</p>
+        </div>
+      </div>
+      <FieldGroup label="기본 이모지">
+        <EmojiPicker value={p.emoji} bg={p.bg} disabled={busy} onChange={(emoji) => void save({ emoji })} />
+      </FieldGroup>
+      <FieldGroup label="이모지 배경색">
+        <ColorPalette label="이모지 배경색" tone="soft" value={p.bg} disabled={busy} onChange={(bg) => void save({ bg })} />
+      </FieldGroup>
+      <FieldGroup label="내 색" hint="함께 작업할 때 나를 알아보는 색이에요. 같은 문서를 보는 팀원 목록에 이 색 테두리로 보여요.">
+        <ColorPalette label="내 색" value={p.color} disabled={busy} onChange={(color) => void save({ color })} />
+      </FieldGroup>
+      <p className="muted small credit">
+        이모지 그림: <a href="https://github.com/microsoft/fluentui-emoji" target="_blank" rel="noreferrer">Microsoft Fluent Emoji</a> (
+        <a href="https://github.com/microsoft/fluentui-emoji/blob/main/LICENSE" target="_blank" rel="noreferrer">
+          MIT 라이선스
+        </a>
+        )
+      </p>
+    </section>
   );
 }
 

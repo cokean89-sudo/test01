@@ -1,6 +1,7 @@
 // 웹 서버 통합 테스트 — 메모리 DB 로 실제 HTTP 요청을 보낸다.
 
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -74,6 +75,20 @@ async function signup(name: string, email = `user${++seq}-${Date.now()}@example.
   const v = await c.post("/api/auth/verify", { token });
   expect(v.status).toBe(200);
   return { c, email, user: v.json.user, personalTeam: v.json.teams[0] };
+}
+
+/** 옛 버전 DB 를 만들고 setup 으로 데이터를 넣은 뒤, 지금 버전으로 다시 연다 (마이그레이션 확인용) */
+async function dbAtVersion(version: number, setup: (raw: import("node:sqlite").DatabaseSync) => void) {
+  const { Database, MIGRATIONS } = await import("../server/db");
+  // server/db.ts 처럼 require 로 불러 실험 기능 경고를 다시 찍지 않는다
+  const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "refboard-mig-")), "old.sqlite");
+  const raw = new DatabaseSync(file);
+  for (let v = 0; v < version; v++) raw.exec(MIGRATIONS[v]);
+  raw.exec(`PRAGMA user_version = ${version}`);
+  setup(raw);
+  raw.close();
+  return new Database(file);
 }
 
 describe("인증", () => {
@@ -360,16 +375,12 @@ describe("라이브러리 · 문서", () => {
   });
 
   it("예전에 태그 없이 저장된 레퍼런스는 업데이트 때 '미분류'가 붙는다 (DB v6)", async () => {
-    const { Database } = await import("../server/db");
-    const db = new Database(":memory:");
-    db.raw.exec("PRAGMA user_version = 5");
-    db.raw.exec("INSERT INTO teams (id, name, created_by, created_at) VALUES ('t1', 'T', 'u', 0)");
-    const cols = "id, team_id, image_url, url_key, tags_json, kind, source, created_by, created_at, updated_by, updated_at";
-    db.raw.exec(`INSERT INTO refs (${cols}) VALUES ('r1', 't1', 'https://e.com/1.jpg', 'k1', '[]', 'image', 'web', 'u', 0, 'u', 0)`);
-    db.raw.exec(`INSERT INTO refs (${cols}) VALUES ('r2', 't1', 'https://e.com/2.jpg', 'k2', '["패키지"]', 'image', 'web', 'u', 0, 'u', 0)`);
-    db.raw.exec("PRAGMA user_version = 5");
-    const reopened = db as unknown as { migrate: () => void };
-    reopened.migrate();
+    const db = await dbAtVersion(5, (raw) => {
+      raw.exec("INSERT INTO teams (id, name, created_by, created_at) VALUES ('t1', 'T', 'u', 0)");
+      const cols = "id, team_id, image_url, url_key, tags_json, kind, source, created_by, created_at, updated_by, updated_at";
+      raw.exec(`INSERT INTO refs (${cols}) VALUES ('r1', 't1', 'https://e.com/1.jpg', 'k1', '[]', 'image', 'web', 'u', 0, 'u', 0)`);
+      raw.exec(`INSERT INTO refs (${cols}) VALUES ('r2', 't1', 'https://e.com/2.jpg', 'k2', '["패키지"]', 'image', 'web', 'u', 0, 'u', 0)`);
+    });
     expect(db.all<{ id: string; tags_json: string }>("SELECT id, tags_json FROM refs ORDER BY id")).toEqual([
       { id: "r1", tags_json: '["미분류"]' },
       { id: "r2", tags_json: '["패키지"]' },

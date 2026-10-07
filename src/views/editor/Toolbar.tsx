@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { usageApi } from "../../api";
+import { UserAvatar } from "../../components/Avatar";
 import { Icon, type IconName } from "../../components/icons";
 import { Button, Menu, MenuItem, Spinner } from "../../components/ui";
 import { navigate } from "../../lib/router";
@@ -226,7 +227,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
 }
 
 /** 같은 문서를 보고 있는 팀원 */
-function Presence() {
+export function Presence() {
   const presence = useEditor((s) => s.presence);
   const pages = useEditor((s) => s.doc?.pages);
   const me = useSession((s) => s.user?.id);
@@ -238,8 +239,15 @@ function Presence() {
       {others.slice(0, 5).map((p) => {
         const idx = pages?.findIndex((x) => x.id === p.pageId) ?? -1;
         return (
-          <button key={p.userId} className="avatar sm" title={`${p.name}${idx >= 0 ? ` · ${idx + 1}페이지` : ""}`} onClick={() => p.pageId && setPage(p.pageId)}>
-            {p.name.slice(0, 1)}
+          <button
+            key={p.userId}
+            className="presence-user"
+            title={`${p.name}${idx >= 0 ? ` · ${idx + 1}페이지` : ""}`}
+            aria-label={`${p.name}${idx >= 0 ? ` — ${idx + 1}페이지 보는 중` : ""}`}
+            onClick={() => p.pageId && setPage(p.pageId)}
+          >
+            {/* 테두리 = 사용자 고유 색 (공동 작업의 선택 테두리 · 깃발과 같은 색) */}
+            <UserAvatar profile={p.profile} name={p.name} size="sm" ring />
             {idx >= 0 && <span className="avatar-page">{idx + 1}</span>}
           </button>
         );

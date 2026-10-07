@@ -101,7 +101,16 @@ npm run app                # 빌드 후 실행 + 브라우저 열기 → http://
   - 비밀번호 보기 토글, Caps Lock 켜짐 경고, Enter 로 로그인, 이해하기 쉬운 오류 문구. 로그인이 필요한 주소로 들어왔다면 로그인 후 그 화면으로 돌아갑니다.
   - 카카오·네이버 버튼은 각 사 로그인 버튼 가이드(컨테이너 색·심볼·문구)에 맞췄고, 메일 로그인 버튼과 높이·모서리·간격을 통일했습니다. 공식 심볼 파일을 `public/brand/`에 넣으면 그 파일을 씁니다([`public/brand/README.md`](public/brand/README.md)).
 - **카카오 / 네이버 로그인**: 가능합니다. 각 개발자 센터에 앱을 등록하고 키를 `.env`에 넣으면 로그인 화면에 버튼이 나타납니다(아래 [소셜 로그인 설정](#소셜-로그인-설정-카카오--네이버)). 이미 메일로 가입한 사람은 **내 계정 → 소셜 로그인 연결**에서 카카오·네이버를 연결할 수 있습니다.
-- **내 계정**: 이름·비밀번호 변경, 카카오·네이버 연결, **다른 기기 모두 로그아웃**(공용 PC에서 로그아웃을 잊었을 때).
+- **내 계정**: 프로필, 이름·비밀번호 변경, 카카오·네이버 연결, **다른 기기 모두 로그아웃**(공용 PC에서 로그아웃을 잊었을 때).
+
+### 프로필 이미지 · 내 색
+
+- **개인 프로필**: `내 계정 → 프로필`. `사진 올리기`로 사진을 고르면 **원형 크롭 도구**가 열립니다(끌어서 위치, 슬라이더 · 휠 · 두 손가락으로 1~4배 확대, 화살표 키로도 이동). 저장하면 512×512 WebP로 줄여 저장하고 위치 정보 등 메타데이터는 남기지 않습니다. 사진을 지우면 기본 이모지로 돌아갑니다.
+- **기본 이모지**: 사진이 없으면 연한 색 원 위에 이모지를 보여 줍니다. 동물 · 표정 · 사물 · 자연과 음식 4가지에서 12개씩, 모두 48개 중에 고르고 배경색은 12색 중에 고릅니다. 가입하면 이모지 · 배경색을 무작위로 정해 줍니다. 그림은 **Microsoft Fluent Emoji 3D(MIT 라이선스)** 만 씁니다 — [`public/emoji/`](public/emoji/README.md)(라이선스 전문 `LICENSE`), `npm run emoji` 로 다시 받습니다.
+- **내 색(사용자 고유 색)**: 가입할 때 12색 중 하나를 정해 주고 `내 계정`에서 바꿉니다. 지금은 편집기 접속자 표시의 테두리에 쓰고, 이후 공동 작업 기능(선택 테두리 · 깃발 · 히스토리)이 같은 색을 씁니다 — 화면에서는 `profileColorVar(user.profile.color)`(`shared/profile.ts`), 색 값은 `tokens.json` 의 `color.profile.*`.
+- **팀 프로필**: `팀 → 팀 설정`. 관리자 이상만 사진을 올리고 바꾸고 지우며, 같은 원형 크롭 도구를 씁니다. 사진이 없으면 **팀 색 + 팀 이름 첫 글자**를 보여 주고, 팀 색은 팀을 만들 때 자동으로 정해지며 팔레트에서 바꿉니다(관리자).
+- **보이는 곳**: 상단 계정 버튼 · 계정 메뉴, 팀 전환 버튼 · 팀 목록, 팀 화면 머리, 팀원 목록, 활동 기록, 편집기(휴대폰 문서 화면 포함) 접속자 표시. 공용 컴포넌트 `src/components/Avatar.tsx`(`UserAvatar` · `TeamAvatar`)를 쓰며, 이후 코멘트도 같은 컴포넌트를 씁니다.
+- **저장과 권한**: 사진은 올린 이미지와 같은 저장소(디스크 · R2 · S3)의 `avatars/<id>.webp` 에 두지만 **팀 · 개인 저장 공간 한도에는 들어가지 않습니다**. 바꾸거나 지우면 이전 파일은 바로 지우고, 팀을 지우면 팀 사진도 지웁니다. 사진(`/api/avatars/<id>.webp`)은 로그인한 사람 중 본인 · 같은 팀 사람(팀 사진은 그 팀 멤버)만 볼 수 있습니다. 한 사람당 1시간에 30번, 5MB까지 올릴 수 있습니다.
 
 ### 팀 프로젝트
 
@@ -399,6 +408,7 @@ shared/
   feedback.ts            의견 보내기 입력 기준·브라우저 판별·토큰 가리기·이미지 형식 검사
   urlKey.ts              중복 이미지 판별용 주소 정규화
   files.ts               서버에 저장한 이미지 주소(/api/files/…) · 허용하는 이미지 주소
+  profile.ts             프로필 — 12색 팔레트(내 색 · 팀 색 · 이모지 배경), 기본 이모지 48개, 무작위 배정, 프로필 사진 주소
 server/
   index.ts               서버 시작 (prod: 빌드 파일 제공, dev: Vite 미들웨어)
   app.ts                 Express 앱 구성 (보안 헤더, CSRF, 요청 제한, 라우터)
@@ -408,8 +418,8 @@ server/
   context.ts             세션 확인, 팀 역할 검사
   events.ts              실시간 동기화(SSE)와 접속자 표시
   mail.ts                인증·재설정·초대·의견 메일
-  routes/                auth(메일·카카오·네이버) · teams(멤버·초대·설정·활동) · library(태그 병합·삭제) · uploads(이미지 올리기·사본·저장 공간·파일 보기) · documents(버전) · tools(스크랩·AI·프록시) · feedback(의견·관리자) · usage(내 사용량 · 내보내기 기록 · 관리자 대시보드 · 한도 조정)
-  images.ts              올린 이미지 최적화 (sharp — EXIF 방향, 긴 변 2000px WebP, 썸네일, 메타데이터 제거)
+  routes/                auth(메일·카카오·네이버) · teams(멤버·초대·설정·활동) · library(태그 병합·삭제) · uploads(이미지 올리기·사본·저장 공간·파일 보기) · avatars(개인 프로필 · 프로필 사진 보기, 팀 사진은 teams) · documents(버전) · tools(스크랩·AI·프록시) · feedback(의견·관리자) · usage(내 사용량 · 내보내기 기록 · 관리자 대시보드 · 한도 조정)
+  images.ts              올린 이미지 최적화 (sharp — EXIF 방향, 긴 변 2000px WebP, 썸네일, 메타데이터 제거) · 프로필 사진 512px WebP
   storage.ts             파일 저장소 — 디스크(DATA_DIR/uploads) 또는 S3 호환(Cloudflare R2 · AWS S3), 환경변수로 교체
   scrape.ts / net.ts     핀터레스트·웹페이지 이미지 추출 / 안전한 fetch (SSRF 차단)
   ai.ts                  Claude 글쓰기(관점·문체·항목별)·태그 제안 (구조화 출력, 작업별 모델) + 규칙 기반 초안
@@ -428,6 +438,9 @@ src/
   lib/releaseNotes.ts    고객용 소식(RELEASE_NOTES.md) — 앱의 업데이트 소식은 이것만 읽음
   lib/share.ts           휴대폰 공유로 받은 사진 · 링크 꺼내기, 서비스 워커 등록
   lib/useMedia.ts        휴대폰 화면 폭 감지 (모바일 문서 화면)
+  lib/crop.ts            원형 크롭 계산 (이동 · 확대가 원 밖으로 비지 않게, 저장할 원본 영역)
+  components/Avatar      프로필 이미지 공용 컴포넌트 (UserAvatar · TeamAvatar · 팔레트 · 이모지 고르기)
+  components/ImageCropDialog  공통 원형 크롭 도구 + 사진 고르기 버튼 (팀 · 개인 프로필)
   tokens.css             디자인 토큰 (CSS 변수) — 색 · 글꼴 · 크기 · 간격 · 모서리 · 그림자. 위쪽은 tokens.json 에서 생성
   styles.css             화면 스타일 (값 대신 토큰만)
   store/                 세션·라이브러리·편집기(자동 저장·병합) 상태
@@ -441,6 +454,8 @@ tokens.json              디자인 토큰 원본 (Figma Variables 로 가져오�
 RELEASE_NOTES.md         고객용 업데이트 소식 (앱에 보임)
 public/manifest.webmanifest, public/sw.js, public/icons/   홈 화면 앱(PWA) · 공유 메뉴로 받기 · 아이콘
 scripts/icons.ts         상단 로고 모양으로 앱 아이콘 만들기 (npm run icons)
+scripts/emoji.ts         프로필 기본 이모지 받기 — Microsoft Fluent Emoji 3D(MIT) → public/emoji/*.webp (npm run emoji)
+public/emoji/            프로필 기본 이모지 48개 + MIT 라이선스 전문(LICENSE) · 출처(README.md)
 CHANGELOG.md, CLAUDE.md  개발 기록 · 작업 규칙
 ai-prices.json           AI 모델별 단가 (예상 비용 계산)
 public/guide/            사용 가이드 샘플 사례 일러스트 (SVG — 브랜드·경쟁사·상품·공간)

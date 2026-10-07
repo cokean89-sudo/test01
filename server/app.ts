@@ -8,6 +8,7 @@ import type { Database } from "./db";
 import { FetchError } from "./net";
 import { Repo } from "./repo";
 import { authRouter } from "./routes/auth";
+import { avatarsRouter, profileRouter } from "./routes/avatars";
 import { documentLookupRouter, documentsRouter } from "./routes/documents";
 import { adminRouter, feedbackRouter } from "./routes/feedback";
 import { libraryRouter } from "./routes/library";
@@ -22,6 +23,8 @@ export function createApp(db: Database, opts: { store?: FileStore } = {}) {
   const repo = new Repo(db);
   // 올린 이미지 저장소 — 환경변수(STORAGE_DRIVER 등)로 디스크 · R2 · S3 중에서 고른다
   const store = opts.store ?? createStore(process.env, DATA_DIR);
+  // 프로필 기능 전에 만든 계정 · 팀에 기본 이모지 · 색을 채운다 (이미 있으면 그대로)
+  repo.fillProfiles();
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", TRUST_PROXY);
@@ -54,6 +57,8 @@ export function createApp(db: Database, opts: { store?: FileStore } = {}) {
   api.use("/admin", authRequired, usageAdminRouter(repo));
   api.use("/usage", authRequired, usageRouter(repo));
   api.use("/files", authRequired, filesRouter(repo, store));
+  api.use("/profile", authRequired, profileRouter(repo, store));
+  api.use("/avatars", authRequired, avatarsRouter(repo, store));
   api.use("/", toolsRouter(repo, store));
   api.use((_req, _res, next) => next(new HttpError(404, "알 수 없는 API")));
   api.use(errorHandler);

@@ -13,6 +13,7 @@ import type {
   InviteInfo,
   LimitOverrides,
   MyUsage,
+  ProfileColor,
   Reference,
   Role,
   ScrapeResult,
@@ -45,15 +46,17 @@ export function setUnauthorizedHandler(fn: () => void) {
 }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  // 이미지(Blob)는 그대로, 나머지는 JSON 으로 보낸다
+  const blob = body instanceof Blob ? body : null;
   const res = await fetch(url, {
     method,
     credentials: "same-origin",
     headers: {
       // CSRF 방지용 사용자 정의 헤더 (서버가 모든 변경 요청에 요구)
       "x-refboard": "1",
-      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+      ...(blob ? { "content-type": blob.type || "application/octet-stream" } : body !== undefined ? { "content-type": "application/json" } : {}),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: blob ?? (body !== undefined ? JSON.stringify(body) : undefined),
   });
   const text = await res.text();
   let data: unknown = null;
@@ -112,11 +115,22 @@ export const authApi = {
   profile: (name: string) => request<SessionInfo>("PATCH", "/api/auth/profile", { name }),
 };
 
+/** 개인 프로필 — 기본 이모지 · 배경색 · 내 색, 프로필 사진(원형으로 잘라 512px 로 보낸다) */
+export const profileApi = {
+  update: (patch: { name?: string; emoji?: string; bg?: ProfileColor; color?: ProfileColor }) => request<SessionInfo>("PATCH", "/api/profile", patch),
+  uploadAvatar: (image: Blob) => request<SessionInfo>("POST", "/api/profile/avatar", image),
+  removeAvatar: () => request<SessionInfo>("DELETE", "/api/profile/avatar", {}),
+};
+
 export const teamApi = {
   list: () => request<TeamSummary[]>("GET", "/api/teams"),
   create: (name: string) => request<TeamDetail>("POST", "/api/teams", { name }),
   detail: (id: string) => request<TeamDetail>("GET", T(id)),
   rename: (id: string, name: string) => request<TeamDetail>("PATCH", T(id), { name }),
+  /** 팀 기본 이미지 색 · 팀 프로필 사진 (팀 관리자만) */
+  setColor: (id: string, color: ProfileColor) => request<TeamDetail>("PATCH", T(id), { color }),
+  uploadAvatar: (id: string, image: Blob) => request<TeamDetail>("POST", `${T(id)}/avatar`, image),
+  removeAvatar: (id: string) => request<TeamDetail>("DELETE", `${T(id)}/avatar`, {}),
   remove: (id: string, confirm: string) => request<{ ok: true }>("DELETE", T(id), { confirm }),
   saveDefaults: (id: string, defaults: DocSettings) => request<TeamDetail>("PUT", `${T(id)}/defaults`, { defaults }),
   setRole: (id: string, userId: string, role: Role) => request<TeamDetail>("PATCH", `${T(id)}/members/${userId}`, { role }),

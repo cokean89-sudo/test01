@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { ROLE_LABEL, ROLE_RANK } from "../shared/types";
+import { TeamAvatar, UserAvatar } from "./components/Avatar";
 import { Icon } from "./components/icons";
 import { UpdatesDialog, VersionLink } from "./components/Updates";
 import { Button, Menu, MenuItem, Spinner, Toasts } from "./components/ui";
@@ -247,7 +248,7 @@ function TopBar({ section }: { section: string }) {
       <Menu
         trigger={(open) => (
           <button className="team-switch" onClick={open} title="팀 전환">
-            <span className="team-dot">{team?.name.slice(0, 1)}</span>
+            {team ? <TeamAvatar profile={team.profile} name={team.name} size="xs" /> : <span className="team-dot" />}
             <span className="team-name ellipsis">{team?.name ?? "팀 없음"}</span>
             <Icon name="down" size={13} />
           </button>
@@ -258,7 +259,7 @@ function TopBar({ section }: { section: string }) {
             {teams.map((t) => (
               <MenuItem
                 key={t.id}
-                icon={t.id === team?.id ? "check" : undefined}
+                lead={<TeamAvatar profile={t.profile} name={t.name} size="xs" />}
                 hint={`${ROLE_LABEL[t.role]} · ${t.memberCount}명`}
                 onClick={() => {
                   close();
@@ -266,7 +267,10 @@ function TopBar({ section }: { section: string }) {
                   if (section === "edit") navigate("docs");
                 }}
               >
-                {t.name}
+                <span className={"team-menu-name" + (t.id === team?.id ? " on" : "")}>
+                  {t.name}
+                  {t.id === team?.id && <Icon name="check" size={14} aria-label="지금 팀" />}
+                </span>
               </MenuItem>
             ))}
             <div className="menu-sep" />
@@ -310,16 +314,19 @@ function TopBar({ section }: { section: string }) {
         <Menu
           align="right"
           trigger={(open) => (
-            <button className="avatar" onClick={open} title={user?.email ?? user?.name}>
-              {user?.name.slice(0, 1)}
+            <button className="avatar-btn" onClick={open} title={user?.email ?? user?.name} aria-label="내 계정 메뉴">
+              <UserAvatar profile={user?.profile} name={user?.name} size="md" />
             </button>
           )}
         >
           {(close) => (
             <>
               <div className="menu-head">
-                <strong>{user?.name}</strong>
-                <span className="muted small">{user?.email ?? "소셜 로그인"}</span>
+                <UserAvatar profile={user?.profile} name={user?.name} size="lg" />
+                <div className="menu-head-text">
+                  <strong>{user?.name}</strong>
+                  <span className="muted small">{user?.email ?? "소셜 로그인"}</span>
+                </div>
               </div>
               <MenuItem icon="settings" onClick={() => (close(), navigate("account"))}>
                 내 계정

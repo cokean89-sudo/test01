@@ -20,6 +20,7 @@ import type {
   VersionInfo,
 } from "../shared/types";
 import { fileThumbUrl } from "../shared/files";
+import { randomColor, randomUserLook, teamProfileOf, userProfileOf, type ProfileColor } from "../shared/profile";
 import { withUnclassified } from "../shared/tags";
 import { urlKey } from "../shared/urlKey";
 import { defaultSettings } from "../src/lib/defaults";
@@ -37,7 +38,14 @@ export interface UserRow {
   locked_until: number | null;
   created_at: number;
   last_login_at: number | null;
+  avatar_id: string | null;
+  avatar_emoji: string | null;
+  avatar_bg: string | null;
+  color: string | null;
 }
+
+/** 프로필 사진 저장소 키 — 팀 파일(<팀ID>/…)과 겹치지 않는 avatars/ 아래 */
+export const avatarKey = (avatarId: string) => `avatars/${avatarId}.webp`;
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -67,14 +75,19 @@ export class Repo {
     return this.db.tx(() => {
       const id = newId("u");
       const t = now();
+      // 가입하면 기본 이모지 · 배경색 · 사용자 고유 색을 무작위로 정한다 (내 계정에서 바꿀 수 있음)
+      const look = randomUserLook();
       this.db.run(
-        "INSERT INTO users (id, email, name, password_hash, email_verified_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO users (id, email, name, password_hash, email_verified_at, created_at, avatar_emoji, avatar_bg, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         id,
         input.email?.trim().toLowerCase() ?? null,
         input.name.trim(),
         input.passwordHash ?? null,
         input.verified ? t : null,
         t,
+        look.emoji,
+        look.bg,
+        look.color,
       );
       const teamId = this.createTeam(`${input.name.trim()}의 작업공간`, id, true);
       this.importLegacyOnce(teamId, id);
@@ -84,7 +97,96 @@ export class Repo {
 
   userInfo(u: UserRow): UserInfo {
     const providers = this.db.all<{ provider: string }>("SELECT provider FROM identities WHERE user_id = ?", u.id).map((r) => r.provider);
-    return { id: u.id, email: u.email, name: u.name, emailVerified: !!u.email_verified_at, hasPassword: !!u.password_hash, providers, isAdmin: isAdminUser(u), createdAt: u.created_at };
+    return {
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      emailVerified: !!u.email_verified_at,
+      hasPassword: !!u.password_hash,
+      providers,
+      isAdmin: isAdminUser(u),
+      createdAt: u.created_at,
+      profile: userProfileOf(u.id, u),
+    };
+  }
+
+  // ─── 프로필 ───────────────────────────────────────────────
+
+  /** 기본 이모지 · 이모지 배경색 · 사용자 고유 색 (값 검사는 라우트에서) */
+  setUserLook(userId: string, look: { emoji?: string; bg?: ProfileColor; color?: ProfileColor }) {
+    this.db.run(
+      "UPDATE users SET avatar_emoji = COALESCE(?, avatar_emoji), avatar_bg = COALESCE(?, avatar_bg), color = COALESCE(?, color) WHERE id = ?",
+      look.emoji ?? null,
+      look.bg ?? null,
+      look.color ?? null,
+      userId,
+    );
+  }
+
+  /** 프로필 사진 바꾸기 · 지우기(null) — 이전 사진 id 를 돌려준다 (저장소에서 지우라고) */
+  setUserAvatar(userId: string, avatarId: string | null): string | null {
+    return this.db.tx(() => {
+      const old = this.getUser(userId)?.avatar_id ?? null;
+      this.db.run("UPDATE users SET avatar_id = ? WHERE id = ?", avatarId, userId);
+      return old;
+    });
+  }
+
+  setTeamColor(teamId: string, color: ProfileColor) {
+    this.db.run("UPDATE teams SET color = ? WHERE id = ?", color, teamId);
+  }
+
+  setTeamAvatar(teamId: string, avatarId: string | null): string | null {
+    return this.db.tx(() => {
+      const old = this.getTeam(teamId)?.avatar_id ?? null;
+      this.db.run("UPDATE teams SET avatar_id = ? WHERE id = ?", avatarId, teamId);
+      return old;
+    });
+  }
+
+  /**
+   * 이 사진을 볼 수 있는지 — 개인 사진: 본인 또는 같은 팀 사람, 팀 사진: 그 팀 멤버.
+   * 없는 사진과 볼 수 없는 사진을 구별하지 않는다 (있는지조차 알려 주지 않게)
+   */
+  canSeeAvatar(viewerId: string, avatarId: string): boolean {
+    const owner = this.db.get<{ id: string }>("SELECT id FROM users WHERE avatar_id = ?", avatarId);
+    if (owner) {
+      if (owner.id === viewerId) return true;
+      return !!this.db.get("SELECT 1 FROM memberships a JOIN memberships b ON a.team_id = b.team_id WHERE a.user_id = ? AND b.user_id = ? LIMIT 1", viewerId, owner.id);
+    }
+    const team = this.db.get<{ id: string }>("SELECT id FROM teams WHERE avatar_id = ?", avatarId);
+    return !!team && !!this.getRole(team.id, viewerId);
+  }
+
+  /** 내가 속한 팀 — 프로필을 바꾸면 팀원 화면에 알린다 */
+  userTeamIds(userId: string): string[] {
+    return this.db.all<{ team_id: string }>("SELECT team_id FROM memberships WHERE user_id = ?", userId).map((r) => r.team_id);
+  }
+
+  allAvatarKeys(): string[] {
+    return this.db
+      .all<{ avatar_id: string }>("SELECT avatar_id FROM users WHERE avatar_id IS NOT NULL UNION ALL SELECT avatar_id FROM teams WHERE avatar_id IS NOT NULL")
+      .map((r) => avatarKey(r.avatar_id));
+  }
+
+  /** 이 기능 전에 만든 계정 · 팀(또는 목록에서 빠진 값)에 무작위 기본값 — 서버 시작 시 한 번 */
+  fillProfiles(rand: () => number = Math.random): { users: number; teams: number } {
+    return this.db.tx(() => {
+      const users = this.db.all<{ id: string }>("SELECT id FROM users WHERE avatar_emoji IS NULL OR avatar_bg IS NULL OR color IS NULL");
+      for (const u of users) {
+        const look = randomUserLook(rand);
+        this.db.run(
+          "UPDATE users SET avatar_emoji = COALESCE(avatar_emoji, ?), avatar_bg = COALESCE(avatar_bg, ?), color = COALESCE(color, ?) WHERE id = ?",
+          look.emoji,
+          look.bg,
+          look.color,
+          u.id,
+        );
+      }
+      const teams = this.db.all<{ id: string }>("SELECT id FROM teams WHERE color IS NULL");
+      for (const t of teams) this.db.run("UPDATE teams SET color = ? WHERE id = ?", randomColor(rand), t.id);
+      return { users: users.length, teams: teams.length };
+    });
   }
 
   markVerified(userId: string) {
@@ -223,13 +325,15 @@ export class Repo {
     const id = newId("t");
     const t = now();
     this.db.run(
-      "INSERT INTO teams (id, name, personal, defaults_json, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO teams (id, name, personal, defaults_json, created_by, created_at, color) VALUES (?, ?, ?, ?, ?, ?, ?)",
       id,
       name.trim(),
       personal,
       JSON.stringify(defaults ?? defaultSettings()),
       ownerId,
       t,
+      // 팀마다 자동으로 정해지는 색 — 팀 기본 이미지(색 + 이름 첫 글자), 팀 설정에서 바꿀 수 있음
+      randomColor(),
     );
     this.db.run("INSERT INTO memberships (team_id, user_id, role, joined_at) VALUES (?, ?, 'owner', ?)", id, ownerId, t);
     return id;
@@ -237,12 +341,12 @@ export class Repo {
 
   listTeams(userId: string): TeamSummary[] {
     return this.db
-      .all<{ id: string; name: string; role: Role; personal: number; members: number }>(
-        `SELECT t.id, t.name, m.role, t.personal, (SELECT COUNT(*) FROM memberships x WHERE x.team_id = t.id) AS members
+      .all<{ id: string; name: string; role: Role; personal: number; members: number; color: string | null; avatar_id: string | null }>(
+        `SELECT t.id, t.name, m.role, t.personal, t.color, t.avatar_id, (SELECT COUNT(*) FROM memberships x WHERE x.team_id = t.id) AS members
          FROM memberships m JOIN teams t ON t.id = m.team_id WHERE m.user_id = ? ORDER BY t.personal DESC, t.created_at`,
         userId,
       )
-      .map((r) => ({ id: r.id, name: r.name, role: r.role, personal: !!r.personal, memberCount: Number(r.members) }));
+      .map((r) => ({ id: r.id, name: r.name, role: r.role, personal: !!r.personal, memberCount: Number(r.members), profile: teamProfileOf(r.id, r) }));
   }
 
   getRole(teamId: string, userId: string): Role | undefined {
@@ -250,7 +354,10 @@ export class Repo {
   }
 
   getTeam(teamId: string) {
-    return this.db.get<{ id: string; name: string; personal: number; defaults_json: string; created_at: number }>("SELECT * FROM teams WHERE id = ?", teamId);
+    return this.db.get<{ id: string; name: string; personal: number; defaults_json: string; created_at: number; color: string | null; avatar_id: string | null }>(
+      "SELECT * FROM teams WHERE id = ?",
+      teamId,
+    );
   }
 
   teamDefaults(teamId: string): DocSettings {
@@ -261,12 +368,12 @@ export class Repo {
 
   members(teamId: string): Member[] {
     return this.db
-      .all<{ user_id: string; name: string; email: string | null; role: Role; joined_at: number }>(
-        `SELECT m.user_id, u.name, u.email, m.role, m.joined_at FROM memberships m JOIN users u ON u.id = m.user_id
+      .all<{ user_id: string; name: string; email: string | null; role: Role; joined_at: number; color: string | null; avatar_emoji: string | null; avatar_bg: string | null; avatar_id: string | null }>(
+        `SELECT m.user_id, u.name, u.email, m.role, m.joined_at, u.color, u.avatar_emoji, u.avatar_bg, u.avatar_id FROM memberships m JOIN users u ON u.id = m.user_id
          WHERE m.team_id = ? ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'editor' THEN 2 ELSE 3 END, m.joined_at`,
         teamId,
       )
-      .map((r) => ({ userId: r.user_id, name: r.name, email: r.email, role: r.role, joinedAt: r.joined_at }));
+      .map((r) => ({ userId: r.user_id, name: r.name, email: r.email, role: r.role, joinedAt: r.joined_at, profile: userProfileOf(r.user_id, r) }));
   }
 
   teamDetail(teamId: string, role: Role): TeamDetail {
@@ -278,6 +385,7 @@ export class Repo {
       role,
       personal: !!t.personal,
       memberCount: members.length,
+      profile: teamProfileOf(t.id, t),
       members,
       defaults: this.teamDefaults(teamId),
       createdAt: t.created_at,
@@ -412,8 +520,22 @@ export class Repo {
 
   activity(teamId: string, limit = 100, before?: number): ActivityItem[] {
     return this.db
-      .all<{ id: number; name: string | null; action: string; target_type: string | null; target_id: string | null; summary: string; created_at: number }>(
-        `SELECT a.id, u.name, a.action, a.target_type, a.target_id, a.summary, a.created_at FROM activity a LEFT JOIN users u ON u.id = a.user_id
+      .all<{
+        id: number;
+        user_id: string | null;
+        name: string | null;
+        action: string;
+        target_type: string | null;
+        target_id: string | null;
+        summary: string;
+        created_at: number;
+        color: string | null;
+        avatar_emoji: string | null;
+        avatar_bg: string | null;
+        avatar_id: string | null;
+      }>(
+        `SELECT a.id, a.user_id, u.name, a.action, a.target_type, a.target_id, a.summary, a.created_at, u.color, u.avatar_emoji, u.avatar_bg, u.avatar_id
+         FROM activity a LEFT JOIN users u ON u.id = a.user_id
          WHERE a.team_id = ? AND (? IS NULL OR a.id < ?) ORDER BY a.id DESC LIMIT ?`,
         teamId,
         before ?? null,
@@ -422,7 +544,9 @@ export class Repo {
       )
       .map((r) => ({
         id: Number(r.id),
+        userId: r.name !== null && r.user_id ? r.user_id : undefined,
         userName: r.name ?? "(알 수 없음)",
+        userProfile: r.name !== null && r.user_id ? userProfileOf(r.user_id, r) : undefined,
         action: r.action,
         targetType: r.target_type ?? undefined,
         targetId: r.target_id ?? undefined,

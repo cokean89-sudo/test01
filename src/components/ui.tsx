@@ -72,6 +72,20 @@ export function Field({ label, children, hint, inline }: { label: ReactNode; chi
   );
 }
 
+/** 버튼 묶음(팔레트 · 이모지 · 사진 버튼)용 — <label> 이 아니라서 빈 곳을 눌러도 첫 버튼이 눌리지 않는다 */
+export function FieldGroup({ label, children, hint }: { label: ReactNode; children: ReactNode; hint?: ReactNode }) {
+  const id = useId();
+  return (
+    <div className="field" role="group" aria-labelledby={id}>
+      <span className="field-label" id={id}>
+        {label}
+      </span>
+      {children}
+      {hint && <span className="field-hint">{hint}</span>}
+    </div>
+  );
+}
+
 export function NumberInput({
   value,
   onChange,
@@ -372,10 +386,25 @@ export function Menu({ trigger, children, align = "left" }: { trigger: (open: ()
   );
 }
 
-export function MenuItem({ icon, children, onClick, hint, disabled }: { icon?: IconName; children: ReactNode; onClick: () => void; hint?: string; disabled?: boolean }) {
+export function MenuItem({
+  icon,
+  lead,
+  children,
+  onClick,
+  hint,
+  disabled,
+}: {
+  icon?: IconName;
+  /** 아이콘 대신 앞에 둘 것 (팀 프로필 이미지 등) */
+  lead?: ReactNode;
+  children: ReactNode;
+  onClick: () => void;
+  hint?: string;
+  disabled?: boolean;
+}) {
   return (
     <button type="button" role="menuitem" className="menu-item" onClick={onClick} disabled={disabled}>
-      {icon ? <Icon name={icon} size={15} /> : <span style={{ width: 15 }} />}
+      {lead ?? (icon ? <Icon name={icon} size={15} /> : <span style={{ width: 15 }} />)}
       <span className="menu-label">{children}</span>
       {hint && <span className="menu-hint">{hint}</span>}
     </button>

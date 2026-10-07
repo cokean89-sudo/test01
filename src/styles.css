@@ -3470,27 +3470,87 @@ select.sm {
   font-size: var(--font-size-13-5);
   color: var(--color-grey-800);
 }
-.avatar {
-  width: 32px;
-  height: 32px;
+/* ─── 프로필 이미지 (components/Avatar.tsx) ───────── */
+.avatar-face {
+  width: var(--size-avatar-md);
+  height: var(--size-avatar-md);
   border-radius: var(--radius-circle);
-  border: 0;
-  background: var(--color-blue-500);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  background: var(--color-grey-200);
   color: var(--color-white);
   font-weight: var(--font-weight-bold);
+  line-height: 1;
+  user-select: none;
+  vertical-align: middle;
+}
+.avatar-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+/* 이모지는 원 안에 여백을 두고 */
+.avatar-face.emoji img {
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+}
+/* 밝은 사진도 테두리가 보이게 */
+.avatar-face.photo {
+  box-shadow: var(--shadow-swatch);
+}
+.avatar-face.letter {
+  background: var(--color-grey-700);
+}
+.avatar-xs {
+  width: var(--size-avatar-xs);
+  height: var(--size-avatar-xs);
+  font-size: var(--font-size-11);
+}
+.avatar-sm {
+  width: var(--size-avatar-sm);
+  height: var(--size-avatar-sm);
+  font-size: var(--font-size-12);
+}
+.avatar-md {
+  width: var(--size-avatar-md);
+  height: var(--size-avatar-md);
+  font-size: var(--font-size-14);
+}
+.avatar-lg {
+  width: var(--size-avatar-lg);
+  height: var(--size-avatar-lg);
+  font-size: var(--font-size-18);
+}
+.avatar-xl {
+  width: var(--size-avatar-xl);
+  height: var(--size-avatar-xl);
+  font-size: var(--font-size-36);
+}
+/* 사용자 고유 색 테두리 — 색은 화면에서 넣는다 (style.borderColor) */
+.avatar-face.ring {
+  border: 2px solid var(--color-white);
+}
+.avatar-btn {
+  border: 0;
+  padding: 0;
+  background: none;
+  border-radius: var(--radius-circle);
   cursor: pointer;
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
 }
-.avatar.sm {
-  width: 28px;
-  height: 28px;
-  font-size: var(--font-size-11-5);
-  margin-left: calc(var(--space-6) * -1);
-  border: 2px solid var(--color-white);
+.avatar-btn:hover .avatar-face,
+.avatar-btn:focus-visible .avatar-face {
+  box-shadow: var(--shadow-outline-accent);
 }
 .avatar-page {
   position: absolute;
@@ -3508,27 +3568,208 @@ select.sm {
   align-items: center;
   padding: 0 var(--space-10) 0 var(--space-14);
 }
-.presence .avatar:nth-child(5n + 1) {
-  background: var(--color-red-500);
+.presence-user {
+  position: relative;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  margin-left: calc(var(--space-6) * -1);
+  border-radius: var(--radius-circle);
 }
-.presence .avatar:nth-child(5n + 2) {
-  background: var(--color-blue-500);
+.presence-user:first-child {
+  margin-left: 0;
 }
-.presence .avatar:nth-child(5n + 3) {
-  background: var(--color-green-500);
+.team-menu-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
 }
-.presence .avatar:nth-child(5n + 4) {
-  background: var(--color-purple-500);
+.team-menu-name.on {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-blue-600);
 }
-.presence .avatar:nth-child(5n + 5) {
-  background: var(--color-orange-500);
+.member-name,
+.activity-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+/* ─── 프로필 설정 (내 계정 · 팀 설정) ───────── */
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-18);
+  flex-wrap: wrap;
+}
+.profile-head-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+.profile-panel .field {
+  margin-top: var(--space-14);
+}
+.profile-panel .credit {
+  margin-top: var(--space-14);
+}
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+.swatch {
+  width: var(--size-avatar-sm);
+  height: var(--size-avatar-sm);
+  border-radius: var(--radius-circle);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: var(--shadow-swatch);
+  transition: transform 0.12s;
+}
+.swatch:hover:not(:disabled) {
+  transform: scale(1.08);
+}
+.swatch.on {
+  box-shadow: var(--shadow-swatch-selected);
+}
+.swatch:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.swatch.on:disabled {
+  opacity: 1;
+}
+.emoji-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+.emoji-tabs {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.emoji-tabs button {
+  border: 0;
+  background: var(--color-grey-100);
+  color: var(--color-grey-700);
+  border-radius: var(--radius-full);
+  padding: var(--space-6) var(--space-12);
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+.emoji-tabs button.on {
+  background: var(--color-grey-800);
+  color: var(--color-white);
+}
+/* 카테고리마다 12개 — PC 한 줄, 휴대폰 두 줄 */
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-4);
+  max-width: 640px;
+}
+.emoji-cell {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: var(--radius-circle);
+  background: none;
+  padding: var(--space-6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.12s;
+}
+.emoji-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.emoji-cell:hover:not(:disabled) {
+  background: var(--color-grey-100);
+  transform: scale(1.06);
+}
+.emoji-cell.on {
+  box-shadow: var(--shadow-swatch-selected);
+}
+
+/* ─── 원형 크롭 도구 (components/ImageCropDialog.tsx) ───────── */
+.crop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-14);
+}
+.crop-stage {
+  position: relative;
+  width: min(var(--size-crop), 100%);
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--color-grey-900);
+  border-radius: var(--radius-12);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.crop-stage:active {
+  cursor: grabbing;
+}
+.crop-stage:focus-visible {
+  outline: 2px solid var(--color-blue-500);
+  outline-offset: 2px;
+}
+.crop-image {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+/* 원 밖은 어둡게 — 원 안에 보이는 부분이 저장된다 */
+.crop-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-circle);
+  border: 2px solid var(--color-white-alpha-85);
+  box-shadow: var(--shadow-crop-mask);
+  pointer-events: none;
+}
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: min(var(--size-crop), 100%);
+}
+.crop-zoom input[type="range"] {
+  flex: 1;
+  accent-color: var(--color-blue-500);
+}
+.crop-hint {
+  text-align: center;
 }
 .menu-head {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-10);
   padding: var(--space-10) var(--space-12);
   border-bottom: 1px solid var(--color-grey-100);
   margin-bottom: var(--space-4);
+}
+.menu-head-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .menu-sep {
   height: 1px;
@@ -6155,9 +6396,23 @@ select.sm {
     padding: var(--space-5) var(--space-8);
     font-size: var(--font-size-12);
   }
-  .avatar {
+  .avatar-btn {
     width: var(--size-touch);
     height: var(--size-touch);
+  }
+  /* 프로필 설정 — 손가락으로 누르기 좋게 */
+  .swatch {
+    width: var(--size-touch);
+    height: var(--size-touch);
+  }
+  .emoji-grid {
+    grid-template-columns: repeat(6, minmax(var(--size-touch), 1fr));
+  }
+  .emoji-tabs button {
+    min-height: var(--size-touch);
+  }
+  .profile-head {
+    gap: var(--space-12);
   }
 
   /* 하단 탭 */

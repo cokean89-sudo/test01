@@ -2,14 +2,16 @@
 
 import { Router } from "express";
 import { z } from "zod";
+import { userProfileOf } from "../../shared/profile";
 import { ROLE_LABEL, ROLE_RANK, type DocSettings, type Role } from "../../shared/types";
 import { APP_URL } from "../config";
 import { requireUser, teamRole } from "../context";
 import { disconnectUser, publish, subscribe, updatePresence } from "../events";
 import { sendInviteMail } from "../mail";
-import { INVITE_MAX_FAILURES, inviteStatus, type Repo } from "../repo";
+import { avatarKey, INVITE_MAX_FAILURES, inviteStatus, type Repo } from "../repo";
 import { enforceLimit, hashPassword, HttpError, isCommonPassword, randomCode, verifyPassword } from "../security";
 import type { FileStore } from "../storage";
+import { avatarPrecheck, dropAvatar, profileColor, readAvatarBody, storeAvatar } from "./avatars";
 import { removeKeys } from "./uploads";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -54,9 +56,32 @@ export function teamsRouter(repo: Repo, store: FileStore): Router {
   });
 
   r.patch("/:teamId", teamRole(repo, "admin"), (req, res) => {
-    const { name } = z.object({ name: teamName }).parse(req.body);
-    repo.renameTeam(req.teamId!, name);
-    repo.log(req.teamId!, req.user!.id, "team.rename", `팀 이름을 '${name}'(으)로 변경`);
+    const { name, color } = z.object({ name: teamName.optional(), color: profileColor.optional() }).parse(req.body);
+    if (name) {
+      repo.renameTeam(req.teamId!, name);
+      repo.log(req.teamId!, req.user!.id, "team.rename", `팀 이름을 '${name}'(으)로 변경`);
+    }
+    if (color) {
+      repo.setTeamColor(req.teamId!, color);
+      repo.log(req.teamId!, req.user!.id, "team.profile", "팀 기본 이미지 색 변경");
+    }
+    publish(req.teamId!, "team", {});
+    res.json(repo.teamDetail(req.teamId!, req.role!));
+  });
+
+  // 팀 프로필 사진 — 관리자만. 화면에서 원형으로 잘라 보낸 이미지를 512px WebP 로 (저장 용량 한도에서 빠진다)
+  r.post("/:teamId/avatar", teamRole(repo, "admin"), avatarPrecheck, readAvatarBody, async (req, res) => {
+    const id = await storeAvatar(store, req.body);
+    dropAvatar(store, repo.setTeamAvatar(req.teamId!, id));
+    repo.log(req.teamId!, req.user!.id, "team.profile", "팀 프로필 사진 변경");
+    publish(req.teamId!, "team", {});
+    res.json(repo.teamDetail(req.teamId!, req.role!));
+  });
+
+  r.delete("/:teamId/avatar", teamRole(repo, "admin"), (req, res) => {
+    const old = repo.setTeamAvatar(req.teamId!, null);
+    dropAvatar(store, old);
+    if (old) repo.log(req.teamId!, req.user!.id, "team.profile", "팀 프로필 사진 삭제");
     publish(req.teamId!, "team", {});
     res.json(repo.teamDetail(req.teamId!, req.role!));
   });
@@ -68,7 +93,7 @@ export function teamsRouter(repo: Repo, store: FileStore): Router {
     if (confirm !== team.name) throw new HttpError(400, "확인을 위해 팀 이름을 정확히 입력하세요.");
     publish(req.teamId!, "removed", { teamId: req.teamId });
     // 팀이 올린 이미지도 저장소에서 지운다 (기록은 팀과 함께 지워진다)
-    const keys = repo.teamFileKeys(req.teamId!);
+    const keys = [...repo.teamFileKeys(req.teamId!), ...(team.avatar_id ? [avatarKey(team.avatar_id)] : [])];
     repo.deleteTeam(req.teamId!);
     removeKeys(store, keys);
     repo.security("team_deleted", req.user!.id, req.ip, team.name);
@@ -203,7 +228,7 @@ export function teamsRouter(repo: Repo, store: FileStore): Router {
     const token = req.sessionToken!;
     const teamId = req.teamId!;
     const userId = req.user!.id;
-    subscribe(req, res, teamId, { id: userId, name: req.user!.name }, docId, () => repo.sessionAlive(token) && !!repo.getRole(teamId, userId));
+    subscribe(req, res, teamId, { id: userId, name: req.user!.name, profile: userProfileOf(userId, req.user!) }, docId, () => repo.sessionAlive(token) && !!repo.getRole(teamId, userId));
   });
 
   r.post("/:teamId/presence", teamRole(repo, "viewer"), (req, res) => {

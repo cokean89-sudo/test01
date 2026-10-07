@@ -145,7 +145,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 
 ## 5. 데이터와 백업
 
-- 데이터베이스는 `/var/data/refboard.sqlite` 파일 하나, 올린 이미지는 `/var/data/uploads/<팀>/` 폴더입니다. 영구 디스크에 있어서 재배포·재시작해도 그대로 남아요.
+- 데이터베이스는 `/var/data/refboard.sqlite` 파일 하나, 올린 이미지는 `/var/data/uploads/<팀>/` 폴더, 프로필 사진은 `/var/data/uploads/avatars/` 폴더입니다. 영구 디스크에 있어서 재배포·재시작해도 그대로 남아요.
 - Render 는 디스크 스냅샷을 자동으로 만들어 둡니다 (서비스 → **Disks** 에서 복원) — 데이터베이스와 올린 이미지가 함께 들어가요.
 - 직접 백업: 서비스 → **Shell** 탭에서 `npm run backup` → `/var/data/backups/` 에 데이터베이스 스냅샷 파일이 생겨요.
   서버 밖에 보관하려면 Render SSH(`scp`)로 내려받으세요. 올린 이미지까지 받으려면 `/var/data/uploads` 폴더도 함께.
@@ -166,7 +166,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 
 ### 5-B. Cloudflare R2 · AWS S3 로 옮기기
 
-이미지가 많아지면 디스크 대신 R2(내보내기 요금 없음) · S3 에 저장할 수 있어요. 앱 안의 이미지 주소(`/api/files/…`)는 저장소와 상관없이 같아서 **문서 · 레퍼런스를 고칠 필요가 없고**, 팀원만 볼 수 있는 권한 확인도 그대로예요.
+이미지가 많아지면 디스크 대신 R2(내보내기 요금 없음) · S3 에 저장할 수 있어요. 앱 안의 이미지 주소(`/api/files/…`, 프로필 사진 `/api/avatars/…`)는 저장소와 상관없이 같아서 **문서 · 레퍼런스를 고칠 필요가 없고**, 팀원만 볼 수 있는 권한 확인도 그대로예요.
 
 1. 버킷 만들기 — **공개(public) 접근은 끈 채로** 둡니다. 서버가 키로 읽어서 전달해요.
    - R2: Cloudflare 대시보드 → R2 → Create bucket → R2 API 토큰 관리에서 그 버킷의 *Object Read & Write* 토큰 발급 (Access Key ID · Secret Access Key, 계정 ID 확인 — 메뉴 이름은 Cloudflare 개편에 따라 조금 다를 수 있어요)
@@ -176,7 +176,7 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 3. 서비스 → **Shell** 에서 기존 파일 복사:
    ```
    STORAGE_DRIVER=s3 npm run storage:migrate -- --dry-run   # 옮길 파일 수 확인
-   STORAGE_DRIVER=s3 npm run storage:migrate                # 복사 (디스크 파일은 지우지 않음)
+   STORAGE_DRIVER=s3 npm run storage:migrate                # 복사 (프로필 사진 avatars/ 포함, 디스크 파일은 지우지 않음)
    ```
 4. **Environment** 에서 `STORAGE_DRIVER=s3` 로 바꾸고 저장 → 재시작 후 이미지가 잘 보이는지 확인.
 5. 문제가 없으면 Shell 에서 `/var/data/uploads` 를 지워 디스크를 비웁니다. (데이터베이스는 계속 디스크에 있어요 — 디스크는 줄일 수 없으니 그대로 둡니다.)
@@ -191,6 +191,14 @@ Docker 없이 Node 22 런타임으로 실행되고, 데이터(SQLite)와 올린 
 - 안드로이드에서 홈 화면에 추가한 뒤에는 사진 · 링크의 **공유 → RefBoard** 로 바로 레퍼런스를 모을 수 있어요. 아이폰은 이 기능(Web Share Target)을 지원하지 않아요.
 - 서비스 워커(`/sw.js`)는 공유 받기만 처리하고 화면 · API 를 캐시하지 않아요. 서버는 `sw.js` · `manifest.webmanifest` 를 `Cache-Control: no-cache` 로 보내서 새로 배포하면 바로 바뀌어요.
 - 아이콘을 바꾸려면 `tokens.json` 의 파란색을 고친 뒤 `npm run icons` → 커밋.
+
+## 5-D. 프로필 사진 · 기본 이모지
+
+따로 설정할 것은 없어요.
+
+- 팀 · 개인 프로필 사진은 올린 이미지와 같은 저장소(`STORAGE_DRIVER`)의 `avatars/<id>.webp` 에 512px WebP 로 저장돼요. **팀 · 개인 · 서비스 저장 공간 한도 계산에는 들어가지 않아요** (한 장 수십 KB, 사람 · 팀마다 한 장만 남고 바꾸면 이전 사진은 바로 지워져요).
+- 처음 배포하면 서버가 시작할 때 기존 계정 · 팀에 기본 이모지 · 배경색 · 내 색 · 팀 색을 무작위로 채워요 (DB v7, 이미 있는 값은 그대로).
+- 기본 이모지 그림은 빌드에 함께 들어가요 (`public/emoji/`, Microsoft Fluent Emoji 3D · MIT 라이선스 — 라이선스 전문 `public/emoji/LICENSE` 를 지우지 마세요).
 
 ## 6. 문제 해결
 

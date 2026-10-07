@@ -2,12 +2,13 @@
 // 단일 서버 프로세스 기준(메모리). 여러 대로 확장하려면 Redis pub/sub 등으로 바꿔야 한다.
 
 import type { Request, Response } from "express";
-import type { PresenceUser } from "../shared/types";
+import type { PresenceUser, UserProfile } from "../shared/types";
 
 interface Client {
   res: Response;
   userId: string;
   name: string;
+  profile?: UserProfile;
   docId?: string;
   pageId?: string;
 }
@@ -24,7 +25,7 @@ export function publish(teamId: string, event: string, data: unknown, exceptUser
 
 function presence(teamId: string, docId: string): PresenceUser[] {
   const seen = new Map<string, PresenceUser>();
-  for (const c of teams.get(teamId) ?? []) if (c.docId === docId) seen.set(c.userId, { userId: c.userId, name: c.name, pageId: c.pageId });
+  for (const c of teams.get(teamId) ?? []) if (c.docId === docId) seen.set(c.userId, { userId: c.userId, name: c.name, profile: c.profile, pageId: c.pageId });
   return [...seen.values()];
 }
 
@@ -41,7 +42,7 @@ export function subscribe(
   req: Request,
   res: Response,
   teamId: string,
-  user: { id: string; name: string },
+  user: { id: string; name: string; profile?: UserProfile },
   docId: string | undefined,
   stillAllowed: () => boolean,
 ) {
@@ -52,7 +53,7 @@ export function subscribe(
     "X-Accel-Buffering": "no", // Nginx 버퍼링 끄기
   });
   res.write("retry: 3000\n\n");
-  const client: Client = { res, userId: user.id, name: user.name, docId };
+  const client: Client = { res, userId: user.id, name: user.name, profile: user.profile, docId };
   if (!teams.has(teamId)) teams.set(teamId, new Set());
   teams.get(teamId)!.add(client);
   if (docId) broadcastPresence(teamId, docId);

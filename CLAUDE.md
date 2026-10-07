@@ -47,4 +47,6 @@ React 19 + Vite (`src/`) · Express + node:sqlite (`server/`) · 공용 타입�
 - 비밀번호는 브라우저에 저장하지 않는다. '아이디 기억하기'는 메일 주소만 저장한다.
 - 변경 요청은 CSRF 헤더(`x-refboard`)를 거치고, 이미지 주소는 http(s)만 받는다.
 - 화면 문구는 쉬운 해요체.
+- 프로필 기본 이모지는 Microsoft Fluent Emoji 3D(MIT)만 쓴다 (`public/emoji/`, 라이선스 전문 함께). 애플 이모지 이미지는 라이선스 문제로 쓰지 않는다.
+- 프로필 이미지는 `src/components/Avatar.tsx`(UserAvatar · TeamAvatar)로만 보여 주고, 사용자 고유 색은 `profileColorVar()`(shared/profile.ts)로 쓴다.
 - 색 · 글꼴 · 크기 · 간격 · 모서리 · 그림자는 `src/styles.css`에 값을 직접 쓰지 않고 `src/tokens.css`의 토큰(`var(--…)`)만 쓴다. 새 토큰은 `tokens.json`(원본)에 추가하고 `npm run tokens`로 CSS를 다시 만든다 — 그림자 · z-index는 tokens.css 아래쪽에 직접. 자세한 규칙은 docs/design-tokens.md.

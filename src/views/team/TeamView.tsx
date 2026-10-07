@@ -16,9 +16,11 @@ import {
   type StorageUsage,
 } from "../../../shared/types";
 import { api, teamApi } from "../../api";
+import { ColorPalette, TeamAvatar, UserAvatar } from "../../components/Avatar";
+import { AvatarUploadButton } from "../../components/ImageCropDialog";
 import { PageView } from "../../components/PageView";
 import { StorageMeter } from "../../components/StorageMeter";
-import { Button, ColorInput, Empty, Field, Modal, NumberInput, Segmented, Select, Spinner, Toggle } from "../../components/ui";
+import { Button, ColorInput, Empty, Field, FieldGroup, Modal, NumberInput, Segmented, Select, Spinner, Toggle } from "../../components/ui";
 import { settingsWithTemplate, TemplatePicker } from "../../components/TemplatePicker";
 import { setThemeAccent } from "../../layout/themes";
 import { createCasePage, createCoverPage, createReferencePage } from "../../layout/templates";
@@ -74,6 +76,7 @@ export function TeamView() {
   return (
     <div className="team-page">
       <header className="team-head">
+        <TeamAvatar profile={team.profile} name={team.name} size="lg" />
         <div>
           <h2>{team.name}</h2>
           <span className="muted small">
@@ -127,7 +130,10 @@ function MembersTab({ team, meId, onChange, reload }: { team: TeamDetail; meId: 
             return (
               <tr key={m.userId}>
                 <td>
-                  <strong>{m.name}</strong> {m.userId === meId && <span className="badge">나</span>}
+                  <span className="member-name">
+                    <UserAvatar profile={m.profile} name={m.name} size="sm" />
+                    <strong>{m.name}</strong> {m.userId === meId && <span className="badge">나</span>}
+                  </span>
                 </td>
                 <td className="muted">{m.email ?? "—"}</td>
                 <td>
@@ -601,7 +607,10 @@ function ActivityTab({ teamId }: { teamId: string }) {
         {items.map((a) => (
           <li key={a.id}>
             <span className="muted small">{fmt(a.createdAt)}</span>
-            <strong>{a.userName}</strong>
+            <span className="activity-who">
+              <UserAvatar profile={a.userProfile} name={a.userName} size="xs" />
+              <strong>{a.userName}</strong>
+            </span>
             <span>{a.summary}</span>
             {a.targetType === "doc" && a.targetId && (
               <a className="link-btn" href={`#/edit/${a.targetId}`}>
@@ -637,9 +646,50 @@ function SettingsTab({ team, onChange }: { team: TeamDetail; onChange: (t: TeamD
   useEffect(() => {
     api.storage(team.id).then(setUsage, () => setUsage(null));
   }, [team.id]);
+  const done = async (next: Promise<TeamDetail>, msg: string) => {
+    try {
+      onChange(await next);
+      await refreshTeams(team.id);
+      toast.success(msg);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
   return (
     <div className="panel narrow">
       <StorageMeter usage={usage} />
+      <FieldGroup label="팀 프로필" hint={isAdmin ? "사진이 없으면 팀 색 위에 팀 이름 첫 글자가 보여요. 프로필 사진은 저장 공간에 포함되지 않아요." : "팀 관리자만 바꿀 수 있어요."}>
+        <div className="profile-head">
+          <TeamAvatar profile={team.profile} name={team.name} size="xl" />
+          {isAdmin && (
+            <div className="row wrap">
+              <AvatarUploadButton
+                label={team.profile.image ? "사진 바꾸기" : "사진 올리기"}
+                title="팀 프로필 사진"
+                onSave={async (image) => {
+                  onChange(await teamApi.uploadAvatar(team.id, image));
+                  await refreshTeams(team.id);
+                  toast.success("팀 프로필 사진을 바꿨어요");
+                }}
+              />
+              {team.profile.image && (
+                <Button
+                  variant="ghost"
+                  icon="trash"
+                  onClick={() => {
+                    if (confirm("팀 프로필 사진을 지울까요? 팀 색과 이름 첫 글자로 돌아가요.")) void done(teamApi.removeAvatar(team.id), "팀 프로필 사진을 지웠어요");
+                  }}
+                >
+                  사진 지우기
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </FieldGroup>
+      <FieldGroup label="팀 색">
+        <ColorPalette label="팀 색" value={team.profile.color} disabled={!isAdmin} onChange={(color) => void done(teamApi.setColor(team.id, color), "팀 색을 바꿨어요")} />
+      </FieldGroup>
       <Field label="팀 이름">
         <div className="row">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} disabled={!isAdmin} />

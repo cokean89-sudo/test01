@@ -3,6 +3,7 @@
 
 import crypto from "node:crypto";
 import sharp, { type Metadata } from "sharp";
+import { AVATAR_EDGE, AVATAR_MAX_BYTES } from "../shared/profile";
 import { HttpError } from "./security";
 
 export const UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
@@ -89,6 +90,30 @@ export async function processImage(input: Buffer, allowed: readonly string[] = U
     } catch (err) {
       if (err instanceof HttpError) throw err;
       throw new HttpError(400, "이미지를 변환하지 못했어요. 다른 파일로 시도해 주세요.", "invalid_image");
+    }
+  });
+}
+
+/**
+ * 프로필 사진 — 화면에서 원형으로 잘라 보낸 이미지를 다시 검사해 512×512 WebP 로 저장한다.
+ * (브라우저가 이미 잘랐지만 형식 · 크기 · 메타데이터는 서버가 다시 정한다. 움직이는 이미지는 첫 장면만)
+ */
+export async function processAvatar(input: Buffer, edge = AVATAR_EDGE): Promise<Buffer> {
+  if (input.length > AVATAR_MAX_BYTES) throw new HttpError(413, "프로필 사진은 5MB까지 올릴 수 있어요.", "file_too_large");
+  const type = sniffType(input);
+  if (!type || !(UPLOAD_TYPES as readonly string[]).includes(type)) throw new HttpError(415, "JPG · PNG · WebP · GIF 이미지만 올릴 수 있어요.", "unsupported_file");
+  return slot(async () => {
+    try {
+      const meta = await sharp(input, { limitInputPixels: MAX_PIXELS }).metadata();
+      if ((meta.width ?? 0) * (meta.pageHeight ?? meta.height ?? 0) > MAX_PIXELS) throw new HttpError(413, "이미지가 너무 커요 (1억 화소 이하).", "file_too_large");
+      return await sharp(input, { limitInputPixels: MAX_PIXELS, pages: 1 })
+        .autoOrient()
+        .resize({ width: edge, height: edge, fit: "cover", position: "centre" })
+        .webp({ quality: 84, effort: 4 })
+        .toBuffer();
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      throw new HttpError(400, "이미지 파일을 읽을 수 없어요. 다른 파일로 시도해 주세요.", "invalid_image");
     }
   });
 }

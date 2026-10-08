@@ -2,6 +2,9 @@ import type { FeedbackInput, FeedbackItem } from "../shared/feedback";
 import type {
   ActivityItem,
   AnalyzeRequest,
+  AssignmentState,
+  CollabDoc,
+  DocActivity,
   AnalyzeResult,
   AppStatus,
   AuthProviders,
@@ -93,13 +96,6 @@ export interface BulkOp {
   delete?: boolean;
 }
 
-export interface SaveResult {
-  version: number;
-  merged: boolean;
-  doc?: DocumentData;
-  conflicts: string[];
-}
-
 export const authApi = {
   providers: () => request<AuthProviders>("GET", "/api/auth/providers"),
   me: () => request<SessionInfo>("GET", "/api/auth/me"),
@@ -149,7 +145,6 @@ export const teamApi = {
     ),
   acceptInvite: (token: string) => request<{ teamId: string; already?: boolean }>("POST", "/api/invites/accept", { token }),
   joinByCode: (code: string, password: string) => request<{ teamId: string; already?: boolean }>("POST", "/api/invites/join", { code, password }),
-  presence: (teamId: string, docId: string, pageId?: string) => request<{ ok: true }>("POST", `${T(teamId)}/presence`, { docId, pageId }),
 };
 
 export const api = {
@@ -168,9 +163,15 @@ export const api = {
   documents: () => request<DocumentSummary[]>("GET", `${T()}/documents`),
   /** 문서 id 만으로 열기 — 문서가 속한 팀과 내 권한을 함께 돌려준다 */
   document: (id: string) => request<DocumentData & { role: Role }>("GET", `/api/documents/${encodeURIComponent(id)}`),
+  /** 편집기용 — 공동 편집 상태(Yjs) · 페이지 맡기 포함 */
+  collabDocument: (id: string) => request<CollabDoc>("GET", `/api/documents/${encodeURIComponent(id)}?collab=1`),
+  assignPage: (teamId: string, docId: string, pageId: string) => request<AssignmentState>("POST", `${T(teamId)}/documents/${encodeURIComponent(docId)}/pages/${encodeURIComponent(pageId)}/assign`, {}),
+  unassignPage: (teamId: string, docId: string, pageId: string) => request<AssignmentState>("DELETE", `${T(teamId)}/documents/${encodeURIComponent(docId)}/pages/${encodeURIComponent(pageId)}/assign`, {}),
+  setAssignStrict: (teamId: string, docId: string, strict: boolean) => request<AssignmentState>("PUT", `${T(teamId)}/documents/${encodeURIComponent(docId)}/assign-strict`, { strict }),
+  docActivity: (teamId: string, docId: string, before?: number) =>
+    request<DocActivity[]>("GET", `${T(teamId)}/documents/${encodeURIComponent(docId)}/activity${before ? `?before=${before}` : ""}`),
   createDocument: (doc: Pick<DocumentData, "title" | "query" | "settings" | "pages">, teamId = currentTeam) =>
     request<DocumentData>("POST", `${T(teamId)}/documents`, doc),
-  saveDocument: (doc: DocumentData, baseVersion: number) => request<SaveResult>("PUT", `${T(doc.teamId)}/documents/${doc.id}`, { doc, baseVersion }),
   duplicateDocument: (id: string) => request<DocumentData>("POST", `${T()}/documents/${id}/duplicate`, {}),
   deleteDocument: (id: string) => request<{ ok: true }>("DELETE", `${T()}/documents/${id}`, {}),
   versions: (teamId: string, id: string) => request<VersionInfo[]>("GET", `${T(teamId)}/documents/${id}/versions`),

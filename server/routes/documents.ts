@@ -1,9 +1,15 @@
-// 문서: 목록·생성·저장(동시 편집 병합)·버전 기록·복원
+// 문서: 목록 · 생성 · 저장 · 버전 기록 · 복원 · 페이지 맡기 · 활동 기록
+//
+// 편집기는 실시간 공동 편집(WebSocket, server/collab)으로 저장한다. 아래 PUT 저장은 예전 방식 클라이언트용으로 남겨 두었고,
+// 들어온 문서를 같은 공동 편집 방에 '바뀐 부분만' 반영한다 (그 사이 다른 사람이 고친 것은 남는다).
 
 import { Router } from "express";
 import { z } from "zod";
 import { SAFE_IMAGE_SRC } from "../../shared/files";
-import type { DocumentData } from "../../shared/types";
+import { toB64 } from "../../shared/collabProtocol";
+import type { DocContent } from "../../shared/collab";
+import type { CollabDoc, DocumentData } from "../../shared/types";
+import { peerUserOf, type CollabHub } from "../collab/hub";
 import { hasRole, requireUser, teamRole } from "../context";
 import { publish } from "../events";
 import type { Repo } from "../repo";
@@ -55,8 +61,17 @@ function parseDoc(body: unknown): Pick<DocumentData, "title" | "query" | "settin
   return { title: d.title, query: d.query, settings: d.settings, pages: d.pages, tray };
 }
 
-export function documentsRouter(repo: Repo): Router {
+const PAGE_ID = /^[\w-]{1,40}$/;
+
+export function documentsRouter(repo: Repo, collab: CollabHub): Router {
   const r = Router({ mergeParams: true });
+
+  /** 이 팀의 문서인지 확인하고 공동 편집 정보 */
+  const docOf = (teamId: string, id: string) => {
+    const info = repo.docTeam(id) === teamId ? repo.docForCollab(id) : undefined;
+    if (!info) throw new HttpError(404, "문서를 찾을 수 없어요.");
+    return { ...info, content: collab.liveContent(id) ?? info.content };
+  };
 
   r.get("/documents", teamRole(repo, "viewer"), (req, res) => {
     res.json(repo.listDocs(req.teamId!));
@@ -74,16 +89,25 @@ export function documentsRouter(repo: Repo): Router {
   r.put("/documents/:id", teamRole(repo, "editor"), (req, res) => {
     const user = req.user!;
     enforceLimit(`doc-save:${user.id}`, 1200, 60 * 60_000);
+    const id = String(req.params.id);
     const baseVersion = z.number().int().min(1).parse(req.body?.baseVersion);
-    const out = repo.saveDoc(req.teamId!, String(req.params.id), parseDoc(req.body?.doc), baseVersion, user.id);
+    const input = parseDoc(req.body?.doc);
+    const cur = docOf(req.teamId!, id);
+    // 출발한 버전과 비교해 바뀐 부분만 얹는다 (그 버전이 없으면 지금 내용 기준)
+    const base: DocContent = (baseVersion !== cur.version && repo.versionContent(id, baseVersion)) || repo.versionContent(id, cur.version) || cur.content;
+    // 보관함을 모르는 예전 클라이언트가 저장해도 지금 보관함을 지우지 않는다
+    const next: DocContent = { ...input, tray: input.tray ?? base.tray };
+    const out = collab.applyContent(id, peerUserOf(user), req.role!, base, next);
     if (!out) throw new HttpError(404, "문서를 찾을 수 없어요.");
-    publish(req.teamId!, "doc", { docId: req.params.id, version: out.version, by: user.id, byName: user.name }, user.id);
-    res.json(out);
+    if (out.rejected) throw new HttpError(409, out.rejected, "assigned_page");
+    const merged = baseVersion !== cur.version;
+    res.json({ version: out.version, merged, doc: merged ? repo.getDoc(req.teamId!, id) : undefined, conflicts: [] });
   });
 
   r.post("/documents/:id/duplicate", teamRole(repo, "editor"), (req, res) => {
-    const src = repo.getDoc(req.teamId!, String(req.params.id));
-    if (!src) throw new HttpError(404, "문서를 찾을 수 없어요.");
+    const found = repo.getDoc(req.teamId!, String(req.params.id));
+    if (!found) throw new HttpError(404, "문서를 찾을 수 없어요.");
+    const src = { ...found, ...(collab.liveContent(found.id) ?? {}) };
     const copy = repo.createDoc(req.teamId!, { ...src, title: src.title + " (사본)" }, req.user!.id);
     recordUsage(repo.db, { userId: req.user!.id, teamId: req.teamId!, kind: "doc", detail: "duplicate" });
     repo.log(req.teamId!, req.user!.id, "doc.duplicate", `문서 '${src.title}' 복제`, { type: "doc", id: copy.id });
@@ -94,6 +118,7 @@ export function documentsRouter(repo: Repo): Router {
   r.delete("/documents/:id", teamRole(repo, "editor"), (req, res) => {
     const doc = repo.getDoc(req.teamId!, String(req.params.id));
     if (!doc) throw new HttpError(404, "문서를 찾을 수 없어요.");
+    collab.drop(doc.id);
     repo.deleteDoc(req.teamId!, doc.id);
     repo.log(req.teamId!, req.user!.id, "doc.delete", `문서 '${doc.title}' 삭제`);
     publish(req.teamId!, "docs", {}, req.user!.id);
@@ -113,20 +138,81 @@ export function documentsRouter(repo: Repo): Router {
 
   r.post("/documents/:id/versions/:version/restore", teamRole(repo, "editor"), (req, res) => {
     const id = String(req.params.id);
-    const old = repo.getVersion(req.teamId!, id, Number(req.params.version));
-    const cur = repo.getDoc(req.teamId!, id);
-    if (!old || !cur) throw new HttpError(404, "버전을 찾을 수 없어요.");
-    const out = repo.saveDoc(req.teamId!, id, old, cur.version!, req.user!.id)!;
-    repo.log(req.teamId!, req.user!.id, "doc.restore", `문서 '${cur.title}'를 이전 버전(v${req.params.version})으로 복원`, { type: "doc", id });
-    publish(req.teamId!, "doc", { docId: id, version: out.version, by: req.user!.id, byName: req.user!.name });
+    const v = Number(req.params.version);
+    const cur = docOf(req.teamId!, id);
+    const old = repo.versionContent(id, v);
+    if (!old) throw new HttpError(404, "버전을 찾을 수 없어요.");
+    // 공동 편집 방에 새 변경으로 반영 → 문서를 보고 있는 사람들에게도 바로 보인다 (담당자만 편집과 상관없이)
+    collab.applyContent(id, peerUserOf(req.user!), req.role!, cur.content, old, { restore: v });
+    repo.log(req.teamId!, req.user!.id, "doc.restore", `문서 '${cur.content.title}'를 이전 버전(v${v})으로 복원`, { type: "doc", id });
     res.json(repo.getDoc(req.teamId!, id));
+  });
+
+  // ─── 페이지 맡기 ────────────────────────────────────────
+
+  /** 이 페이지 맡기 — 편집자 이상. 다른 사람이 맡은 페이지는 먼저 해제해야 한다 */
+  r.post("/documents/:id/pages/:pageId/assign", teamRole(repo, "editor"), (req, res) => {
+    const id = String(req.params.id);
+    const pageId = String(req.params.pageId);
+    const me = req.user!;
+    const doc = docOf(req.teamId!, id);
+    if (!PAGE_ID.test(pageId) || !doc.content.pages.some((p) => p.id === pageId)) throw new HttpError(404, "페이지를 찾을 수 없어요.");
+    const cur = repo.assignments(id).assignments[pageId];
+    if (cur && cur.userId !== me.id) throw new HttpError(409, `${cur.name}님이 맡은 페이지예요.`, "assigned_page");
+    repo.assignPage(id, pageId, me.id, me.id);
+    repo.recordDocActivity(id, req.teamId!, me.id, pageId, [{ label: "페이지", action: "맡음" }]);
+    collab.assignChanged(id);
+    res.json(repo.assignments(id));
+  });
+
+  /** 맡기 해제 — 맡은 사람, 문서를 만든 사람, 팀 관리자 */
+  r.delete("/documents/:id/pages/:pageId/assign", teamRole(repo, "editor"), (req, res) => {
+    const id = String(req.params.id);
+    const pageId = String(req.params.pageId);
+    const me = req.user!;
+    const doc = docOf(req.teamId!, id);
+    const cur = repo.assignments(id).assignments[pageId];
+    if (cur) {
+      if (cur.userId !== me.id && doc.createdBy !== me.id && !hasRole(req.role, "admin")) {
+        throw new HttpError(403, "맡은 사람, 문서를 만든 사람, 팀 관리자만 해제할 수 있어요.");
+      }
+      repo.unassignPage(id, pageId);
+      repo.recordDocActivity(id, req.teamId!, me.id, pageId, [{ label: cur.userId === me.id ? "페이지 맡기" : `${cur.name}님 페이지 맡기`, action: "해제" }]);
+      collab.assignChanged(id);
+    }
+    res.json(repo.assignments(id));
+  });
+
+  /** 담당자만 편집 — 문서를 만든 사람 · 팀 관리자 */
+  r.put("/documents/:id/assign-strict", teamRole(repo, "editor"), (req, res) => {
+    const id = String(req.params.id);
+    const me = req.user!;
+    const doc = docOf(req.teamId!, id);
+    if (doc.createdBy !== me.id && !hasRole(req.role, "admin")) throw new HttpError(403, "문서를 만든 사람이나 팀 관리자만 바꿀 수 있어요.");
+    const { strict } = z.object({ strict: z.boolean() }).parse(req.body);
+    repo.setAssignStrict(id, strict);
+    repo.recordDocActivity(id, req.teamId!, me.id, null, [{ label: "담당자만 편집", action: strict ? "켬" : "끔" }]);
+    collab.assignChanged(id);
+    res.json(repo.assignments(id));
+  });
+
+  // ─── 활동 기록 ──────────────────────────────────────────
+
+  r.get("/documents/:id/activity", teamRole(repo, "viewer"), (req, res) => {
+    const id = String(req.params.id);
+    if (repo.docTeam(id) !== req.teamId) throw new HttpError(404, "문서를 찾을 수 없어요.");
+    const before = req.query.before ? Number(req.query.before) : undefined;
+    res.json(repo.docActivity(id, { before: Number.isFinite(before) ? before : undefined, limit: 300 }));
   });
 
   return r;
 }
 
-/** 문서 id 만으로 열기 (뷰어·인쇄·편집기) — 문서가 속한 팀의 멤버인지 확인 */
-export function documentLookupRouter(repo: Repo): Router {
+/**
+ * 문서 id 만으로 열기 (뷰어 · 인쇄 · 편집기) — 문서가 속한 팀의 멤버인지 확인.
+ * ?collab=1 (편집기): 공동 편집 방의 Yjs 상태(ystate)와 같은 시점의 내용 · 페이지 맡기를 함께 준다.
+ */
+export function documentLookupRouter(repo: Repo, collab: CollabHub): Router {
   const r = Router();
   r.get("/:id", (req, res) => {
     const user = requireUser(req);
@@ -134,7 +220,14 @@ export function documentLookupRouter(repo: Repo): Router {
     const teamId = repo.docTeam(id);
     const role = teamId ? repo.getRole(teamId, user.id) : undefined;
     if (!teamId || !hasRole(role, "viewer")) throw new HttpError(404, "문서를 찾을 수 없어요.");
-    res.json({ ...repo.getDoc(teamId, id), role });
+    const doc = repo.getDoc(teamId, id)!;
+    if (req.query.collab === "1") {
+      const snap = collab.snapshot(id)!;
+      const out: CollabDoc = { ...doc, ...snap.content, role, ystate: toB64(snap.state), assign: snap.assign };
+      res.json(out);
+      return;
+    }
+    res.json({ ...doc, ...(collab.liveContent(id) ?? {}), role });
   });
   return r;
 }

@@ -2,22 +2,20 @@
 // 배치 · 이미지 · 페이지 편집은 PC 편집기에서 한다. 고친 글은 PC 편집기와 같은 방식으로 자동 저장된다.
 
 import { useState } from "react";
+import { mergeText } from "../../../shared/collab";
 import type { TextElement } from "../../../shared/types";
 import { Icon } from "../../components/icons";
 import { PageView } from "../../components/PageView";
 import { Button, Modal } from "../../components/ui";
 import { navigate } from "../../lib/router";
 import { useEditor } from "../../store/editor";
-import { Presence } from "./Toolbar";
+import { Presence, SyncBadge } from "./Toolbar";
 import { toast } from "../../store/toast";
-
-const SAVE_LABEL = { saved: "저장됨", saving: "저장 중…", dirty: "저장 대기", error: "저장 실패" } as const;
 
 export function MobileEditor() {
   const doc = useEditor((s) => s.doc)!;
   const readOnly = useEditor((s) => s.readOnly);
-  const saveState = useEditor((s) => s.saveState);
-  const [editing, setEditing] = useState<{ pageId: string; elId: string; text: string } | null>(null);
+  const [editing, setEditing] = useState<{ pageId: string; elId: string; text: string; base: string } | null>(null);
 
   /** 페이지 안의 글을 누르면 고치기 창 */
   const onTap = (pageId: string) => (e: React.MouseEvent) => {
@@ -26,14 +24,15 @@ export function MobileEditor() {
     const el = doc.pages.find((p) => p.id === pageId)?.elements.find((x): x is TextElement => x.id === id && x.type === "text");
     if (!el) return;
     if (el.locked) return toast.info("잠긴 글이에요. PC 편집기에서 잠금을 풀 수 있어요.");
-    setEditing({ pageId, elId: el.id, text: el.text });
+    setEditing({ pageId, elId: el.id, text: el.text, base: el.text });
   };
 
   const save = () => {
     if (!editing) return;
     useEditor.getState().update((d) => {
       const el = d.pages.find((p) => p.id === editing.pageId)?.elements.find((x) => x.id === editing.elId);
-      if (el?.type === "text") el.text = editing.text;
+      // 창을 연 사이 다른 사람이 같은 글을 고쳤으면 둘 다 살린다
+      if (el?.type === "text") el.text = mergeText(editing.base, editing.text, el.text);
     });
     setEditing(null);
     toast.success("글을 고쳤어요");
@@ -46,7 +45,7 @@ export function MobileEditor() {
           <Icon name="chevronLeft" size={20} />
         </button>
         <strong className="ellipsis">{doc.title || "제목 없는 문서"}</strong>
-        {!readOnly && <span className={"mobile-save " + saveState}>{SAVE_LABEL[saveState]}</span>}
+        {!readOnly && <SyncBadge className="mobile-save" />}
         <Presence />
         <Button size="sm" icon="play" onClick={() => navigate(`view/${doc.id}?present`)}>
           발표

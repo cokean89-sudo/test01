@@ -4,6 +4,7 @@ import { PageView } from "../../components/PageView";
 import { Button, Menu, MenuItem } from "../../components/ui";
 import { useEditor } from "../../store/editor";
 import { addPage, deletePage, duplicatePage, movePage } from "./actions";
+import { AssigneeFlag, assignPage, PageViewers, unassignPage, useCanManageAssign } from "./CollabUI";
 import { HOVER_SWITCH_MS, useImageDrag } from "./imageDrag";
 
 const Thumb = memo(function Thumb({ page, settings, index, total, title }: { page: Page; settings: DocSettings; index: number; total: number; title: string }) {
@@ -25,6 +26,13 @@ export function PageList() {
   const doc = useEditor((s) => s.doc)!;
   const pageId = useEditor((s) => s.pageId);
   const setPage = useEditor((s) => s.setPage);
+  const assignments = useEditor((s) => s.assign.assignments);
+  const me = useEditor((s) => s.me);
+  const readOnly = useEditor((s) => s.readOnly);
+  const onlyMine = useEditor((s) => s.onlyMine);
+  const setOnlyMine = useEditor((s) => s.setOnlyMine);
+  const canManage = useCanManageAssign();
+  const mineCount = doc.pages.filter((p) => assignments[p.id]?.userId === me).length;
   const [dragId, setDragId] = useState<string | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   // 캔버스 · 보관함에서 이미지를 끌어 썸네일 위에 올렸을 때
@@ -68,8 +76,15 @@ export function PageList() {
           )}
         </Menu>
       </div>
+      {(mineCount > 0 || onlyMine) && (
+        <label className="page-filter">
+          <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
+          내가 맡은 페이지만 ({mineCount})
+        </label>
+      )}
       <div className="page-list-scroll">
-        {doc.pages.map((p, i) => (
+        {onlyMine && mineCount === 0 && <p className="muted small page-filter-empty">맡은 페이지가 없어요</p>}
+        {doc.pages.map((p, i) => (onlyMine && assignments[p.id]?.userId !== me ? null : (
           <div
             key={p.id}
             className={
@@ -104,6 +119,9 @@ export function PageList() {
             <span className="page-num">{i + 1}</span>
             <div className="page-thumb">
               <Thumb page={p} settings={doc.settings} index={i} total={doc.pages.length} title={doc.title} />
+              {/* 썸네일 위에 그려지도록 뒤에 둔다 */}
+              <AssigneeFlag pageId={p.id} />
+              <PageViewers pageId={p.id} />
               {imgHover?.pageId === p.id && (
                 <span className="thumb-drop-hint">
                   놓으면 이 페이지로
@@ -145,12 +163,28 @@ export function PageList() {
                     <MenuItem icon="trash" disabled={doc.pages.length <= 1} onClick={() => (close(), deletePage(p.id))}>
                       페이지 삭제
                     </MenuItem>
+                    {!readOnly && <div className="menu-sep" />}
+                    {!readOnly && !assignments[p.id] && (
+                      <MenuItem icon="flag" onClick={() => (close(), void assignPage(p.id))}>
+                        이 페이지 맡기
+                      </MenuItem>
+                    )}
+                    {!readOnly && assignments[p.id] && (assignments[p.id].userId === me || canManage) && (
+                      <MenuItem icon="flag" onClick={() => (close(), void unassignPage(p.id))}>
+                        {assignments[p.id].userId === me ? "맡기 해제" : `맡기 해제 (${assignments[p.id].name}님)`}
+                      </MenuItem>
+                    )}
+                    {!readOnly && assignments[p.id] && assignments[p.id].userId !== me && !canManage && (
+                      <MenuItem icon="flag" disabled onClick={() => undefined}>
+                        {assignments[p.id].name}님이 맡은 페이지
+                      </MenuItem>
+                    )}
                   </>
                 )}
               </Menu>
             </div>
           </div>
-        ))}
+        )))}
       </div>
     </aside>
   );

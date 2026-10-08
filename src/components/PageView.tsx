@@ -71,6 +71,8 @@ interface Props {
   mode?: PageMode;
   editingId?: string | null;
   onTextCommit?: (id: string, text: string) => void;
+  /** 입력하는 동안 (공동 편집 — 끝내기 전에도 다른 사람에게 보이게) */
+  onTextLive?: (id: string, text: string) => void;
   onImageNatural?: (id: string, w: number, h: number) => void;
   /** 하단/상단 문구의 {title} 자리에 들어갈 문서 제목 */
   docTitle?: string;
@@ -79,7 +81,7 @@ interface Props {
   children?: ReactNode;
 }
 
-export function PageView({ page, settings, index, total, mode = "view", editingId, onTextCommit, onImageNatural, docTitle, className, style, children }: Props) {
+export function PageView({ page, settings, index, total, mode = "view", editingId, onTextCommit, onTextLive, onImageNatural, docTitle, className, style, children }: Props) {
   const { W, H } = pageSize(settings);
   const u = (pt: number) => `${(pt / W) * 100}cqw`;
   return (
@@ -99,6 +101,7 @@ export function PageView({ page, settings, index, total, mode = "view", editingI
           mode={mode}
           editing={editingId === el.id}
           onTextCommit={onTextCommit}
+          onTextLive={onTextLive}
           onImageNatural={onImageNatural}
           docTitle={docTitle}
         />
@@ -131,6 +134,8 @@ function ElementView(props: {
   mode: PageMode;
   editing: boolean;
   onTextCommit?: (id: string, text: string) => void;
+  /** 입력하는 동안 (공동 편집 — 끝내기 전에도 다른 사람에게 보이게) */
+  onTextLive?: (id: string, text: string) => void;
   onImageNatural?: (id: string, w: number, h: number) => void;
   docTitle?: string;
 }) {
@@ -163,6 +168,7 @@ function TextView({
   mode,
   editing,
   onTextCommit,
+  onTextLive,
   docTitle,
 }: {
   el: TextElement;
@@ -173,6 +179,8 @@ function TextView({
   mode: PageMode;
   editing: boolean;
   onTextCommit?: (id: string, text: string) => void;
+  /** 입력하는 동안 (공동 편집 — 끝내기 전에도 다른 사람에게 보이게) */
+  onTextLive?: (id: string, text: string) => void;
   docTitle?: string;
 }) {
   const st = resolveStyle(settings, el.role, el.style);
@@ -190,7 +198,7 @@ function TextView({
   const shown = fillTokens(el.text, settings, docTitle);
   let content: ReactNode = shown;
   if (editing) {
-    content = <EditableText text={el.text} onCommit={(t) => onTextCommit?.(el.id, t)} />;
+    content = <EditableText text={el.text} onCommit={(t) => onTextCommit?.(el.id, t)} onLive={onTextLive && ((t) => onTextLive(el.id, t))} />;
   } else if (empty) {
     content = <span className="rb-placeholder">{dummyText(el.role)}</span>;
   } else if (st.bgMode === "inline" && st.background) {
@@ -216,7 +224,7 @@ function TextView({
   );
 }
 
-function EditableText({ text, onCommit }: { text: string; onCommit: (text: string) => void }) {
+function EditableText({ text, onCommit, onLive }: { text: string; onCommit: (text: string) => void; onLive?: (text: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const done = useRef(false);
   useEffect(() => {
@@ -243,6 +251,7 @@ function EditableText({ text, onCommit }: { text: string; onCommit: (text: strin
       contentEditable
       suppressContentEditableWarning
       onBlur={commit}
+      onInput={() => !done.current && onLive?.(ref.current?.innerText.replace(/\n$/, "") ?? "")}
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();

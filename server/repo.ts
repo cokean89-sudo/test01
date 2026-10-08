@@ -3,10 +3,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { FeedbackItem, FeedbackKind } from "../shared/feedback";
-import { mergeDocuments } from "../shared/merge";
 import type {
   ActivityItem,
+  AssignmentState,
   CaseStudy,
+  DocActivity,
+  DocActivityItem,
   DocSettings,
   DocumentData,
   DocumentSummary,
@@ -20,6 +22,7 @@ import type {
   VersionInfo,
 } from "../shared/types";
 import { fileThumbUrl } from "../shared/files";
+import type { DocContent } from "../shared/collab";
 import { randomColor, randomUserLook, teamProfileOf, userProfileOf, type ProfileColor } from "../shared/profile";
 import { withUnclassified } from "../shared/tags";
 import { urlKey } from "../shared/urlKey";
@@ -48,6 +51,19 @@ export interface UserRow {
 export const avatarKey = (avatarId: string) => `avatars/${avatarId}.webp`;
 
 const DAY = 24 * 60 * 60 * 1000;
+/** 같은 사람이 이 시간 안에 이어서 고치면 버전 기록 한 줄로 */
+export const VERSION_BURST_MS = 60_000;
+/** 같은 사람이 같은 페이지에서 이 시간 안에 한 수정은 활동 기록 한 줄로 */
+export const ACTIVITY_MERGE_MS = 2 * 60_000;
+
+/** 활동 항목 합치기 — 같은 요소 · 같은 동작은 한 번만, 최근 것이 앞에 */
+export function mergeActivityItems(prev: DocActivityItem[], next: DocActivityItem[]): DocActivityItem[] {
+  const key = (i: DocActivityItem) => `${i.el ?? ""}|${i.label}|${i.action}`;
+  const out = new Map<string, DocActivityItem>();
+  for (const i of [...next].reverse()) out.set(key(i), i);
+  for (const i of prev) if (!out.has(key(i))) out.set(key(i), i);
+  return [...out.values()].slice(0, 30);
+}
 
 /** 관리자: ADMIN_EMAILS 에 있는 메일이면서 메일 인증을 마친 계정 */
 export function isAdminUser(u: Pick<UserRow, "email" | "email_verified_at">): boolean {
@@ -883,6 +899,7 @@ export class Repo {
       version: Number(r.version),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      createdBy: r.created_by ?? undefined,
       createdByName: r.cname ?? undefined,
       updatedByName: r.uname ?? undefined,
     };
@@ -916,73 +933,210 @@ export class Repo {
    * 저장 — 다른 사람이 먼저 저장했으면(baseVersion 이 현재 버전보다 오래됨) 3-way 병합한다.
    * 병합했으면 병합 결과를 돌려주어 클라이언트가 반영하게 한다.
    */
-  saveDoc(
-    teamId: string,
-    id: string,
-    input: Pick<DocumentData, "title" | "query" | "settings" | "pages" | "tray">,
-    baseVersion: number,
-    userId: string,
-  ): { version: number; merged: boolean; doc?: DocumentData; conflicts: string[] } | undefined {
+  /** 공동 편집 방이 쓰는 문서 정보 — Yjs 상태(없으면 null), JSON, 담당자만 편집 */
+  docForCollab(docId: string) {
+    const r = this.db.get<{ team_id: string; title: string; query: string | null; data_json: string; ydoc: Uint8Array | null; version: number; created_by: string | null; assign_strict: number }>(
+      "SELECT team_id, title, query, data_json, ydoc, version, created_by, assign_strict FROM documents WHERE id = ?",
+      docId,
+    );
+    if (!r) return undefined;
+    const data = parseJson<Pick<DocumentData, "settings" | "pages" | "tray">>(r.data_json, { settings: defaultSettings(), pages: [] });
+    const content: DocContent = { title: r.title, ...(r.query != null ? { query: r.query } : {}), settings: data.settings, pages: data.pages, tray: data.tray ?? [] };
+    return { teamId: r.team_id, content, ydoc: r.ydoc, version: Number(r.version), createdBy: r.created_by, strict: !!r.assign_strict };
+  }
+
+  /** Yjs 상태만 저장 (처음 JSON 에서 만들었을 때 — 모든 사람이 같은 출발점을 쓰도록 바로 남긴다) */
+  saveYState(docId: string, state: Uint8Array) {
+    this.db.run("UPDATE documents SET ydoc = ? WHERE id = ?", state, docId);
+  }
+
+  /**
+   * 공동 편집 방의 내용을 저장 — data_json(목록 · 뷰어 · 내보내기용) + Yjs 상태 + 버전 기록.
+   * 버전 기록: 같은 사람이 1분 안에 이어서 고치면 마지막 버전을 덮어쓰고, 아니면 새 버전 (직접 저장 · 복원은 늘 새 버전).
+   */
+  persistCollab(docId: string, content: DocContent, state: Uint8Array, userId: string | null, opts: { forceVersion?: boolean } = {}): number | undefined {
     return this.db.tx(() => {
-      const current = this.getDoc(teamId, id);
-      if (!current) return undefined;
-      let next: Pick<DocumentData, "title" | "query" | "settings" | "pages" | "tray"> = {
-        title: input.title,
-        query: input.query,
-        settings: input.settings,
-        pages: input.pages,
-        // 보관함을 모르는 예전 클라이언트가 저장해도 지금 보관함을 지우지 않는다
-        tray: input.tray ?? current.tray,
-      };
-      let merged = false;
-      let conflicts: string[] = [];
-      if (baseVersion !== current.version) {
-        const base = this.getVersionData(id, baseVersion);
-        if (base) {
-          const r = mergeDocuments(
-            { ...current, ...base } as DocumentData,
-            { ...current, ...next } as DocumentData,
-            current,
-          );
-          next = { title: r.value.title, query: r.value.query, settings: r.value.settings, pages: r.value.pages, tray: r.value.tray };
-          conflicts = r.conflicts;
-          merged = true;
-        } else {
-          conflicts = ["base-missing"];
-        }
-      }
-      const version = (current.version ?? 1) + 1;
+      const cur = this.db.get<{ version: number }>("SELECT version FROM documents WHERE id = ?", docId);
+      if (!cur) return undefined;
       const t = now();
-      const data = JSON.stringify({ settings: next.settings, pages: next.pages, tray: next.tray ?? [] });
-      this.db.run(
-        "UPDATE documents SET title = ?, query = ?, data_json = ?, version = ?, cover = ?, page_count = ?, updated_by = ?, updated_at = ? WHERE id = ? AND team_id = ?",
-        next.title,
-        next.query,
-        data,
-        version,
-        coverOf(next as DocumentData),
-        next.pages.length,
-        userId,
-        t,
-        id,
-        teamId,
-      );
-      this.db.run("INSERT INTO document_versions (doc_id, version, title, data_json, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)", id, version, next.title, data, userId, t);
-      if (version % 25 === 0) this.pruneVersions(id);
-      return { version, merged, doc: merged ? this.getDoc(teamId, id) : undefined, conflicts };
+      const data = JSON.stringify({ settings: content.settings, pages: content.pages, tray: content.tray ?? [] });
+      let version = Number(cur.version);
+      if (userId) {
+        const last = this.db.get<{ version: number; updated_by: string | null; updated_at: number }>(
+          "SELECT version, updated_by, updated_at FROM document_versions WHERE doc_id = ? ORDER BY version DESC LIMIT 1",
+          docId,
+        );
+        // (처음 만든 버전 v1 은 덮어쓰지 않는다 — 원본으로 복원할 수 있게)
+        if (!opts.forceVersion && last && Number(last.version) > 1 && last.updated_by === userId && t - last.updated_at < VERSION_BURST_MS && Number(last.version) === version) {
+          this.db.run("UPDATE document_versions SET title = ?, data_json = ?, updated_at = ? WHERE doc_id = ? AND version = ?", content.title, data, t, docId, last.version);
+        } else {
+          version += 1;
+          this.db.run("INSERT INTO document_versions (doc_id, version, title, data_json, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)", docId, version, content.title, data, userId, t);
+          if (version % 25 === 0) this.pruneVersions(docId);
+        }
+        this.db.run(
+          "UPDATE documents SET title = ?, query = ?, data_json = ?, version = ?, cover = ?, page_count = ?, ydoc = ?, updated_by = ?, updated_at = ? WHERE id = ?",
+          content.title,
+          content.query ?? null,
+          data,
+          version,
+          coverOf(content as DocumentData),
+          content.pages.length,
+          state,
+          userId,
+          t,
+          docId,
+        );
+      } else {
+        this.db.run(
+          "UPDATE documents SET title = ?, query = ?, data_json = ?, cover = ?, page_count = ?, ydoc = ? WHERE id = ?",
+          content.title,
+          content.query ?? null,
+          data,
+          coverOf(content as DocumentData),
+          content.pages.length,
+          state,
+          docId,
+        );
+      }
+      return version;
     });
   }
 
-  private getVersionData(docId: string, version: number): Pick<DocumentData, "title" | "settings" | "pages" | "tray"> | undefined {
+  /** 예전 버전의 내용 (복원 · 예전 방식 저장의 병합 기준) */
+  versionContent(docId: string, version: number): DocContent | undefined {
     const r = this.db.get<{ title: string; data_json: string }>("SELECT title, data_json FROM document_versions WHERE doc_id = ? AND version = ?", docId, version);
     if (!r) return undefined;
     const data = parseJson<Pick<DocumentData, "settings" | "pages" | "tray">>(r.data_json, { settings: defaultSettings(), pages: [] });
     return { title: r.title, ...data, tray: data.tray ?? [] };
   }
 
+  // ─── 페이지 맡기 ──────────────────────────────────────────
+
+  /** 담당자 — 팀을 떠난 사람은 빼고 */
+  assignments(docId: string): AssignmentState {
+    const doc = this.db.get<{ team_id: string; assign_strict: number }>("SELECT team_id, assign_strict FROM documents WHERE id = ?", docId);
+    if (!doc) return { assignments: {}, strict: false };
+    const rows = this.db.all<{ page_id: string; user_id: string; name: string; assigned_at: number; color: string | null; avatar_emoji: string | null; avatar_bg: string | null; avatar_id: string | null }>(
+      `SELECT a.page_id, a.user_id, u.name, a.assigned_at, u.color, u.avatar_emoji, u.avatar_bg, u.avatar_id
+       FROM page_assignments a JOIN users u ON u.id = a.user_id JOIN memberships m ON m.user_id = a.user_id AND m.team_id = ?
+       WHERE a.doc_id = ?`,
+      doc.team_id,
+      docId,
+    );
+    const assignments: AssignmentState["assignments"] = {};
+    for (const r of rows) assignments[r.page_id] = { userId: r.user_id, name: r.name, profile: userProfileOf(r.user_id, r), assignedAt: r.assigned_at };
+    return { assignments, strict: !!doc.assign_strict };
+  }
+
+  assignPage(docId: string, pageId: string, userId: string, by: string) {
+    this.db.run(
+      "INSERT INTO page_assignments (doc_id, page_id, user_id, assigned_by, assigned_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(doc_id, page_id) DO UPDATE SET user_id = excluded.user_id, assigned_by = excluded.assigned_by, assigned_at = excluded.assigned_at",
+      docId,
+      pageId,
+      userId,
+      by,
+      now(),
+    );
+  }
+
+  unassignPage(docId: string, pageId: string): boolean {
+    return this.db.run("DELETE FROM page_assignments WHERE doc_id = ? AND page_id = ?", docId, pageId).changes > 0;
+  }
+
+  setAssignStrict(docId: string, strict: boolean) {
+    this.db.run("UPDATE documents SET assign_strict = ? WHERE id = ?", strict ? 1 : 0, docId);
+  }
+
+  /** 팀을 떠난 사람의 담당 해제 — 영향을 받은 문서 id */
+  dropUserAssignments(teamId: string, userId: string): string[] {
+    const docs = this.db
+      .all<{ doc_id: string }>("SELECT DISTINCT a.doc_id FROM page_assignments a JOIN documents d ON d.id = a.doc_id WHERE d.team_id = ? AND a.user_id = ?", teamId, userId)
+      .map((r) => r.doc_id);
+    if (docs.length) this.db.run("DELETE FROM page_assignments WHERE user_id = ? AND doc_id IN (SELECT id FROM documents WHERE team_id = ?)", userId, teamId);
+    return docs;
+  }
+
+  /** 없어진 페이지의 담당 정리 */
+  pruneAssignments(docId: string, livePageIds: Set<string>) {
+    const rows = this.db.all<{ page_id: string }>("SELECT page_id FROM page_assignments WHERE doc_id = ?", docId);
+    for (const r of rows) if (!livePageIds.has(r.page_id)) this.db.run("DELETE FROM page_assignments WHERE doc_id = ? AND page_id = ?", docId, r.page_id);
+  }
+
+  // ─── 문서 활동 기록 (요소 단위) ───────────────────────────────
+
+  /**
+   * 같은 사람이 같은 페이지에서 2분 안에 한 수정은 그 사람의 그 페이지 마지막 줄에 합친다
+   * (사이에 다른 사람 줄이 끼어도 — 목록은 마지막으로 고친 시각 순이라 합친 줄이 위로 올라간다)
+   */
+  recordDocActivity(docId: string, teamId: string, userId: string, pageId: string | null, items: DocActivityItem[], t = now()) {
+    if (!items.length) return;
+    const last = this.db.get<{ id: number; items_json: string }>(
+      "SELECT id, items_json FROM doc_activity WHERE doc_id = ? AND user_id = ? AND page_id IS ? AND updated_at >= ? ORDER BY updated_at DESC, id DESC LIMIT 1",
+      docId,
+      userId,
+      pageId,
+      t - ACTIVITY_MERGE_MS,
+    );
+    if (last) {
+      const merged = mergeActivityItems(parseJson<DocActivityItem[]>(last.items_json, []), items);
+      this.db.run("UPDATE doc_activity SET items_json = ?, updated_at = ? WHERE id = ?", JSON.stringify(merged), t, last.id);
+      return;
+    }
+    this.db.run(
+      "INSERT INTO doc_activity (doc_id, team_id, user_id, page_id, items_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      docId,
+      teamId,
+      userId,
+      pageId,
+      JSON.stringify(mergeActivityItems([], items)),
+      t,
+      t,
+    );
+  }
+
+  docActivity(docId: string, opts: { limit?: number; before?: number } = {}): DocActivity[] {
+    const rows = this.db.all<{
+      id: number;
+      user_id: string | null;
+      name: string | null;
+      page_id: string | null;
+      items_json: string;
+      created_at: number;
+      updated_at: number;
+      color: string | null;
+      avatar_emoji: string | null;
+      avatar_bg: string | null;
+      avatar_id: string | null;
+    }>(
+      `SELECT a.id, a.user_id, u.name, a.page_id, a.items_json, a.created_at, a.updated_at, u.color, u.avatar_emoji, u.avatar_bg, u.avatar_id
+       FROM doc_activity a LEFT JOIN users u ON u.id = a.user_id
+       WHERE a.doc_id = ? AND (? IS NULL OR a.updated_at < ?) ORDER BY a.updated_at DESC, a.id DESC LIMIT ?`,
+      docId,
+      opts.before ?? null,
+      opts.before ?? null,
+      Math.min(opts.limit ?? 300, 1000),
+    );
+    return rows.map((r) => ({
+      id: Number(r.id),
+      userId: r.user_id ?? undefined,
+      userName: r.name ?? "(알 수 없음)",
+      userProfile: r.user_id && r.name !== null ? userProfileOf(r.user_id, r) : undefined,
+      pageId: r.page_id ?? undefined,
+      items: parseJson<DocActivityItem[]>(r.items_json, []),
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+  }
+
+  /** 오래된 활동 기록 정리 (기본 90일) */
+  pruneDocActivity(olderThanMs = 90 * DAY): number {
+    return this.db.run("DELETE FROM doc_activity WHERE updated_at < ?", now() - olderThanMs).changes;
+  }
+
   getVersion(teamId: string, docId: string, version: number): DocumentData | undefined {
     const cur = this.getDoc(teamId, docId);
-    const data = cur && this.getVersionData(docId, version);
+    const data = cur && this.versionContent(docId, version);
     return cur && data ? { ...cur, ...data, version } : undefined;
   }
 
@@ -1327,6 +1481,7 @@ function rowToCase(r: CaseRow): CaseStudy {
 interface DocRow {
   id: string;
   team_id: string;
+  created_by: string | null;
   title: string;
   query: string | null;
   data_json: string;

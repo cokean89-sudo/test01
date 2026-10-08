@@ -2,11 +2,11 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { userProfileOf } from "../../shared/profile";
 import { ROLE_LABEL, ROLE_RANK, type DocSettings, type Role } from "../../shared/types";
 import { APP_URL } from "../config";
 import { requireUser, teamRole } from "../context";
-import { disconnectUser, publish, subscribe, updatePresence } from "../events";
+import type { CollabHub } from "../collab/hub";
+import { disconnectUser, publish, subscribe } from "../events";
 import { sendInviteMail } from "../mail";
 import { avatarKey, INVITE_MAX_FAILURES, inviteStatus, type Repo } from "../repo";
 import { enforceLimit, hashPassword, HttpError, isCommonPassword, randomCode, verifyPassword } from "../security";
@@ -35,7 +35,7 @@ const defaultsSchema = z
   })
   .passthrough();
 
-export function teamsRouter(repo: Repo, store: FileStore): Router {
+export function teamsRouter(repo: Repo, store: FileStore, collab?: CollabHub): Router {
   const r = Router();
 
   r.get("/", (req, res) => {
@@ -148,6 +148,9 @@ export function teamsRouter(repo: Repo, store: FileStore): Router {
     repo.log(teamId, me.id, self ? "member.leave" : "member.remove", self ? `${me.name} 님이 팀을 나감` : `${target?.name ?? "멤버"} 님을 내보냄`);
     repo.security(self ? "team_left" : "member_removed", me.id, req.ip, `${teamId}:${targetId}`);
     disconnectUser(teamId, targetId);
+    // 그 사람이 맡은 페이지는 풀고, 열어 둔 공동 편집 연결도 끊는다
+    for (const docId of repo.dropUserAssignments(teamId, targetId)) collab?.assignChanged(docId);
+    collab?.kick(teamId, targetId);
     publish(teamId, "team", {});
     res.json({ ok: true });
   });
@@ -222,19 +225,12 @@ export function teamsRouter(repo: Repo, store: FileStore): Router {
     res.json(repo.activity(req.teamId!, 100, Number.isFinite(before) ? before : undefined));
   });
 
+  // 팀 단위 실시간 알림 (레퍼런스 · 문서 목록 · 팀 정보). 문서 편집 중의 접속자 · 변경은 공동 편집(server/collab)이 맡는다
   r.get("/:teamId/events", teamRole(repo, "viewer"), (req, res) => {
-    const docId = typeof req.query.doc === "string" && /^[\w-]{1,40}$/.test(req.query.doc) ? req.query.doc : undefined;
-    if (docId && repo.docTeam(docId) !== req.teamId) throw new HttpError(404, "문서를 찾을 수 없어요.");
     const token = req.sessionToken!;
     const teamId = req.teamId!;
     const userId = req.user!.id;
-    subscribe(req, res, teamId, { id: userId, name: req.user!.name, profile: userProfileOf(userId, req.user!) }, docId, () => repo.sessionAlive(token) && !!repo.getRole(teamId, userId));
-  });
-
-  r.post("/:teamId/presence", teamRole(repo, "viewer"), (req, res) => {
-    const body = z.object({ docId: z.string().max(40), pageId: z.string().max(40).optional() }).parse(req.body);
-    updatePresence(req.teamId!, req.user!.id, body.docId, body.pageId);
-    res.json({ ok: true });
+    subscribe(req, res, teamId, userId, () => repo.sessionAlive(token) && !!repo.getRole(teamId, userId));
   });
 
   return r;

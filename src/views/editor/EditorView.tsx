@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import type { PresenceUser, TextElement } from "../../../shared/types";
-import { api, teamApi, teamEvents } from "../../api";
+import type { TextElement } from "../../../shared/types";
+import { api } from "../../api";
 import { Spinner } from "../../components/ui";
-import { navigate } from "../../lib/router";
-import { flushSave, pullRemote, useEditor } from "../../store/editor";
+import { bumpActivity, flushSave, useEditor } from "../../store/editor";
 import { useSession } from "../../store/session";
 import { toast } from "../../store/toast";
 import { PENDING_AI_KEY } from "../BuildDialog";
@@ -32,12 +31,13 @@ export function EditorView({ id }: { id: string }) {
   useEffect(() => {
     let cancelled = false;
     api
-      .document(id)
+      .collabDocument(id)
       .then((d) => {
         if (cancelled) return;
         // 다른 팀의 문서 링크로 들어왔으면 그 팀으로 전환
         if (d.teamId && d.teamId !== useSession.getState().teamId) useSession.getState().switchTeam(d.teamId);
-        useEditor.getState().open(d, { readOnly: d.role === "viewer" });
+        // 공동 편집 세션을 연다 — 서버의 Yjs 상태에서 시작하고 WebSocket 으로 실시간 동기화
+        useEditor.getState().open(d, { me: useSession.getState().user?.id ?? "" });
         if (d.role === "viewer") toast.info("보기 전용 권한이에요 — 편집할 수 없어요");
         if (sessionStorage.getItem(PENDING_AI_KEY) === d.id) {
           sessionStorage.removeItem(PENDING_AI_KEY);
@@ -54,33 +54,18 @@ export function EditorView({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // 실시간: 다른 팀원의 저장을 반영하고, 같은 문서를 보는 사람을 표시
-  const teamId = doc?.id === id ? doc.teamId : undefined;
+  // 편집기에서 입력이 있으면 알린다 — 다른 사람이 선택한 요소의 잠금은 30초 동안 입력이 없으면 풀린다
   useEffect(() => {
-    if (!teamId) return;
-    const es = teamEvents(teamId, id);
-    es.addEventListener("doc", (e) => {
-      const data = JSON.parse((e as MessageEvent).data) as { docId: string; version: number; byName?: string };
-      if (data.docId === id) void pullRemote(data.version, data.byName).catch(() => undefined);
-    });
-    es.addEventListener("presence", (e) => {
-      const data = JSON.parse((e as MessageEvent).data) as { docId: string; users: PresenceUser[] };
-      if (data.docId === id) useEditor.setState({ presence: data.users });
-    });
-    es.addEventListener("removed", () => {
-      toast.error("이 팀에 대한 접근 권한이 없어졌어요");
-      navigate("docs");
-    });
-    return () => es.close();
-  }, [teamId, id]);
-
-  // 내가 보고 있는 페이지를 팀원에게 알림
-  const pageId = useEditor((s) => s.pageId);
-  useEffect(() => {
-    if (!teamId || !pageId) return;
-    const t = setTimeout(() => void teamApi.presence(teamId, id, pageId).catch(() => undefined), 400);
-    return () => clearTimeout(t);
-  }, [teamId, id, pageId]);
+    const onInput = () => bumpActivity();
+    window.addEventListener("pointerdown", onInput, true);
+    window.addEventListener("keydown", onInput, true);
+    window.addEventListener("wheel", onInput, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", onInput, true);
+      window.removeEventListener("keydown", onInput, true);
+      window.removeEventListener("wheel", onInput, true);
+    };
+  }, []);
 
   const aiPage = useCallback(() => {
     const { pageId, setModal } = useEditor.getState();

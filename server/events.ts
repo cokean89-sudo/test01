@@ -1,16 +1,12 @@
-// 실시간 알림 (Server-Sent Events) — 팀원이 추가·수정한 내용과 문서 편집 중인 사람(프레즌스)을 즉시 전달한다.
+// 실시간 알림 (Server-Sent Events) — 팀원이 추가·수정한 레퍼런스 · 문서 목록 · 팀 정보를 즉시 전달한다.
+// 문서 편집 중의 변경 · 접속자 · 선택은 공동 편집(server/collab, WebSocket)이 맡는다.
 // 단일 서버 프로세스 기준(메모리). 여러 대로 확장하려면 Redis pub/sub 등으로 바꿔야 한다.
 
 import type { Request, Response } from "express";
-import type { PresenceUser, UserProfile } from "../shared/types";
 
 interface Client {
   res: Response;
   userId: string;
-  name: string;
-  profile?: UserProfile;
-  docId?: string;
-  pageId?: string;
 }
 
 const teams = new Map<string, Set<Client>>();
@@ -23,29 +19,11 @@ export function publish(teamId: string, event: string, data: unknown, exceptUser
   for (const c of teams.get(teamId) ?? []) if (c.userId !== exceptUserId) send(c, event, data);
 }
 
-function presence(teamId: string, docId: string): PresenceUser[] {
-  const seen = new Map<string, PresenceUser>();
-  for (const c of teams.get(teamId) ?? []) if (c.docId === docId) seen.set(c.userId, { userId: c.userId, name: c.name, profile: c.profile, pageId: c.pageId });
-  return [...seen.values()];
-}
-
-function broadcastPresence(teamId: string, docId: string) {
-  const users = presence(teamId, docId);
-  for (const c of teams.get(teamId) ?? []) if (c.docId === docId) send(c, "presence", { docId, users });
-}
-
 /**
  * 실시간 연결을 연다. `stillAllowed` 는 주기적으로 다시 확인해, 로그아웃·세션 만료·팀에서 내보내기 등으로
  * 권한이 사라진 연결이 계속 데이터를 받지 않게 끊는다.
  */
-export function subscribe(
-  req: Request,
-  res: Response,
-  teamId: string,
-  user: { id: string; name: string; profile?: UserProfile },
-  docId: string | undefined,
-  stillAllowed: () => boolean,
-) {
+export function subscribe(req: Request, res: Response, teamId: string, userId: string, stillAllowed: () => boolean) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-store",
@@ -53,17 +31,15 @@ export function subscribe(
     "X-Accel-Buffering": "no", // Nginx 버퍼링 끄기
   });
   res.write("retry: 3000\n\n");
-  const client: Client = { res, userId: user.id, name: user.name, profile: user.profile, docId };
+  const client: Client = { res, userId };
   if (!teams.has(teamId)) teams.set(teamId, new Set());
   teams.get(teamId)!.add(client);
-  if (docId) broadcastPresence(teamId, docId);
   let closed = false;
   const drop = () => {
     if (closed) return;
     closed = true;
     clearInterval(ping);
     teams.get(teamId)?.delete(client);
-    if (docId) broadcastPresence(teamId, docId);
   };
   const ping = setInterval(() => {
     if (!stillAllowed()) {
@@ -74,17 +50,6 @@ export function subscribe(
     res.write(": ping\n\n");
   }, 25_000);
   req.on("close", drop);
-}
-
-export function updatePresence(teamId: string, userId: string, docId: string, pageId?: string) {
-  let changed = false;
-  for (const c of teams.get(teamId) ?? []) {
-    if (c.userId === userId && c.docId === docId && c.pageId !== pageId) {
-      c.pageId = pageId;
-      changed = true;
-    }
-  }
-  if (changed) broadcastPresence(teamId, docId);
 }
 
 /** 팀에서 내보낸 사용자의 실시간 연결을 끊는다 */

@@ -31,12 +31,11 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
   const tool = useEditor((s) => s.tool);
   const setTool = useEditor((s) => s.setTool);
   const selection = useEditor((s) => s.selection);
-  const canUndo = useEditor((s) => s.past.length > 0);
-  const canRedo = useEditor((s) => s.future.length > 0);
+  const canUndo = useEditor((s) => s.canUndo);
+  const canRedo = useEditor((s) => s.canRedo);
   const zoom = useEditor((s) => s.zoom);
   const fitScale = useEditor((s) => s.fitScale);
   const setZoom = useEditor((s) => s.setZoom);
-  const saveState = useEditor((s) => s.saveState);
   const setModal = useEditor((s) => s.setModal);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
@@ -66,13 +65,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
           readOnly={readOnly}
           aria-label="문서 제목"
         />
-        {readOnly ? (
-          <span className="badge">보기 전용</span>
-        ) : (
-          <span className={"save-state " + saveState}>
-            {saveState === "saving" ? "저장 중…" : saveState === "dirty" ? "변경됨" : saveState === "error" ? "저장 실패" : "저장됨"}
-          </span>
-        )}
+        {readOnly ? <span className="badge">보기 전용</span> : <SyncBadge />}
       </div>
 
       <div className="tb-group edit-only">
@@ -125,7 +118,7 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
 
       <Presence />
       <div className="tb-group">
-        <TB icon="refresh" title="버전 기록 (누가 언제 저장했는지 · 복원)" onClick={() => setModal({ type: "history" })} />
+        <TB icon="refresh" title="문서 히스토리 — 누가 무엇을 바꿨는지 · 버전 복원" onClick={() => setModal({ type: "history" })} />
       </div>
 
       <div className="tb-group edit-only">
@@ -223,6 +216,29 @@ export function Toolbar({ onAiPage, onAiAll, aiBusy }: { onAiPage: () => void; o
         </Menu>
       </div>
     </div>
+  );
+}
+
+/** 저장 · 연결 상태 — 저장됨 / 저장 중 / 오프라인 — 변경 N개 대기 중 / 다시 연결 중 */
+export function SyncBadge({ className = "save-state" }: { className?: string }) {
+  const sync = useEditor((s) => s.sync);
+  const saveState = useEditor((s) => s.saveState);
+  const label =
+    saveState === "saved"
+      ? "저장됨"
+      : saveState === "saving"
+        ? "저장 중…"
+        : saveState === "connecting"
+          ? sync.pending
+            ? `연결 중 — 변경 ${sync.pending}개 대기 중`
+            : "연결 중…"
+          : sync.pending
+            ? `오프라인 — 변경 ${sync.pending}개 대기 중`
+            : "오프라인 — 다시 연결하는 중";
+  return (
+    <span className={`${className} ${saveState}`} role="status" aria-live="polite" title={sync.transport === "http" ? "실시간 연결이 막혀 있어 1.5초마다 주고받는 중이에요" : undefined}>
+      {label}
+    </span>
   );
 }
 

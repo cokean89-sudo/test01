@@ -274,6 +274,34 @@ export const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX users_avatar ON users(avatar_id) WHERE avatar_id IS NOT NULL;
   CREATE UNIQUE INDEX teams_avatar ON teams(avatar_id) WHERE avatar_id IS NOT NULL;
   `,
+  // v8: 실시간 공동 편집 — 문서의 Yjs 상태(바이너리), 페이지 맡기 · 담당자만 편집, 요소 단위 활동 기록.
+  //     data_json 은 계속 최신으로 유지한다 (목록 · 뷰어 · 인쇄 · 내보내기 · 백업이 읽는다). ydoc 이 없으면 처음 열 때 data_json 에서 만든다.
+  `
+  ALTER TABLE documents ADD COLUMN ydoc BLOB;
+  ALTER TABLE documents ADD COLUMN assign_strict INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE page_assignments (
+    doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    page_id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    assigned_by TEXT,
+    assigned_at INTEGER NOT NULL,
+    PRIMARY KEY (doc_id, page_id)
+  );
+  CREATE INDEX page_assignments_user ON page_assignments(user_id);
+  CREATE TABLE doc_activity (
+    id INTEGER PRIMARY KEY,
+    doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    team_id TEXT NOT NULL,
+    user_id TEXT,
+    page_id TEXT,
+    items_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX doc_activity_doc ON doc_activity(doc_id, updated_at);
+  CREATE INDEX doc_activity_user ON doc_activity(doc_id, user_id, updated_at);
+  CREATE INDEX doc_activity_time ON doc_activity(updated_at);
+  `,
 ];
 
 export class Database {

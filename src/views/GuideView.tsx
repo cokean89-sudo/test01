@@ -648,7 +648,7 @@ function TeamStep({ onTeam }: { onTeam: () => void }) {
       id="team"
       no={8}
       title="팀과 함께 모으고 함께 고쳐요"
-      lead="팀을 만들면 레퍼런스·케이스·문서를 같이 써요. 같은 문서를 여러 명이 동시에 고쳐도 서로의 수정이 합쳐지고, 누가 언제 무엇을 바꿨는지 기록이 남아요."
+      lead="팀을 만들면 레퍼런스·케이스·문서를 같이 써요. 같은 문서를 여러 명이 함께 열면 서로의 수정이 바로 보이고, 같은 글을 동시에 고쳐도 합쳐져요. 페이지 썸네일의 ⋯ 메뉴에서 '이 페이지 맡기'로 일을 나눌 수 있어요."
     >
       <div className="guide-cards">
         <div className="guide-card">
@@ -663,8 +663,8 @@ function TeamStep({ onTeam }: { onTeam: () => void }) {
         </div>
         <div className="guide-card">
           <Icon name="refresh" size={22} />
-          <h3>버전 기록</h3>
-          <p>편집 화면의 &lsquo;버전 기록&rsquo;에서 저장 시점별로 미리 보고, 예전 버전으로 되돌릴 수 있어요.</p>
+          <h3>문서 히스토리</h3>
+          <p>편집 화면의 &lsquo;문서 히스토리&rsquo;에서 누가 언제 몇 페이지의 무엇을 바꿨는지 보고, 예전 버전으로 되돌릴 수 있어요.</p>
         </div>
       </div>
       <div className="guide-cta">

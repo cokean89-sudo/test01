@@ -327,6 +327,8 @@ export interface DocumentData {
   /** 서버 저장 버전 (동시 편집 병합 기준) */
   version?: number;
   teamId?: string;
+  /** 문서를 만든 사람 (페이지 맡기 해제 · '담당자만 편집' 설정 권한) */
+  createdBy?: string;
   createdByName?: string;
   updatedByName?: string;
 }
@@ -539,6 +541,52 @@ export interface PresenceUser {
   /** 접속자 표시 — 프로필 이미지와 사용자 고유 색(테두리) */
   profile?: UserProfile;
   pageId?: string;
+}
+
+// ─── 실시간 공동 편집 ─────────────────────────────────────────
+
+/** 페이지 맡기 — 담당자 */
+export interface PageAssignment {
+  userId: string;
+  name: string;
+  profile: UserProfile;
+  assignedAt: number;
+}
+
+/** 문서의 페이지 맡기 상태 — strict: '담당자만 편집' */
+export interface AssignmentState {
+  assignments: Record<string, PageAssignment>;
+  strict: boolean;
+}
+
+/** 편집기를 열 때 받는 문서 — Yjs 상태(base64)와 페이지 맡기 포함 */
+export interface CollabDoc extends DocumentData {
+  role?: Role;
+  ystate: string;
+  assign: AssignmentState;
+}
+
+/** 문서 활동 한 줄의 항목 — "타이틀 수정" */
+export interface DocActivityItem {
+  /** 요소 id (요소가 아니면 없음) */
+  el?: string;
+  /** 요소 이름 — 타이틀 · 이미지 · 로고 … */
+  label: string;
+  /** 동작 — 수정 · 추가 · 삭제 · 위치 변경 … */
+  action: string;
+}
+
+/** 문서 활동 기록 한 줄 — 같은 사람이 같은 페이지에서 2분 안에 한 수정은 한 줄로 묶는다 */
+export interface DocActivity {
+  id: number;
+  userId?: string;
+  userName: string;
+  userProfile?: UserProfile;
+  /** 페이지 id (문서 설정 · 보관함이면 없음) */
+  pageId?: string;
+  items: DocActivityItem[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface VersionInfo {

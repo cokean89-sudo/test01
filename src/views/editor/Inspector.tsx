@@ -53,6 +53,7 @@ import {
   updatePage,
 } from "./actions";
 import { TypeControls } from "./TypeControls";
+import { CollabSettings } from "./CollabUI";
 
 type Tab = "element" | "page" | "doc" | "type";
 
@@ -635,6 +636,9 @@ function DocPanel() {
   const isAdmin = !!team && ROLE_RANK[team.role] >= ROLE_RANK.admin;
   return (
     <>
+      <Section title="공동 작업">
+        <CollabSettings />
+      </Section>
       <Section title="팀 기본 양식">
         <p className="muted small">새 문서는 &lsquo;{team?.name}&rsquo; 팀의 기본 양식(부서명·하단 태그라인·타이포)으로 시작해요.</p>
         <div className="row wrap">

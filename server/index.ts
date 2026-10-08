@@ -6,13 +6,16 @@ import path from "node:path";
 import express from "express";
 import { aiStatus } from "./ai";
 import { createApp } from "./app";
+import { attachCollab } from "./collab/ws";
 import { APP_URL, HOST, isProd, mailConfigured, oauth, openOnStart, PORT, ROOT, SECURE_COOKIES } from "./config";
 import { openDatabase } from "./db";
 
 async function start() {
   const db = openDatabase();
-  const { app } = createApp(db);
+  const { app, repo, collab } = createApp(db);
   const server = http.createServer(app);
+  // 실시간 공동 편집 WebSocket (/api/collab/<문서 id>)
+  const wss = attachCollab(server, collab, repo);
 
   if (isProd) {
     const dist = path.join(ROOT, "dist");
@@ -69,6 +72,9 @@ async function start() {
   });
 
   const shutdown = () => {
+    // 공동 편집 방에 남은 변경을 먼저 저장하고 연결을 닫는다
+    collab.close();
+    for (const ws of wss.clients) ws.close(1001, "server shutdown");
     server.close(() => {
       db.close();
       process.exit(0);

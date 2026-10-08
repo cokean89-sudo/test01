@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import type { ImageElement, PageElement, Rect } from "../../../shared/types";
 import { PageView, pageSize } from "../../components/PageView";
 import { uid } from "../../lib/id";
-import { useCurrentPage, useEditor, withPage } from "../../store/editor";
+import { canEditPage, currentPage, lockOwner, useCurrentPage, useEditor, withPage } from "../../store/editor";
+import { toast } from "../../store/toast";
+import { HighlightOverlay, RemoteSelections } from "./CollabUI";
 import { effectiveArea } from "../../layout/templates";
 import { addElement, bbox, isFlowText, newText, patchElements } from "./actions";
 import { createImageDrag, registerCanvasProbe, useImageDrag, type DragHover, type DropZone } from "./imageDrag";
@@ -27,6 +29,8 @@ export function Canvas() {
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [draft, setDraft] = useState<Rect | null>(null);
   const drag = useImageDrag((s) => s.hover);
+  /** 입력 중인 글 — 0.25초 모아서 공유 */
+  const liveText = useRef<{ id: string; text: string; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   useLayoutEffect(() => {
     const el = wrapRef.current;
@@ -90,6 +94,12 @@ export function Canvas() {
     const active = document.activeElement as HTMLElement | null;
     if (active && active !== document.body) active.blur();
     const state = useEditor.getState();
+    // 다른 사람이 선택 중인 요소는 고르거나 옮길 수 없다
+    const owner = lockOwner(el.id);
+    if (owner) {
+      toast.info(`${owner.name}님이 편집 중이에요`);
+      return;
+    }
     if (e.shiftKey || e.metaKey || e.ctrlKey) {
       state.select(state.selection.includes(el.id) ? state.selection.filter((i) => i !== el.id) : [...state.selection, el.id]);
       return;
@@ -99,7 +109,8 @@ export function Canvas() {
       sel = [el.id];
       state.select(sel);
     }
-    const movers = page.elements.filter((x) => sel.includes(x.id) && !x.locked);
+    // 담당자만 편집인 남의 페이지는 고르기만 (옮기지 않는다)
+    const movers = canEditPage(page.id) ? page.elements.filter((x) => sel.includes(x.id) && !x.locked && !lockOwner(x.id)) : [];
     if (!movers.length) return;
     const start = toPt(e);
     const orig = new Map(movers.map((m) => [m.id, { x: m.x, y: m.y }]));
@@ -321,16 +332,33 @@ export function Canvas() {
             mode="edit"
             docTitle={doc.title}
             editingId={editingId}
+            onTextLive={(id, text) => {
+              // 입력하는 동안 0.25초마다 공유 — 같은 key 라 끝낼 때까지 실행 취소 한 번으로 묶인다
+              if (liveText.current) clearTimeout(liveText.current.timer);
+              liveText.current = {
+                id,
+                text,
+                timer: setTimeout(() => {
+                  liveText.current = null;
+                  const ed = useEditor.getState();
+                  if (ed.editingId !== id) return;
+                  const cur = currentPage()?.elements.find((x) => x.id === id);
+                  if (cur?.type === "text" && cur.text !== text) patchElements([id], { text }, "text:" + id);
+                }, 250),
+              };
+            }}
             onTextCommit={(id, text) => {
+              if (liveText.current) clearTimeout(liveText.current.timer);
+              liveText.current = null;
               const ed = useEditor.getState();
               ed.setEditing(null);
-              const cur = page.elements.find((x) => x.id === id);
+              const cur = currentPage()?.elements.find((x) => x.id === id);
               if (cur?.type === "text" && cur.role === "free" && !text.trim()) {
                 // 내용 없이 끝낸 자유 텍스트 상자는 지운다
                 ed.update((d) => withPage(d, page.id, (pg) => void (pg.elements = pg.elements.filter((x) => x.id !== id))));
               } else if (cur?.type === "text" && cur.text !== text) {
                 // 본문 길이에 따라 짧은 글/긴 글 배치를 다시 고른다
-                patchElements([id], { text });
+                patchElements([id], { text }, "text:" + id);
               }
             }}
             onImageNatural={(id, w, h) => useEditor.getState().patchTransient(page.id, { [id]: { natW: w, natH: h } })}
@@ -359,7 +387,9 @@ export function Canvas() {
             />
           ))}
           {selectedEls.length > 1 && <div className="sel-box multi" style={rectPx(bbox(selectedEls))} />}
-          {single && !single.locked && editingId !== single.id && (
+          <RemoteSelections page={page} rectPx={rectPx} />
+          <HighlightOverlay page={page} rectPx={rectPx} />
+          {single && !single.locked && editingId !== single.id && canEditPage(page.id) && (
             <div className="sel-box" style={rectPx(single)}>
               {HANDLES.map((h) => (
                 <span key={h} className={"handle h-" + h} onPointerDown={(e) => onHandleDown(e, single, h)} />
